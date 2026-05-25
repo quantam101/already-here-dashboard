@@ -1,10 +1,11 @@
 .App {
   min-height: 100vh;
+  background: linear-gradient(135deg, #0a0e1a 0%, #1a1f2e 50%, #0f1419 100%);
 }
 
 .dashboard-layout {
   display: grid;
-  grid-template-columns: 280px 1fr;
+  grid-template-columns: 240px 1fr;
   min-height: 100vh;
 }
 
@@ -14,33 +15,67 @@
   }
 }
 
-.stat-card {
-  background: linear-gradient(135deg, rgba(255,255,255,0.95) 0%, rgba(255,255,255,0.85) 100%);
-  border-radius: 1rem;
+.enterprise-card {
+  background: rgba(23, 27, 40, 0.6);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 12px;
   padding: 1.5rem;
-  border: 1px solid hsl(220 15% 88%);
-  box-shadow: 0 4px 12px rgba(0,0,0,0.03);
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  transition: all 0.3s ease;
 }
 
-.stat-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 24px rgba(0,0,0,0.08);
+.enterprise-card:hover {
+  border-color: rgba(34, 197, 94, 0.3);
+  box-shadow: 0 8px 32px rgba(34, 197, 94, 0.1);
 }
 
-.metric-card {
-  background: white;
-  border-radius: 1rem;
+.metric-card-enterprise {
+  background: linear-gradient(135deg, rgba(23, 27, 40, 0.9) 0%, rgba(30, 35, 50, 0.7) 100%);
+  border: 1px solid rgba(34, 197, 94, 0.2);
+  border-radius: 12px;
   padding: 1.5rem;
-  border: 1px solid hsl(220 15% 88%);
-  box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+  position: relative;
+  overflow: hidden;
 }
 
-.gradient-text {
-  background: linear-gradient(135deg, hsl(260 90% 58%) 0%, hsl(195 65% 55%) 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+.metric-card-enterprise::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, rgba(34, 197, 94, 0.6), transparent);
+}
+
+.health-bar {
+  height: 6px;
+  border-radius: 3px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.health-bar-fill {
+  height: 100%;
+  transition: width 0.5s ease;
+  border-radius: 3px;
+}
+
+.health-100 { background: linear-gradient(90deg, #22c55e, #16a34a); }
+.health-90 { background: linear-gradient(90deg, #84cc16, #65a30d); }
+.health-75 { background: linear-gradient(90deg, #eab308, #ca8a04); }
+.health-50 { background: linear-gradient(90deg, #f97316, #ea580c); }
+
+.agent-status-live {
+  background: rgba(34, 197, 94, 0.1);
+  border: 1px solid rgba(34, 197, 94, 0.3);
+  color: #22c55e;
+}
+
+.agent-status-await {
+  background: rgba(251, 191, 36, 0.1);
+  border: 1px solid rgba(251, 191, 36, 0.3);
+  color: #fbbf24;
 }
 
 .sidebar-link {
@@ -48,80 +83,71 @@
   align-items: center;
   gap: 0.75rem;
   padding: 0.75rem 1rem;
-  border-radius: 0.5rem;
-  color: hsl(220 10% 45%);
+  border-radius: 8px;
+  color: rgba(255, 255, 255, 0.6);
   text-decoration: none;
   transition: all 0.2s ease;
   font-weight: 500;
+  font-size: 0.875rem;
 }
 
 .sidebar-link:hover {
-  background: hsl(220 20% 96%);
-  color: hsl(220 15% 12%);
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.9);
 }
 
 .sidebar-link.active {
-  background: hsl(260 90% 58%);
-  color: white;
+  background: linear-gradient(135deg, rgba(34, 197, 94, 0.15), rgba(59, 130, 246, 0.1));
+  color: #22c55e;
+  border-left: 3px solid #22c55e;
+  padding-left: calc(1rem - 3px);
 }
 
-.content-badge {
-  padding: 0.25rem 0.75rem;
-  border-radius: 9999px;
-  font-size: 0.75rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.025em;
+.revenue-chart-bar {
+  transition: all 0.3s ease;
 }
 
-.status-badge-active {
-  background: hsl(170 70% 50% / 0.15);
-  color: hsl(170 70% 35%);
+.revenue-chart-bar:hover {
+  opacity: 0.8;
+  transform: scaleY(1.05);
 }
 
-.status-badge-pending {
-  background: hsl(45 95% 50% / 0.15);
-  color: hsl(45 90% 35%);
+.activity-item {
+  padding: 0.75rem;
+  border-left: 2px solid rgba(34, 197, 94, 0.3);
+  background: rgba(23, 27, 40, 0.4);
+  border-radius: 4px;
+  margin-bottom: 0.5rem;
+  transition: all 0.2s ease;
 }
 
-.status-badge-draft {
-  background: hsl(220 15% 50% / 0.15);
-  color: hsl(220 15% 35%);
+.activity-item:hover {
+  background: rgba(23, 27, 40, 0.6);
+  border-left-color: #22c55e;
 }
 
-.page-header {
-  margin-bottom: 2rem;
-}
-
-.page-header h1 {
-  font-family: 'Work Sans', sans-serif;
-  font-size: 2rem;
-  font-weight: 700;
-  color: hsl(220 15% 12%);
-  margin: 0 0 0.5rem 0;
-}
-
-.page-header p {
-  font-size: 1rem;
-  color: hsl(220 10% 45%);
-  margin: 0;
+.profit-badge {
+  position: fixed;
+  bottom: 2rem;
+  left: 2rem;
+  background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+  padding: 1rem 1.5rem;
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(34, 197, 94, 0.3);
+  z-index: 50;
 }
 
 .glass-panel {
-  background: rgba(255, 255, 255, 0.7);
-  backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.5);
-  border-radius: 1rem;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08);
+  background: rgba(23, 27, 40, 0.6);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 12px;
 }
 
-.mobile-sidebar-open {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: white;
-  z-index: 50;
-  overflow-y: auto;
+.trend-up {
+  color: #22c55e;
+}
+
+.trend-down {
+  color: #ef4444;
 }

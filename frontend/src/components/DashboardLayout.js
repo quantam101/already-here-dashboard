@@ -8,20 +8,23 @@ import {
   Rocket,
   CheckCircle2,
   Shield,
+  TrendingUp,
+  Link as LinkIcon,
   Menu,
   X,
 } from "lucide-react";
 import { useState } from "react";
 
 const navigation = [
-  { name: "Overview", path: "/overview", icon: LayoutDashboard },
-  { name: "Revenue", path: "/revenue", icon: DollarSign },
-  { name: "Content", path: "/content", icon: FileText },
-  { name: "Agents", path: "/agents", icon: Bot },
-  { name: "Builds", path: "/builds", icon: Package },
-  { name: "Deployments", path: "/deployments", icon: Rocket },
-  { name: "Approvals", path: "/approvals", icon: CheckCircle2 },
-  { name: "Audit", path: "/audit", icon: Shield },
+  { name: "Command Center", path: "/overview", icon: LayoutDashboard, section: "operations" },
+  { name: "Income Streams", path: "/revenue", icon: DollarSign, section: "operations" },
+  { name: "AI Agents", path: "/agents", icon: Bot, section: "operations" },
+  { name: "Content Factory", path: "/content", icon: FileText, section: "operations" },
+  { name: "Revenue Intel", path: "/builds", icon: TrendingUp, section: "revenue" },
+  { name: "Merch / POD", path: "/deployments", icon: Package, section: "revenue" },
+  { name: "Affiliate Links", path: "/approvals", icon: LinkIcon, section: "revenue" },
+  { name: "VHLL / AAF", path: "/audit", icon: Rocket, section: "system" },
+  { name: "LGAC Monitor", path: "/audit", icon: Shield, section: "system" },
 ];
 
 export default function DashboardLayout() {
@@ -30,51 +33,114 @@ export default function DashboardLayout() {
 
   return (
     <div className="dashboard-layout">
-      {/* Sidebar - Desktop */}
-      <aside className="hidden lg:block bg-white border-r border-gray-200 px-6 py-8">
-        <div className="mb-12">
-          <h1 className="text-2xl font-bold gradient-text" data-testid="dashboard-title">
-            Command OS
-          </h1>
-          <p className="text-sm text-gray-500 mt-1">Already Here Ecosystem</p>
+      <aside className="hidden lg:block border-r border-gray-800 px-5 py-6" style={{ background: '#0f1419' }}>
+        <div className="mb-8">
+          <div className="flex items-center gap-3 mb-2">
+            <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg flex items-center justify-center">
+              <span className="text-white font-bold text-lg">P</span>
+            </div>
+            <div>
+              <h1 className="text-white font-bold text-lg" style={{ fontFamily: 'Space Grotesk' }} data-testid="dashboard-title">
+                ProfitEngine
+              </h1>
+              <p className="text-gray-500 text-xs">v5.0x - PRODUCTION - VHLL PROD</p>
+            </div>
+          </div>
         </div>
 
         <nav className="space-y-1" data-testid="sidebar-nav">
-          {navigation.map((item) => {
-            const Icon = item.icon;
-            const isActive = location.pathname === item.path;
-            return (
-              <NavLink
-                key={item.path}
-                to={item.path}
-                className={`sidebar-link ${isActive ? "active" : ""}`}
-                data-testid={`nav-${item.name.toLowerCase()}`}
-              >
-                <Icon className="w-5 h-5" />
-                {item.name}
-              </NavLink>
-            );
-          })}
+          <div className="mb-6">
+            <div className="text-gray-500 text-xs font-semibold uppercase tracking-wider mb-2 px-3">
+              Operations
+            </div>
+            {navigation
+              .filter((item) => item.section === "operations")
+              .map((item) => {
+                const Icon = item.icon;
+                const isActive = location.pathname === item.path;
+                return (
+                  <NavLink
+                    key={item.path}
+                    to={item.path}
+                    className={`sidebar-link ${isActive ? "active" : ""}`}
+                    data-testid={`nav-${item.name.toLowerCase().replace(/\\s+/g, '-')}`}
+                  >
+                    <Icon className="w-4 h-4" />
+                    <span className="text-sm">{item.name}</span>
+                  </NavLink>
+                );
+              })}
+          </div>
+
+          <div className="mb-6">
+            <div className="text-gray-500 text-xs font-semibold uppercase tracking-wider mb-2 px-3">
+              Revenue
+            </div>
+            {navigation
+              .filter((item) => item.section === "revenue")
+              .map((item) => {
+                const Icon = item.icon;
+                const isActive = location.pathname === item.path;
+                return (
+                  <NavLink
+                    key={item.path}
+                    to={item.path}
+                    className={`sidebar-link ${isActive ? "active" : ""}`}
+                  >
+                    <Icon className="w-4 h-4" />
+                    <span className="text-sm">{item.name}</span>
+                  </NavLink>
+                );
+              })}
+          </div>
+
+          <div>
+            <div className="text-gray-500 text-xs font-semibold uppercase tracking-wider mb-2 px-3">
+              System
+            </div>
+            {navigation
+              .filter((item) => item.section === "system")
+              .map((item) => {
+                const Icon = item.icon;
+                const isActive = location.pathname === item.path;
+                return (
+                  <NavLink
+                    key={item.path}
+                    to={item.path}
+                    className={`sidebar-link ${isActive ? "active" : ""}`}
+                  >
+                    <Icon className="w-4 h-4" />
+                    <span className="text-sm">{item.name}</span>
+                  </NavLink>
+                );
+              })}
+          </div>
         </nav>
 
-        <div className="mt-12 p-4 bg-gradient-to-br from-purple-50 to-blue-50 rounded-lg" data-testid="sidebar-info">
-          <div className="text-sm font-semibold text-gray-700 mb-1">
-            System Status
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-            <span className="text-xs text-gray-600">All Systems Operational</span>
+        <div className="mt-auto pt-6" data-testid="sidebar-info">
+          <div className="p-3 border border-gray-700 rounded-lg" style={{ background: 'rgba(31, 41, 55, 0.5)' }}>
+            <div className="flex items-center gap-2 mb-2">
+              <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+              <span className="text-xs font-semibold text-gray-300">System Status</span>
+            </div>
+            <div className="text-xs text-gray-400">All services operational</div>
           </div>
         </div>
       </aside>
 
-      {/* Mobile Header */}
-      <div className="lg:hidden fixed top-0 left-0 right-0 bg-white border-b border-gray-200 px-4 py-3 z-40">
+      <div className="lg:hidden fixed top-0 left-0 right-0 border-b border-gray-800 px-4 py-3 z-40" style={{ background: '#0f1419' }}>
         <div className="flex items-center justify-between">
-          <h1 className="text-xl font-bold gradient-text">Command OS</h1>
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg flex items-center justify-center">
+              <span className="text-white font-bold">P</span>
+            </div>
+            <h1 className="text-white font-bold" style={{ fontFamily: 'Space Grotesk' }}>
+              ProfitEngine
+            </h1>
+          </div>
           <button
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            className="p-2 hover:bg-gray-100 rounded-lg"
+            className="p-2 hover:bg-gray-800 rounded-lg text-gray-400"
             data-testid="mobile-menu-toggle"
           >
             {mobileMenuOpen ? <X /> : <Menu />}
@@ -82,9 +148,8 @@ export default function DashboardLayout() {
         </div>
       </div>
 
-      {/* Mobile Menu */}
       {mobileMenuOpen && (
-        <div className="lg:hidden mobile-sidebar-open" data-testid="mobile-sidebar">
+        <div className="lg:hidden mobile-sidebar-open" style={{ background: '#0f1419' }} data-testid="mobile-sidebar">
           <div className="px-4 py-20">
             <nav className="space-y-1">
               {navigation.map((item) => {
@@ -97,7 +162,7 @@ export default function DashboardLayout() {
                     onClick={() => setMobileMenuOpen(false)}
                     className={`sidebar-link ${isActive ? "active" : ""}`}
                   >
-                    <Icon className="w-5 h-5" />
+                    <Icon className="w-4 h-4" />
                     {item.name}
                   </NavLink>
                 );
@@ -107,8 +172,7 @@ export default function DashboardLayout() {
         </div>
       )}
 
-      {/* Main Content */}
-      <main className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-blue-50 p-6 lg:p-12 mt-16 lg:mt-0" data-testid="main-content">
+      <main className="min-h-screen mt-16 lg:mt-0" data-testid="main-content">
         <Outlet />
       </main>
     </div>
