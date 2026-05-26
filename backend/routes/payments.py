@@ -201,7 +201,10 @@ async def get_checkout_status(session_id: str, http_request: Request, db=Depends
     Idempotently records to ledger when payment_status == 'paid'.
     """
     stripe_checkout = _get_stripe(http_request)
-    status = await stripe_checkout.get_checkout_status(session_id)
+    try:
+        status = await stripe_checkout.get_checkout_status(session_id)
+    except Exception as e:
+        raise HTTPException(status_code=404, detail=f"Stripe session not found: {e}") from e
 
     txn = await db.payment_transactions.find_one({"session_id": session_id}, {"_id": 0})
     if not txn:

@@ -23,7 +23,19 @@ Build a complete enterprise-grade, governed multi-agent operating system consoli
 
 ## What's Been Implemented (2026-05-26)
 
-### Iteration 6 - Code Quality Fixes (latest)
+### Iteration 7 - Stripe Payments + Analytics + AI Advisor + Auto-Cycle (latest)
+**Real money receiving, real analytics, real intelligence:**
+- **`/api/payments/` route** (Stripe via emergentintegrations) — 3 fixed packages: starter $49 one-time, pro $99/mo, enterprise $499/mo. Successful checkouts auto-write a ledger entry to `rev-saas` stream so the $25K Proof-of-Work meter ticks on REAL money. Webhook handler at `/api/payments/webhook` for Stripe events. Idempotent recording (no double-credit).
+- **`/api/analytics/` route** — 6 endpoints: funnel, posting-times, stream-roi, platform-mix, viral-themes, momentum + combined `/dashboard` payload. All data live from ledger + publishing_log + content_ideas (zero seeded analytics)
+- **`/api/advisor/` route** (Claude Sonnet 4-5 via Emergent LLM) — reads live dashboard JSON snapshot, returns ONE prioritized next-action with headline/rationale/confidence
+- **`services/scheduler_service.py`** — asyncio in-process daily auto-cycle at 7am UTC (configurable via `DAILY_CYCLE_HOUR_UTC`, disabled in `SYSTEM_MODE=test`)
+- **Frontend `/analytics`** — AI Advisor card + 6 visualization cards (Recharts, dark theme, empty-state guards)
+- **Frontend `/pricing`** — 3 PriceCards with Stripe Checkout integration + test card instructions + live-keys swap guidance
+- **Frontend `/payment-success`** — Polling with hard-fail on 4xx, paid/error/expired/processing states
+- 67/67 pytest pass (added 9 new tests: payments, analytics, advisor)
+- All polish items from iteration_7 testing report fixed (Stripe 404 handling, polling stop on 4xx, Recharts empty-data guard)
+
+### Iteration 6 - Code Quality Fixes
 - Extracted module-level constants: `SECTIONS_BY_TYPE` + `DEFAULT_COMPANY` in `proposals.py` (cut `_build_prompt` complexity 11→6)
 - Extracted helpers: `_format_bullet_list` (proposals), `_coerce_amount` + `_parse_csv_row` (ledger), `_make_idea_doc` + `_make_publishing_draft` (cycle) — reduces complexity across the board
 - Extracted `CONTENT_TYPE_OPTIONS`, `TONE_OPTIONS`, `LENGTH_OPTIONS` in ContentGenerateDialog (eliminates inline array re-render anti-pattern)

@@ -119,15 +119,21 @@ function MomentumCard({ data }) {
         <StatTile label="$/day" value={`$${data.daily_avg_last_7d}`} accent="text-yellow-400" />
       </div>
       <div className="h-32">
-        <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={chartData} margin={{ top: 4, right: 4, bottom: 4, left: -24 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" />
-            <XAxis dataKey="date" tick={{ fill: "#9ca3af", fontSize: 9 }} />
-            <YAxis tick={{ fill: "#9ca3af", fontSize: 9 }} />
-            <Tooltip contentStyle={{ background: "#0f1419", border: "1px solid #1f2937", color: "#fff" }} />
-            <Line type="monotone" dataKey="net" stroke="#22c55e" strokeWidth={2} dot={false} />
-          </LineChart>
-        </ResponsiveContainer>
+        {chartData.length > 0 ? (
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart data={chartData} margin={{ top: 4, right: 4, bottom: 4, left: -24 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" />
+              <XAxis dataKey="date" tick={{ fill: "#9ca3af", fontSize: 9 }} />
+              <YAxis tick={{ fill: "#9ca3af", fontSize: 9 }} />
+              <Tooltip contentStyle={{ background: "#0f1419", border: "1px solid #1f2937", color: "#fff" }} />
+              <Line type="monotone" dataKey="net" stroke="#22c55e" strokeWidth={2} dot={false} />
+            </LineChart>
+          </ResponsiveContainer>
+        ) : (
+          <div className="h-full flex items-center justify-center text-xs text-gray-500">
+            No data yet · log earnings to see the curve
+          </div>
+        )}
       </div>
     </div>
   );

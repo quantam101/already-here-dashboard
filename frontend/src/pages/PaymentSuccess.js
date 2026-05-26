@@ -31,6 +31,12 @@ export default function PaymentSuccess() {
         setState({ status: d.payment_status, data: d, attempts: attempt });
         if (d.payment_status === "paid" || d.status === "expired" || attempt >= MAX_ATTEMPTS) return;
       } catch (e) {
+        const code = e?.response?.status;
+        // Hard-fail (404 / 4xx not transient) - stop polling and surface error
+        if (code && code >= 400 && code < 500) {
+          setState({ status: "error", data: { error: e?.response?.data?.detail || e.message }, attempts: attempt });
+          return;
+        }
         setState({ status: "error", data: { error: e.message }, attempts: attempt });
         if (attempt >= MAX_ATTEMPTS) return;
       }
@@ -42,6 +48,7 @@ export default function PaymentSuccess() {
 
   const isPaid = state.status === "paid";
   const isExpired = state.data?.status === "expired";
+  const isError = state.status === "error";
 
   return (
     <div className="min-h-screen bg-[#0a0e1a] flex items-center justify-center p-6" data-testid="payment-success-page">
@@ -73,12 +80,22 @@ export default function PaymentSuccess() {
             </div>
           </>
         )}
-        {!isPaid && !isExpired && (
+        {!isPaid && !isExpired && !isError && (
           <>
             <Clock className="w-16 h-16 text-yellow-400 mx-auto mb-4 animate-pulse" />
             <h1 className="text-2xl font-bold text-white mb-2">Processing payment...</h1>
             <p className="text-gray-400 mb-4">Polling status (attempt {state.attempts}/{MAX_ATTEMPTS})</p>
             <p className="text-xs text-gray-500 font-mono">Session: {sessionId?.slice(0, 40)}...</p>
+          </>
+        )}
+        {isError && (
+          <>
+            <XCircle className="w-16 h-16 text-red-400 mx-auto mb-4" data-testid="payment-error-icon" />
+            <h1 className="text-2xl font-bold text-white mb-2">Status check failed</h1>
+            <p className="text-gray-400 mb-6 text-sm">{state.data?.error || "Unknown error"}</p>
+            <Button onClick={() => navigate("/pricing")} className="bg-blue-600 hover:bg-blue-700 text-white">
+              Back to Pricing
+            </Button>
           </>
         )}
         {isExpired && (
