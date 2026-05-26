@@ -1,7 +1,23 @@
 # Already Here Command OS — Deploy Handoff (for any DevOps freelancer)
 
 > **Target turnaround:** 60–90 minutes  
-> **Budget:** $50–150 flat fee is reasonable. This is a routine OCI deployment.
+> **Budget:** $50–150 flat fee is reasonable. This is a routine OCI deployment.  
+> **Operator contact:** alreadyherellc@gmail.com
+
+---
+
+## TL;DR for the freelancer
+
+You're deploying a **production-ready FastAPI + React app** to **Oracle Cloud Always Free**. The code, tests, Docker config, Caddy config, and bootstrap scripts are all done. The operator has hit terminal/SSH access issues that they cannot resolve via OCI Cloud Shell. **They need someone with their own SSH-capable terminal to take this across the finish line.**
+
+You will:
+1. Get OCI tenancy access OR a public IP + private SSH key from the operator
+2. SSH in (or recreate the instance with your own SSH key)
+3. Run the bootstrap (one curl command)
+4. Wait 10 minutes
+5. Verify the site is live at `https://alreadyherellc.com`
+
+That's the entire scope.
 
 ---
 
@@ -11,10 +27,18 @@ A FastAPI + React application:
 
 - **Code:** https://github.com/Quantam101/already-here-dashboard (public, includes all deploy artifacts)
 - **Target server:** Oracle Cloud Always Free, Ubuntu, public IP **144.24.60.159**  (region: us-phoenix-1)
-- **Target domain:** **alreadyherellc.com** (GoDaddy DNS already pointing at the IP)
-- **HTTPS:** Caddy + Let's Encrypt (auto)
+- **Target domain:** **alreadyherellc.com** (GoDaddy DNS A-record currently points at the IP above)
+- **HTTPS:** Caddy + Let's Encrypt (auto-issued)
 - **Database:** SQLite on persistent disk (host is 1 GB RAM, MongoDB is too heavy)
 - **Required end state:** `https://alreadyherellc.com` returns the dashboard with HTTPS, Google login works, Quickstart Wizard appears.
+
+## Current blocker (why operator handed off)
+
+- Operator tried multiple times via OCI Cloud Shell. Hit:
+  - Cloud-init paste mangling (long SSH key got truncated in OCI form)
+  - Docker install failure (`get.docker.com` tries to install `docker-model-plugin` which doesn't exist on Ubuntu 20.04 focal — EOL)
+  - OCI Cloud Shell intermittently times out connecting to the instance even when port 22 is open from the public internet
+- **All of the above are operator-environment issues, not code issues.** The repo is healthy: 104/104 backend tests passing, deploy scripts patched, all artifacts committed.
 
 ## Status when handed off
 
