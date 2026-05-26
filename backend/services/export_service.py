@@ -3,70 +3,8 @@ import json
 from datetime import datetime
 from pathlib import Path
 
-async def create_export_pack(post: dict) -> str:
-    """
-    Create a ready-to-post export pack for manual platform upload.
-    Generates all necessary files and metadata.
-    """
-    
-    export_dir = Path("/app/exports")
-    export_dir.mkdir(exist_ok=True)
-    
-    post_id = post['id']
-    platform = post['platform']
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    
-    pack_dir = export_dir / f"{platform}_{post_id}_{timestamp}"
-    pack_dir.mkdir(exist_ok=True)
-    
-    # Generate export package metadata
-    export_metadata = {
-        "post_id": post_id,
-        "platform": platform,
-        "scheduled_time": post.get('scheduled_time', ''),
-        "title": post.get('title', ''),
-        "caption": post['caption'],
-        "hashtags": post.get('hashtags', []),
-        "media_urls": post.get('media_urls', []),
-        "thumbnail_url": post.get('thumbnail_url'),
-        "publishing_method": "manual_upload",
-        "created_at": datetime.now().isoformat(),
-        "instructions": get_platform_upload_instructions(platform)
-    }
-    
-    # Write metadata file
-    metadata_file = pack_dir / "post_metadata.json"
-    with open(metadata_file, 'w') as f:
-        json.dump(export_metadata, f, indent=2)
-    
-    # Write caption file
-    caption_file = pack_dir / "caption.txt"
-    with open(caption_file, 'w') as f:
-        f.write(post['caption'])
-        if post.get('hashtags'):
-            f.write("\n\n")
-            f.write(" ".join(f"#{tag}" for tag in post['hashtags']))
-    
-    # Write upload instructions
-    instructions_file = pack_dir / "UPLOAD_INSTRUCTIONS.txt"
-    with open(instructions_file, 'w') as f:
-        f.write(get_platform_upload_instructions(platform))
-    
-    # Write title file if exists
-    if post.get('title'):
-        title_file = pack_dir / "title.txt"
-        with open(title_file, 'w') as f:
-            f.write(post['title'])
-    
-    return str(pack_dir)
-
-def get_platform_upload_instructions(platform: str) -> str:
-    """
-    Generate detailed manual upload instructions for each platform.
-    """
-    
-    instructions = {
-        "tiktok": """TIKTOK MANUAL UPLOAD INSTRUCTIONS
+PLATFORM_INSTRUCTIONS = {
+    "tiktok": """TIKTOK MANUAL UPLOAD INSTRUCTIONS
 
 1. Open TikTok app or https://www.tiktok.com/creator
 2. Click the '+' button to create new post
@@ -80,7 +18,7 @@ def get_platform_upload_instructions(platform: str) -> str:
 NOTE: TikTok Content Posting API requires app registration and approval.
 Setup instructions: https://developers.tiktok.com/doc/content-posting-api-get-started/
 """,
-        "youtube": """YOUTUBE MANUAL UPLOAD INSTRUCTIONS
+    "youtube": """YOUTUBE MANUAL UPLOAD INSTRUCTIONS
 
 1. Go to https://studio.youtube.com
 2. Click 'Create' → 'Upload videos'
@@ -96,7 +34,7 @@ Setup instructions: https://developers.tiktok.com/doc/content-posting-api-get-st
 NOTE: YouTube Data API v3 requires OAuth2 setup and app verification.
 Setup: https://developers.google.com/youtube/v3/getting-started
 """,
-        "instagram": """INSTAGRAM MANUAL UPLOAD INSTRUCTIONS
+    "instagram": """INSTAGRAM MANUAL UPLOAD INSTRUCTIONS
 
 1. Open Instagram app
 2. Tap '+' to create new post/reel
@@ -111,7 +49,7 @@ Setup: https://developers.google.com/youtube/v3/getting-started
 NOTE: Instagram Graph API requires Facebook App, app review, and approved permissions.
 Setup: https://developers.facebook.com/docs/instagram-api
 """,
-        "linkedin": """LINKEDIN MANUAL UPLOAD INSTRUCTIONS
+    "linkedin": """LINKEDIN MANUAL UPLOAD INSTRUCTIONS
 
 1. Go to https://www.linkedin.com
 2. Click 'Start a post'
@@ -121,10 +59,10 @@ Setup: https://developers.facebook.com/docs/instagram-api
 6. Select audience visibility
 7. Click 'Post' or schedule
 
-NOTE: LinkedIn API posting requires OAuth2 app setup and r_liteprofile, w_member_social permissions.
+NOTE: LinkedIn API posting requires OAuth2 app setup and permissions.
 Setup: https://docs.microsoft.com/en-us/linkedin/marketing/integrations/community-management/shares/share-api
 """,
-        "twitter": """TWITTER/X MANUAL UPLOAD INSTRUCTIONS
+    "twitter": """TWITTER/X MANUAL UPLOAD INSTRUCTIONS
 
 1. Go to https://twitter.com or open X app
 2. Click 'Post' or '+'
@@ -137,9 +75,11 @@ NOTE: Twitter API v2 posting requires Elevated access or Enterprise plan ($$$).
 Free tier does not support tweet creation.
 Setup: https://developer.twitter.com/en/portal/petition/essential/basic-info
 """,
-    }
-    
-    return instructions.get(platform, f"""MANUAL UPLOAD INSTRUCTIONS FOR {platform.upper()}
+}
+
+def get_platform_upload_instructions(platform: str) -> str:
+    """Get detailed manual upload instructions for each platform."""
+    return PLATFORM_INSTRUCTIONS.get(platform, f"""MANUAL UPLOAD INSTRUCTIONS FOR {platform.upper()}
 
 1. Log into {platform}
 2. Navigate to content creation area
@@ -150,3 +90,68 @@ Setup: https://developer.twitter.com/en/portal/petition/essential/basic-info
 
 API integration not yet configured for this platform.
 """)
+
+def create_export_metadata(post: dict) -> dict:
+    """Create export package metadata."""
+    return {
+        "post_id": post['id'],
+        "platform": post['platform'],
+        "scheduled_time": post.get('scheduled_time', ''),
+        "title": post.get('title', ''),
+        "caption": post['caption'],
+        "hashtags": post.get('hashtags', []),
+        "media_urls": post.get('media_urls', []),
+        "thumbnail_url": post.get('thumbnail_url'),
+        "publishing_method": "manual_upload",
+        "created_at": datetime.now().isoformat(),
+        "instructions": get_platform_upload_instructions(post['platform'])
+    }
+
+def write_export_files(pack_dir: Path, post: dict, metadata: dict):
+    """Write all export files to the pack directory."""
+    # Write metadata file
+    metadata_file = pack_dir / "post_metadata.json"
+    with open(metadata_file, 'w') as f:
+        json.dump(metadata, f, indent=2)
+    
+    # Write caption file
+    caption_file = pack_dir / "caption.txt"
+    with open(caption_file, 'w') as f:
+        f.write(post['caption'])
+        if post.get('hashtags'):
+            f.write("\n\n")
+            f.write(" ".join(f"#{tag}" for tag in post['hashtags']))
+    
+    # Write upload instructions
+    instructions_file = pack_dir / "UPLOAD_INSTRUCTIONS.txt"
+    with open(instructions_file, 'w') as f:
+        f.write(get_platform_upload_instructions(post['platform']))
+    
+    # Write title file if exists
+    if post.get('title'):
+        title_file = pack_dir / "title.txt"
+        with open(title_file, 'w') as f:
+            f.write(post['title'])
+
+async def create_export_pack(post: dict) -> str:
+    """
+    Create a ready-to-post export pack for manual platform upload.
+    Generates all necessary files and metadata.
+    """
+    export_dir = Path("/app/exports")
+    export_dir.mkdir(exist_ok=True)
+    
+    post_id = post['id']
+    platform = post['platform']
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    
+    pack_dir = export_dir / f"{platform}_{post_id}_{timestamp}"
+    pack_dir.mkdir(exist_ok=True)
+    
+    # Generate export package metadata
+    export_metadata = create_export_metadata(post)
+    
+    # Write all files
+    write_export_files(pack_dir, post, export_metadata)
+    
+    return str(pack_dir)

@@ -1,4 +1,5 @@
 import { Outlet, NavLink, useLocation } from "react-router-dom";
+import { useMemo, useState } from "react";
 import {
   LayoutDashboard,
   DollarSign,
@@ -6,30 +7,69 @@ import {
   Bot,
   Package,
   Rocket,
-  CheckCircle2,
   Shield,
   TrendingUp,
   Link as LinkIcon,
+  Sparkles,
   Menu,
   X,
 } from "lucide-react";
-import { useState } from "react";
 
-const navigation = [
+const NAVIGATION = [
   { name: "Command Center", path: "/overview", icon: LayoutDashboard, section: "operations" },
   { name: "Income Streams", path: "/revenue", icon: DollarSign, section: "operations" },
   { name: "AI Agents", path: "/agents", icon: Bot, section: "operations" },
-  { name: "Content Factory", path: "/content", icon: FileText, section: "operations" },
+  { name: "Content Factory", path: "/studio", icon: Sparkles, section: "operations" },
+  { name: "Content Library", path: "/content", icon: FileText, section: "revenue" },
   { name: "Revenue Intel", path: "/builds", icon: TrendingUp, section: "revenue" },
-  { name: "Merch / POD", path: "/deployments", icon: Package, section: "revenue" },
+  { name: "Deployments", path: "/deployments", icon: Package, section: "revenue" },
   { name: "Affiliate Links", path: "/approvals", icon: LinkIcon, section: "revenue" },
-  { name: "VHLL / AAF", path: "/audit", icon: Rocket, section: "system" },
+  { name: "Audit Log", path: "/audit", icon: Rocket, section: "system" },
   { name: "LGAC Monitor", path: "/audit", icon: Shield, section: "system" },
 ];
+
+const SECTIONS = ["operations", "revenue", "system"];
+
+function NavSection({ title, items, pathname, onLinkClick }) {
+  return (
+    <div className="mb-6">
+      <div className="text-gray-500 text-xs font-semibold uppercase tracking-wider mb-2 px-3">
+        {title}
+      </div>
+      {items.map((item) => {
+        const Icon = item.icon;
+        const isActive = pathname === item.path;
+        return (
+          <NavLink
+            key={`${item.name}-${item.path}`}
+            to={item.path}
+            onClick={onLinkClick}
+            className={`sidebar-link ${isActive ? "active" : ""}`}
+            data-testid={`nav-${item.name.toLowerCase().replace(/\s+/g, '-')}`}
+          >
+            <Icon className="w-4 h-4" />
+            <span className="text-sm">{item.name}</span>
+          </NavLink>
+        );
+      })}
+    </div>
+  );
+}
 
 export default function DashboardLayout() {
   const location = useLocation();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  // Memoize grouped navigation to prevent re-computation on every render
+  const navGroups = useMemo(() => {
+    const groups = {};
+    SECTIONS.forEach((section) => {
+      groups[section] = NAVIGATION.filter((item) => item.section === section);
+    });
+    return groups;
+  }, []);
+
+  const closeMobileMenu = () => setMobileMenuOpen(false);
 
   return (
     <div className="dashboard-layout">
@@ -43,78 +83,15 @@ export default function DashboardLayout() {
               <h1 className="text-white font-bold text-lg" style={{ fontFamily: 'Space Grotesk' }} data-testid="dashboard-title">
                 ProfitEngine
               </h1>
-              <p className="text-gray-500 text-xs">v5.0x - PRODUCTION - VHLL PROD</p>
+              <p className="text-gray-500 text-xs">v5.0x · PRODUCTION · VHLL</p>
             </div>
           </div>
         </div>
 
         <nav className="space-y-1" data-testid="sidebar-nav">
-          <div className="mb-6">
-            <div className="text-gray-500 text-xs font-semibold uppercase tracking-wider mb-2 px-3">
-              Operations
-            </div>
-            {navigation
-              .filter((item) => item.section === "operations")
-              .map((item) => {
-                const Icon = item.icon;
-                const isActive = location.pathname === item.path;
-                return (
-                  <NavLink
-                    key={item.path}
-                    to={item.path}
-                    className={`sidebar-link ${isActive ? "active" : ""}`}
-                    data-testid={`nav-${item.name.toLowerCase().replace(/\\s+/g, '-')}`}
-                  >
-                    <Icon className="w-4 h-4" />
-                    <span className="text-sm">{item.name}</span>
-                  </NavLink>
-                );
-              })}
-          </div>
-
-          <div className="mb-6">
-            <div className="text-gray-500 text-xs font-semibold uppercase tracking-wider mb-2 px-3">
-              Revenue
-            </div>
-            {navigation
-              .filter((item) => item.section === "revenue")
-              .map((item) => {
-                const Icon = item.icon;
-                const isActive = location.pathname === item.path;
-                return (
-                  <NavLink
-                    key={item.path}
-                    to={item.path}
-                    className={`sidebar-link ${isActive ? "active" : ""}`}
-                  >
-                    <Icon className="w-4 h-4" />
-                    <span className="text-sm">{item.name}</span>
-                  </NavLink>
-                );
-              })}
-          </div>
-
-          <div>
-            <div className="text-gray-500 text-xs font-semibold uppercase tracking-wider mb-2 px-3">
-              System
-            </div>
-            {navigation
-              .filter((item) => item.section === "system")
-              .map((item) => {
-                const Icon = item.icon;
-                const isActive = location.pathname === item.path;
-                return (
-                  <NavLink
-                    key={item.path}
-                    to={item.path}
-                    className={`sidebar-link ${isActive ? "active" : ""}`}
-                  >
-                    <Icon className="w-4 h-4" />
-                    <span className="text-sm">{item.name}</span>
-                  </NavLink>
-                );
-              })}
-          </div>
+          <NavSection title="Operations" items={navGroups.operations} pathname={location.pathname} />
+          <NavSection title="Revenue" items={navGroups.revenue} pathname={location.pathname} />
+          <NavSection title="System" items={navGroups.system} pathname={location.pathname} />
         </nav>
 
         <div className="mt-auto pt-6" data-testid="sidebar-info">
@@ -124,6 +101,7 @@ export default function DashboardLayout() {
               <span className="text-xs font-semibold text-gray-300">System Status</span>
             </div>
             <div className="text-xs text-gray-400">All services operational</div>
+            <div className="text-xs text-green-400 mt-1">$0/month cost</div>
           </div>
         </div>
       </aside>
@@ -149,25 +127,11 @@ export default function DashboardLayout() {
       </div>
 
       {mobileMenuOpen && (
-        <div className="lg:hidden mobile-sidebar-open" style={{ background: '#0f1419' }} data-testid="mobile-sidebar">
-          <div className="px-4 py-20">
-            <nav className="space-y-1">
-              {navigation.map((item) => {
-                const Icon = item.icon;
-                const isActive = location.pathname === item.path;
-                return (
-                  <NavLink
-                    key={item.path}
-                    to={item.path}
-                    onClick={() => setMobileMenuOpen(false)}
-                    className={`sidebar-link ${isActive ? "active" : ""}`}
-                  >
-                    <Icon className="w-4 h-4" />
-                    {item.name}
-                  </NavLink>
-                );
-              })}
-            </nav>
+        <div className="lg:hidden fixed inset-0 z-30 overflow-y-auto pt-16" style={{ background: '#0f1419' }} data-testid="mobile-sidebar">
+          <div className="px-4 py-6">
+            <NavSection title="Operations" items={navGroups.operations} pathname={location.pathname} onLinkClick={closeMobileMenu} />
+            <NavSection title="Revenue" items={navGroups.revenue} pathname={location.pathname} onLinkClick={closeMobileMenu} />
+            <NavSection title="System" items={navGroups.system} pathname={location.pathname} onLinkClick={closeMobileMenu} />
           </div>
         </div>
       )}

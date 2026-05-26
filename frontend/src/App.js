@@ -9,6 +9,7 @@ import Builds from "./pages/Builds";
 import Deployments from "./pages/Deployments";
 import Approvals from "./pages/Approvals";
 import Audit from "./pages/Audit";
+import ContentStudio from "./pages/ContentStudio";
 import { Toaster } from "sonner";
 
 function App() {
@@ -21,6 +22,7 @@ function App() {
             <Route path="overview" element={<Overview />} />
             <Route path="revenue" element={<Revenue />} />
             <Route path="content" element={<Content />} />
+            <Route path="studio" element={<ContentStudio />} />
             <Route path="agents" element={<Agents />} />
             <Route path="builds" element={<Builds />} />
             <Route path="deployments" element={<Deployments />} />
