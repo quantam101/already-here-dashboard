@@ -30,6 +30,17 @@ export const contentAPI = {
   delete: (id) => api.delete(`/content/${id}`),
 };
 
+// Content Studio (ideas + scripts)
+export const studioAPI = {
+  getIdeas: () => api.get("/studio/ideas/"),
+  createIdea: (data) => api.post("/studio/ideas/", data),
+  generateScript: (ideaId) => api.post(`/studio/ideas/${ideaId}/script`),
+  scriptsForIdea: (ideaId) => api.get(`/studio/ideas/${ideaId}/scripts`),
+  allScripts: () => api.get("/studio/scripts/"),
+  getConnectors: () => api.get("/studio/connectors/"),
+  getScheduled: () => api.get("/studio/schedule/"),
+};
+
 // Agents API
 export const agentsAPI = {
   getAll: (params) => api.get("/agents/", { params }),

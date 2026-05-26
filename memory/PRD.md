@@ -23,7 +23,15 @@ Build a complete enterprise-grade, governed multi-agent operating system consoli
 
 ## What's Been Implemented (2026-05-26)
 
-### Iteration 9 - Quickstart Wizard + UTM Channel Attribution + Deploy Guide (latest)
+### Iteration 10 - Read/Copy/Post Content Flow + Agents UX Polish (latest)
+**Fixes the "I can't access my generated content" pain. 96/96 pytest.**
+- **`GET /api/studio/scripts/`** + **`GET /api/studio/ideas/{id}/scripts`** — operator can now read every script Gemini generated (was previously written to DB with no surfaced UI)
+- **`<IdeaDetailDialog>`** — clicking an idea card opens a 3xl dialog showing description, target platforms, inspiration source URL, and **all generated scripts** (newest first). Each script section (Hook / Script Body / CTA / Shot List) has its own `copy` button, plus a top-level "Copy Full Script" that bundles everything in CapCut-import-ready format. "Generate Another" button inside the dialog calls Gemini-3-Flash and refreshes the list
+- **`<ContentDetailDialog>`** — Content Library cards are now clickable; opens a 2xl dialog with full body in a `<pre>` block, Copy button, keywords, "Open published URL" if present, and a clear "How to post" instruction line linking to `/proof-of-work` Log Post
+- **Agents page UX rewrite** — replaced scary "Fails: N" red columns with prominent **Success Rate %** (green ✓ if ≥90%, yellow ⚠ otherwise) and a "Fleet Success Rate" header stat (currently 98% across 3,190 historical runs). Agents with 0 fails show **"Status: ✓ Clean"** instead of red "0". Execute button now toasts the agent name and refetches
+- **3 new pytest tests** for studio scripts (list all, list-for-idea, empty-for-nonexistent). Total **96/96 PASSING** (was 93)
+
+### Iteration 9 - Quickstart Wizard + UTM Channel Attribution + Deploy Guide
 **First-run operator onboarding + live channel-of-sale attribution. 93/93 pytest.**
 - **`/api/system/status` route** — operator-facing config snapshot: `operator_email_set`, `stripe_mode` (live/test/missing), `stripe_webhook_secret_set`, `emergent_llm_key_set`, `daily_cycle_hour_utc`, collection counts (revenue_streams/agents/builds/ledger_entries/books/payment_transactions), `is_seeded`. Never leaks secret values — only set/unset flags + masked operator email
 - **QuickstartWizard component** — auto-opens on first visit (gated by `localStorage` key `ah_quickstart_completed_v1`), 5 steps: Welcome → Operator Access → Stripe Mode → Seed Data & LLM → Test Auto-Cycle (one-click `POST /api/cycle/run`). Each step shows live ✓/⚠ from `/api/system/status`. Re-openable from sidebar's "Re-open Quickstart" button

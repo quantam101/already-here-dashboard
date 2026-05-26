@@ -1004,3 +1004,31 @@ class TestSystemStatus:
         assert d["counts"]["revenue_streams"] >= 3
         assert d["counts"]["agents"] >= 3
         assert d["is_seeded"] is True
+
+
+# ---------------- Studio Scripts (read-back of generated scripts) ----------------
+class TestStudioScripts:
+    def test_list_all_scripts_endpoint(self, api):
+        r = api.get(f"{BASE_URL}/api/studio/scripts/")
+        assert r.status_code == 200, r.text
+        d = r.json()
+        assert isinstance(d, list)
+
+    def test_scripts_for_idea_returns_only_that_ideas_scripts(self, api):
+        # Find an idea that has been scripted
+        ideas = api.get(f"{BASE_URL}/api/studio/ideas/").json()
+        scripted = next((i for i in ideas if i.get("status") == "scripted"), None)
+        if scripted is None:
+            pytest.skip("no scripted idea in fixture")
+        r = api.get(f"{BASE_URL}/api/studio/ideas/{scripted['id']}/scripts")
+        assert r.status_code == 200
+        scripts = r.json()
+        assert isinstance(scripts, list)
+        for s in scripts:
+            assert s["idea_id"] == scripted["id"], "leak: script for wrong idea returned"
+
+    def test_scripts_for_nonexistent_idea_returns_empty(self, api):
+        r = api.get(f"{BASE_URL}/api/studio/ideas/idea-does-not-exist/scripts")
+        assert r.status_code == 200
+        assert r.json() == []
+

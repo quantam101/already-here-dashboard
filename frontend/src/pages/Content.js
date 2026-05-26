@@ -5,6 +5,7 @@ import { contentAPI } from "../lib/api";
 import { toast } from "sonner";
 import ContentLibraryCard from "../components/ContentLibraryCard";
 import ContentGenerateDialog from "../components/ContentGenerateDialog";
+import ContentDetailDialog from "../components/ContentDetailDialog";
 
 const INITIAL_FORM = {
   content_type: "blog",
@@ -61,6 +62,7 @@ export default function Content() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [formData, setFormData] = useState(INITIAL_FORM);
+  const [selectedItem, setSelectedItem] = useState(null);
 
   const { data: content = [] } = useQuery({
     queryKey: ["content"],
@@ -115,11 +117,17 @@ export default function Content() {
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4" data-testid="content-list">
             {content.map((item) => (
-              <ContentLibraryCard key={item.id} item={item} />
+              <ContentLibraryCard key={item.id} item={item} onClick={setSelectedItem} />
             ))}
           </div>
         )}
       </div>
+
+      <ContentDetailDialog
+        item={selectedItem}
+        open={!!selectedItem}
+        onOpenChange={(v) => !v && setSelectedItem(null)}
+      />
     </div>
   );
 }

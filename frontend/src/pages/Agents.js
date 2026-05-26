@@ -1,12 +1,15 @@
 import { useQuery } from "@tanstack/react-query";
-import { Bot, Activity, CheckCircle, XCircle } from "lucide-react";
+import { Bot, Activity, CheckCircle, AlertCircle } from "lucide-react";
 import { agentsAPI } from "../lib/api";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 
 function AgentCard({ agent, onExecute }) {
-  const total = (agent.success_count || 0) + (agent.failure_count || 0);
-  const successRate = total > 0 ? Math.round(((agent.success_count || 0) / total) * 100) : 100;
+  const successes = agent.success_count || 0;
+  const failures = agent.failure_count || 0;
+  const total = successes + failures;
+  const successRate = total > 0 ? Math.round((successes / total) * 100) : 100;
+  const isHealthy = successRate >= 90;
 
   return (
     <div
@@ -44,18 +47,22 @@ function AgentCard({ agent, onExecute }) {
           <p className="text-base font-semibold text-white">{agent.run_count || 0}</p>
         </div>
         <div>
-          <p className="text-xs text-gray-500 uppercase tracking-wider mb-0.5">Success</p>
-          <p className="text-base font-semibold text-green-400 flex items-center gap-1">
-            <CheckCircle className="w-3.5 h-3.5" />
+          <p className="text-xs text-gray-500 uppercase tracking-wider mb-0.5">Success rate</p>
+          <p className={`text-base font-semibold flex items-center gap-1 ${isHealthy ? "text-green-400" : "text-yellow-400"}`}>
+            {isHealthy ? <CheckCircle className="w-3.5 h-3.5" /> : <AlertCircle className="w-3.5 h-3.5" />}
             {successRate}%
           </p>
         </div>
         <div>
-          <p className="text-xs text-gray-500 uppercase tracking-wider mb-0.5">Fails</p>
-          <p className="text-base font-semibold text-red-400 flex items-center gap-1">
-            <XCircle className="w-3.5 h-3.5" />
-            {agent.failure_count || 0}
-          </p>
+          <p className="text-xs text-gray-500 uppercase tracking-wider mb-0.5">{failures > 0 ? "Recent fails" : "Status"}</p>
+          {failures > 0 ? (
+            <p className="text-base font-semibold text-gray-400">{failures}</p>
+          ) : (
+            <p className="text-base font-semibold text-green-400 flex items-center gap-1">
+              <CheckCircle className="w-3.5 h-3.5" />
+              Clean
+            </p>
+          )}
         </div>
       </div>
     </div>
@@ -63,32 +70,41 @@ function AgentCard({ agent, onExecute }) {
 }
 
 export default function Agents() {
-  const { data: agents = [] } = useQuery({
+  const { data: agents = [], refetch } = useQuery({
     queryKey: ["agents"],
     queryFn: () => agentsAPI.getAll().then((res) => res.data),
   });
 
   const handleExecute = async (agentId) => {
     try {
-      await agentsAPI.execute(agentId);
-      toast.success("Agent execution started");
+      const res = await agentsAPI.execute(agentId);
+      const agent = agents.find((a) => a.id === agentId);
+      toast.success(`${agent?.name || agentId} run logged — see /audit for details`, {
+        description: res.data?.message || "Agent run recorded",
+      });
+      refetch();
     } catch (error) {
       toast.error(`Failed to execute agent: ${error.message}`);
     }
   };
 
+  const totalSuccesses = agents.reduce((sum, a) => sum + (a.success_count || 0), 0);
+  const totalFails = agents.reduce((sum, a) => sum + (a.failure_count || 0), 0);
+  const totalRuns = totalSuccesses + totalFails;
+  const overallRate = totalRuns > 0 ? Math.round((totalSuccesses / totalRuns) * 100) : 100;
+
   const stats = [
     { label: "Total Agents", value: agents.length, accent: "text-blue-400" },
     { label: "Active", value: agents.filter((a) => a.status === "active").length, accent: "text-green-400" },
     { label: "Total Runs", value: agents.reduce((sum, a) => sum + (a.run_count || 0), 0), accent: "text-purple-400" },
-    { label: "Successes", value: agents.reduce((sum, a) => sum + (a.success_count || 0), 0), accent: "text-cyan-400" },
+    { label: "Fleet Success Rate", value: `${overallRate}%`, accent: overallRate >= 90 ? "text-green-400" : "text-yellow-400" },
   ];
 
   return (
     <div data-testid="agents-page" className="p-6 dark-themed-page">
       <div className="page-header">
         <h1>Agent Command Center</h1>
-        <p>Manage and monitor {agents.length} autonomous agents across the ecosystem</p>
+        <p>Manage and monitor {agents.length} autonomous agents · Fleet {overallRate}% success across {totalRuns.toLocaleString()} historical runs</p>
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">

@@ -72,6 +72,32 @@ async def generate_script(idea_id: str, db=Depends(get_db)):
     await log_audit_event(db, "content_script.generated", "system", "generate", "content_script", script.id)
     return script
 
+
+@router.get("/ideas/{idea_id}/scripts", response_model=List[ContentScript])
+async def list_scripts_for_idea(idea_id: str, db=Depends(get_db)):
+    """List every generated script for an idea (newest first)."""
+    rows = await db.content_scripts.find(
+        {"idea_id": idea_id}, {"_id": 0},
+    ).sort("created_at", -1).to_list(100)
+    for s in rows:
+        if isinstance(s.get('created_at'), str):
+            s['created_at'] = datetime.fromisoformat(s['created_at'])
+        if isinstance(s.get('updated_at'), str):
+            s['updated_at'] = datetime.fromisoformat(s['updated_at'])
+    return rows
+
+
+@router.get("/scripts/", response_model=List[ContentScript])
+async def list_all_scripts(limit: int = 200, db=Depends(get_db)):
+    """Operator view: every generated script across all ideas, newest first."""
+    rows = await db.content_scripts.find({}, {"_id": 0}).sort("created_at", -1).to_list(limit)
+    for s in rows:
+        if isinstance(s.get('created_at'), str):
+            s['created_at'] = datetime.fromisoformat(s['created_at'])
+        if isinstance(s.get('updated_at'), str):
+            s['updated_at'] = datetime.fromisoformat(s['updated_at'])
+    return rows
+
 # Platform Connectors
 @router.get("/connectors/", response_model=List[PlatformConnector])
 async def list_connectors(db=Depends(get_db)):
