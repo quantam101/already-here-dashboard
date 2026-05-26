@@ -9,6 +9,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -84,6 +85,9 @@ export default function LogPostDialog() {
       <DialogContent className="bg-[#0f1419] border-white/10 text-white max-w-md">
         <DialogHeader>
           <DialogTitle>Log a Published Post</DialogTitle>
+          <DialogDescription className="text-gray-400 text-sm">
+            Record a content distribution event. Use status &quot;posted&quot; with a URL to mark it live, &quot;verified&quot; once metrics are confirmed.
+          </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4" data-testid="log-post-form">
           <div>

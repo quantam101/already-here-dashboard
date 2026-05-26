@@ -9,6 +9,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -88,6 +89,9 @@ export default function RecordEarningsDialog({ defaultStreamId, triggerLabel = "
       <DialogContent className="bg-[#0f1419] border-white/10 text-white max-w-md">
         <DialogHeader>
           <DialogTitle>Record Real Earnings</DialogTitle>
+          <DialogDescription className="text-gray-400 text-sm">
+            Log an attested payout from a revenue stream. This entry is immutable proof-of-work toward the $25,000 commercialization goal.
+          </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4" data-testid="record-earnings-form">
           {!defaultStreamId && (

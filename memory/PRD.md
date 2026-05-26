@@ -23,7 +23,28 @@ Build a complete enterprise-grade, governed multi-agent operating system consoli
 
 ## What's Been Implemented (2026-05-26)
 
-### Iteration 3 - Production Wire-up + Dark Theme (latest)
+### Iteration 4 - Proof of Work System (latest)
+**Real live data, not seeded:**
+- New `/api/ledger/` route: immutable revenue ledger for real net earnings
+  - POST/GET, validation (net ≤ gross, stream must exist)
+  - `GET /api/ledger/stats/profit-progress` - $25K goal tracker
+  - `GET /api/ledger/stats/by-stream` - aggregated per-stream totals
+- New `/api/publishing/` route: immutable publishing log
+  - status lifecycle: drafted → exported → posted → verified
+  - auto-stamps `posted_at` / `verified_at` on transition
+  - `GET /api/publishing/stats/overview` - counts by status + platform
+- Revenue `monthly_actual` now computed LIVE from ledger entries dated in current month (single source of truth)
+- Seeded `monthly_actual` reset to $0 (true clean start from real proof-of-work)
+- **Frontend Proof of Work page** (`/proof-of-work`): ledger table, publishing table, $25K profit meter, stats tiles
+- **ProfitMeter** on Command Center: $25K progress, total net, this month, remaining, entry count
+- **RecordEarningsDialog**: form to log net earnings with date/source/proof URL, validates net ≤ gross
+- **LogPostDialog**: form to log publishing events with platform/URL/status
+- "Record Earnings" button on every revenue stream card
+- Sidebar nav: new "Proof of Work" entry under Revenue
+- **35/35 pytest** (was 19), all frontend flows verified by testing agent
+- a11y: DialogDescription added to all new dialogs
+
+### Iteration 3 - Production Wire-up + Dark Theme
 - Expanded seed: 10 revenue streams (AI Blog Network, Faceless Videos, Print-on-Demand A/B, Affiliate Links, Social Automation, SEO Content Farm, Federal Contracting, Service Automation, Newsletter Sponsorships)
 - Expanded agents: 5 → 10 (added SEO Scout, Faceless Video, POD Designer, Affiliate Link, Health Oracle)
 - Command Center fixed: ProfitEngine v5 status `degraded`/`fail` → `live`/`pass`
@@ -104,9 +125,17 @@ Build a complete enterprise-grade, governed multi-agent operating system consoli
 - Paid blocked: 1 (Twitter/X - $100/mo blocked by Cost Guard)
 
 ## Test Coverage
-- Backend pytest: 19/19 PASSING (100%)
-- Frontend smoke tests: 8/8 routes (100%, 0 errors)
+- Backend pytest: **35/35 PASSING** (100%)
+- Frontend smoke tests: 9/9 routes (100%, 0 errors)
 - Lint: Backend ruff PASS, Frontend eslint PASS
 
 ## Live URL
 https://gmaos-control.preview.emergentagent.com
+
+## Proof-of-Work Workflow (Operator Loop)
+1. Operator uses Content Factory → generates a ready-to-post pack
+2. Operator manually publishes to platform (or via approved API)
+3. Operator clicks **Log Post** in dashboard → records platform, title, URL, status='posted'
+4. When platform pays out (Amazon Associates, AdSense, Etsy, etc.), operator clicks **Record Earnings**
+5. Live ledger updates Revenue stats, Profit Meter, and per-stream actuals immediately
+6. Once cumulative net ≥ $25,000 → meter shows **UNLOCKED** → commercialization green light
