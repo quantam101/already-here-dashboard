@@ -403,9 +403,79 @@ class TestProposals:
         r = api.get(f"{BASE_URL}/api/proposals/")
         assert r.status_code == 200
         items = r.json()
+
+
+# ---------------- Payments (Stripe) ----------------
+class TestPayments:
+    def test_packages_listed(self, api):
+        r = api.get(f"{BASE_URL}/api/payments/packages")
+        assert r.status_code == 200
+        pkgs = r.json()
+        for pid in ("starter", "pro", "enterprise"):
+            assert pid in pkgs, f"Missing package: {pid}"
+            assert pkgs[pid]["amount"] > 0
+            assert pkgs[pid]["currency"] == "usd"
+
+    def test_checkout_unknown_package(self, api):
+        r = api.post(f"{BASE_URL}/api/payments/checkout", json={
+            "package_id": "bogus", "origin_url": "http://localhost:3000",
+        })
+        assert r.status_code == 400
+
+    def test_checkout_starter_creates_session(self, api):
+        r = api.post(f"{BASE_URL}/api/payments/checkout", json={
+            "package_id": "starter", "origin_url": "http://localhost:3000",
+        })
+        assert r.status_code == 200, r.text
+        d = r.json()
+        assert d["url"].startswith("https://"), f"bad url: {d['url']}"
+        assert d["session_id"].startswith("cs_test_")
+        assert d["package"]["id"] == "starter"
+        assert d["package"]["amount"] == 49.0
+
+    def test_payment_stats(self, api):
+        r = api.get(f"{BASE_URL}/api/payments/stats")
+        assert r.status_code == 200
+        d = r.json()
+        assert "total_paid_usd" in d and "by_package" in d
+
+
+# ---------------- Analytics ----------------
+class TestAnalytics:
+    def test_funnel(self, api):
+        r = api.get(f"{BASE_URL}/api/analytics/funnel")
+        assert r.status_code == 200
+        d = r.json()
+        for k in ("drafted", "exported", "posted", "verified"):
+            assert k in d["totals"]
+        assert "rates" in d
+
+    def test_dashboard(self, api):
+        r = api.get(f"{BASE_URL}/api/analytics/dashboard")
+        assert r.status_code == 200
+        d = r.json()
+        for k in ("funnel", "posting_times", "stream_roi", "platform_mix", "viral_themes", "momentum"):
+            assert k in d
+
+    def test_momentum_no_data_safe(self, api):
+        r = api.get(f"{BASE_URL}/api/analytics/momentum")
+        assert r.status_code == 200
+        d = r.json()
+        assert d["cumulative_net"] >= 0
+        assert "remaining_to_25k" in d
+
+    def test_stream_roi_includes_all_streams(self, api):
+        r = api.get(f"{BASE_URL}/api/analytics/stream-roi")
+        assert r.status_code == 200
+        d = r.json()
+        assert len(d["streams"]) >= 10
+
+
+class TestProposalsRetrieval:
+    def test_list_and_get(self, api):
+        items = api.get(f"{BASE_URL}/api/proposals/").json()
         assert isinstance(items, list)
         if items:
-            # get the first one
             pid = items[0]["id"]
             rg = api.get(f"{BASE_URL}/api/proposals/{pid}")
             assert rg.status_code == 200
@@ -609,3 +679,90 @@ class TestLedgerExtra:
         events = r.json()
         types = {e.get("event_type") for e in events}
         assert "ledger.entry.recorded" in types
+
+
+
+# ---------------- Payments extra coverage ----------------
+class TestPaymentsExtra:
+    def test_transactions_list_after_checkout(self, api):
+        # Create one new session, then ensure it shows up
+        r = api.post(f"{BASE_URL}/api/payments/checkout", json={
+            "package_id": "pro", "origin_url": "http://localhost:3000",
+        })
+        assert r.status_code == 200, r.text
+        sid = r.json()["session_id"]
+        rt = api.get(f"{BASE_URL}/api/payments/transactions")
+        assert rt.status_code == 200
+        txns = rt.json()
+        assert isinstance(txns, list)
+        assert any(t.get("session_id") == sid for t in txns)
+
+    def test_checkout_status_unpaid_does_not_crash(self, api):
+        # Create a session and immediately poll status (will be unpaid)
+        r = api.post(f"{BASE_URL}/api/payments/checkout", json={
+            "package_id": "starter", "origin_url": "http://localhost:3000",
+        })
+        assert r.status_code == 200
+        sid = r.json()["session_id"]
+        rs = api.get(f"{BASE_URL}/api/payments/checkout/{sid}")
+        assert rs.status_code == 200, rs.text
+        d = rs.json()
+        assert "status" in d and "payment_status" in d
+        assert d["payment_status"] != "paid"  # fresh session shouldn't be paid
+        assert d["recorded"] is False
+        assert d["package_id"] == "starter"
+
+    def test_checkout_creates_saas_stream(self, api):
+        # Calling checkout should idempotently ensure rev-saas exists
+        api.post(f"{BASE_URL}/api/payments/checkout", json={
+            "package_id": "starter", "origin_url": "http://localhost:3000",
+        })
+        r = api.get(f"{BASE_URL}/api/revenue/")
+        assert r.status_code == 200
+        names = {s["id"] for s in r.json()}
+        assert "rev-saas" in names
+
+
+# ---------------- Analytics extra coverage ----------------
+class TestAnalyticsExtra:
+    def test_posting_times(self, api):
+        r = api.get(f"{BASE_URL}/api/analytics/posting-times")
+        assert r.status_code == 200
+        d = r.json()
+        assert "sample_size" in d
+        assert isinstance(d.get("recommendation", ""), str)
+        assert len(d["recommendation"]) > 0
+
+    def test_platform_mix(self, api):
+        r = api.get(f"{BASE_URL}/api/analytics/platform-mix")
+        assert r.status_code == 200
+        d = r.json()
+        assert "platforms" in d and isinstance(d["platforms"], list)
+        assert "total_posts" in d
+
+    def test_viral_themes(self, api):
+        r = api.get(f"{BASE_URL}/api/analytics/viral-themes")
+        assert r.status_code == 200
+        d = r.json()
+        assert "sample_size" in d
+        assert "top_themes" in d and isinstance(d["top_themes"], list)
+
+
+# ---------------- Advisor (Claude Sonnet via Emergent LLM) ----------------
+class TestAdvisor:
+    def test_recommend(self, api):
+        r = api.post(f"{BASE_URL}/api/advisor/recommend", timeout=120)
+        # Accept 200 (any structured/unstructured) or 502 (LLM upstream error)
+        assert r.status_code in (200, 502), r.text
+        if r.status_code == 200:
+            d = r.json()
+            assert d.get("id", "").startswith("adv-")
+            assert d.get("confidence") in ("low", "medium", "high")
+            # next_action must be non-empty (LLM produced something)
+            assert isinstance(d.get("next_action"), str) and len(d["next_action"]) > 0
+
+    def test_recent(self, api):
+        r = api.get(f"{BASE_URL}/api/advisor/recent")
+        assert r.status_code == 200
+        rows = r.json()
+        assert isinstance(rows, list)

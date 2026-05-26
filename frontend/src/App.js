@@ -13,6 +13,9 @@ import ContentStudio from "./pages/ContentStudio";
 import ProofOfWork from "./pages/ProofOfWork";
 import Scout from "./pages/Scout";
 import Proposals from "./pages/Proposals";
+import Analytics from "./pages/Analytics";
+import Pricing from "./pages/Pricing";
+import PaymentSuccess from "./pages/PaymentSuccess";
 import { Toaster } from "sonner";
 
 function App() {
@@ -34,7 +37,10 @@ function App() {
             <Route path="proof-of-work" element={<ProofOfWork />} />
             <Route path="scout" element={<Scout />} />
             <Route path="proposals" element={<Proposals />} />
+            <Route path="analytics" element={<Analytics />} />
+            <Route path="pricing" element={<Pricing />} />
           </Route>
+          <Route path="/payment-success" element={<PaymentSuccess />} />
         </Routes>
       </BrowserRouter>
       <Toaster position="top-right" richColors />

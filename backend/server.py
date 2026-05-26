@@ -12,7 +12,8 @@ ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
 # Import routers
-from routes import revenue, content, agents, builds, deployments, audit, approvals, health, content_factory, ledger, publishing, scout, proposals, cycle
+from routes import revenue, content, agents, builds, deployments, audit, approvals, health, content_factory, ledger, publishing, scout, proposals, cycle, payments, analytics, advisor
+from services.scheduler_service import start_scheduler, stop_scheduler
 
 # MongoDB connection
 mongo_url = os.environ['MONGO_URL']
@@ -25,8 +26,10 @@ async def lifespan(app: FastAPI):
     app.state.db = db
     app.state.mongo_client = client
     logging.info("Database connected")
+    start_scheduler()
     yield
     # Shutdown
+    stop_scheduler()
     client.close()
     logging.info("Database connection closed")
 
@@ -56,6 +59,9 @@ api_router.include_router(publishing.router, prefix="/publishing", tags=["publis
 api_router.include_router(scout.router, prefix="/scout", tags=["scout"])
 api_router.include_router(proposals.router, prefix="/proposals", tags=["proposals"])
 api_router.include_router(cycle.router, prefix="/cycle", tags=["cycle"])
+api_router.include_router(payments.router, prefix="/payments", tags=["payments"])
+api_router.include_router(analytics.router, prefix="/analytics", tags=["analytics"])
+api_router.include_router(advisor.router, prefix="/advisor", tags=["advisor"])
 
 # Include router in main app
 app.include_router(api_router)

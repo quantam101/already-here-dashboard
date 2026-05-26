@@ -14,17 +14,21 @@ import {
   Trophy,
   Radar,
   ScrollText,
+  BarChart3,
+  CreditCard,
   Menu,
   X,
 } from "lucide-react";
 
 const NAVIGATION = [
   { name: "Command Center", path: "/overview", icon: LayoutDashboard, section: "operations" },
+  { name: "Analytics", path: "/analytics", icon: BarChart3, section: "operations" },
   { name: "Income Streams", path: "/revenue", icon: DollarSign, section: "operations" },
   { name: "AI Agents", path: "/agents", icon: Bot, section: "operations" },
   { name: "Content Factory", path: "/studio", icon: Sparkles, section: "operations" },
   { name: "Scout", path: "/scout", icon: Radar, section: "operations" },
   { name: "Proof of Work", path: "/proof-of-work", icon: Trophy, section: "revenue" },
+  { name: "Pricing & Pay In", path: "/pricing", icon: CreditCard, section: "revenue" },
   { name: "Proposals", path: "/proposals", icon: ScrollText, section: "revenue" },
   { name: "Content Library", path: "/content", icon: FileText, section: "revenue" },
   { name: "Build Registry", path: "/builds", icon: TrendingUp, section: "revenue" },

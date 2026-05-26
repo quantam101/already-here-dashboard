@@ -120,3 +120,29 @@ export const ledgerImportCSV = async (streamId, file) => {
   if (!res.ok) throw new Error(await res.text());
   return res.json();
 };
+
+// Payments
+export const paymentsAPI = {
+  packages: () => api.get("/payments/packages"),
+  checkout: (data) => api.post("/payments/checkout", data),
+  status: (sessionId) => api.get(`/payments/checkout/${sessionId}`),
+  transactions: () => api.get("/payments/transactions"),
+  stats: () => api.get("/payments/stats"),
+};
+
+// Analytics
+export const analyticsAPI = {
+  dashboard: () => api.get("/analytics/dashboard"),
+  funnel: () => api.get("/analytics/funnel"),
+  postingTimes: () => api.get("/analytics/posting-times"),
+  streamRoi: () => api.get("/analytics/stream-roi"),
+  platformMix: () => api.get("/analytics/platform-mix"),
+  viralThemes: () => api.get("/analytics/viral-themes"),
+  momentum: () => api.get("/analytics/momentum"),
+};
+
+// AI Advisor
+export const advisorAPI = {
+  recommend: () => api.post("/advisor/recommend"),
+  recent: () => api.get("/advisor/recent"),
+};
