@@ -35,6 +35,58 @@ DEFAULT_SYSTEM_MESSAGE = (
     "specific past performance, and explicit alignment to evaluation criteria."
 )
 
+# Section templates by document type - extracted to module level to reduce
+# _build_prompt complexity and make the templates trivially editable.
+SECTIONS_BY_TYPE: dict[str, list[str]] = {
+    "grant_proposal": [
+        "1. Executive Summary",
+        "2. Problem Statement (with cited evidence)",
+        "3. Proposed Solution & Approach",
+        "4. Goals & Measurable Outcomes",
+        "5. Implementation Timeline",
+        "6. Budget Narrative",
+        "7. Organizational Capability & Past Performance",
+        "8. Evaluation & Sustainability Plan",
+    ],
+    "contract_proposal": [
+        "1. Cover Page",
+        "2. Technical Approach",
+        "3. Past Performance (specific projects, metrics)",
+        "4. Management & Staffing Plan",
+        "5. Pricing Summary",
+        "6. Compliance Matrix (line-by-line)",
+    ],
+    "rfp_response": [
+        "1. Compliance / Cross-Reference Matrix",
+        "2. Executive Summary",
+        "3. Technical Response (section-by-section to RFP)",
+        "4. Management Response",
+        "5. Past Performance",
+        "6. Price/Cost Response",
+    ],
+    "capability_statement": [
+        "1. Core Competencies (bullet list)",
+        "2. Past Performance (3-5 specific projects)",
+        "3. Differentiators",
+        "4. Company Data (NAICS, CAGE, UEI, certifications)",
+        "5. Contact Information",
+    ],
+    "cover_letter": [
+        "1. Opening hook tied to opportunity",
+        "2. Why this team / company is uniquely qualified",
+        "3. Specific evidence of past performance",
+        "4. Clear call to action",
+    ],
+}
+
+DEFAULT_COMPANY = {
+    "name": "Already Here",
+    "mission": "Build governed, zero-cost autonomous systems for revenue and proof of work.",
+    "proof": "H&M RFID US0275 successful deployment - 55 readers, 61 data runs, 4 new APs.",
+    "naics": "541512",
+    "certifications": ["SBA Small Business"],
+}
+
 
 class ProposalDraftRequest(BaseModel):
     doc_type: str
@@ -90,50 +142,17 @@ def _validate_doc_type(doc_type: str) -> None:
         raise HTTPException(status_code=400, detail=f"doc_type must be one of {sorted(ALLOWED_TYPES)}")
 
 
+def _format_bullet_list(items: list[str], empty_text: str) -> str:
+    if not items:
+        return f"- {empty_text}"
+    return "\n".join(f"- {it}" for it in items)
+
+
 def _build_prompt(req: ProposalDraftRequest) -> str:
-    company = req.company_profile or {}
-    sections_by_type = {
-        "grant_proposal": [
-            "1. Executive Summary",
-            "2. Problem Statement (with cited evidence)",
-            "3. Proposed Solution & Approach",
-            "4. Goals & Measurable Outcomes",
-            "5. Implementation Timeline",
-            "6. Budget Narrative",
-            "7. Organizational Capability & Past Performance",
-            "8. Evaluation & Sustainability Plan",
-        ],
-        "contract_proposal": [
-            "1. Cover Page",
-            "2. Technical Approach",
-            "3. Past Performance (specific projects, metrics)",
-            "4. Management & Staffing Plan",
-            "5. Pricing Summary",
-            "6. Compliance Matrix (line-by-line)",
-        ],
-        "rfp_response": [
-            "1. Compliance / Cross-Reference Matrix",
-            "2. Executive Summary",
-            "3. Technical Response (section-by-section to RFP)",
-            "4. Management Response",
-            "5. Past Performance",
-            "6. Price/Cost Response",
-        ],
-        "capability_statement": [
-            "1. Core Competencies (bullet list)",
-            "2. Past Performance (3-5 specific projects)",
-            "3. Differentiators",
-            "4. Company Data (NAICS, CAGE, UEI, certifications)",
-            "5. Contact Information",
-        ],
-        "cover_letter": [
-            "1. Opening hook tied to opportunity",
-            "2. Why this team / company is uniquely qualified",
-            "3. Specific evidence of past performance",
-            "4. Clear call to action",
-        ],
-    }
-    sections = "\n".join(sections_by_type.get(req.doc_type, sections_by_type["grant_proposal"]))
+    company = {**DEFAULT_COMPANY, **(req.company_profile or {})}
+    sections = "\n".join(SECTIONS_BY_TYPE.get(req.doc_type, SECTIONS_BY_TYPE["grant_proposal"]))
+    reqs_block = _format_bullet_list(req.requirements, "(none specified)")
+    evid_block = _format_bullet_list(req.evidence, "(use company profile proof above)")
 
     return f"""Generate a professional {req.doc_type.replace('_', ' ')} with the following details:
 
@@ -144,17 +163,17 @@ DEADLINE: {req.deadline or 'TBD'}
 BUDGET (USD): {req.budget_usd if req.budget_usd is not None else 'TBD'}
 
 COMPANY PROFILE:
-- Name: {company.get('name', 'Already Here')}
-- Mission: {company.get('mission', 'Build governed, zero-cost autonomous systems for revenue and proof of work.')}
-- Key proof: {company.get('proof', 'H&M RFID US0275 successful deployment - 55 readers, 61 data runs, 4 new APs.')}
-- NAICS: {company.get('naics', '541512')}
-- Certifications: {', '.join(company.get('certifications', ['SBA Small Business']))}
+- Name: {company['name']}
+- Mission: {company['mission']}
+- Key proof: {company['proof']}
+- NAICS: {company['naics']}
+- Certifications: {', '.join(company['certifications'])}
 
 REQUIREMENTS (from the opportunity):
-{chr(10).join(f"- {r}" for r in req.requirements) if req.requirements else '- (none specified)'}
+{reqs_block}
 
 EVIDENCE / PAST PERFORMANCE TO LEVERAGE:
-{chr(10).join(f"- {e}" for e in req.evidence) if req.evidence else '- (use company profile proof above)'}
+{evid_block}
 
 ADDITIONAL INSTRUCTIONS:
 {req.instructions or '(none)'}

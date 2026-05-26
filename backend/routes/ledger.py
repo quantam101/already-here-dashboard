@@ -147,6 +147,41 @@ async def stats_by_stream(db=Depends(get_db)):
 
 
 
+def _coerce_amount(raw: str) -> float:
+    """Parse '$1,234.56' / '1234.56' -> 1234.56."""
+    return float(str(raw or "0").replace("$", "").replace(",", "").strip() or 0)
+
+
+def _parse_csv_row(
+    row: dict, line_no: int, keys: tuple[str, str, str], stream_id: str, filename: str | None,
+    source_label: str,
+) -> tuple[dict | None, str | None]:
+    """Convert one CSV row into a ledger doc, returning (doc, None) or (None, error_msg)."""
+    date_key, gross_key, net_key = keys
+    occurred = (row.get(date_key) or "").strip()[:10]
+    if not occurred:
+        return None, None  # silently skip blank rows
+    try:
+        gross = _coerce_amount(row.get(gross_key, "0"))
+        net = _coerce_amount(row.get(net_key, "0"))
+    except ValueError as exc:
+        return None, f"row {line_no}: {exc}"
+    if net > gross:
+        return None, f"row {line_no}: net={net} > gross={gross}"
+    return {
+        "id": f"led-{uuid.uuid4().hex[:10]}",
+        "stream_id": stream_id,
+        "occurred_on": occurred,
+        "gross_amount": gross,
+        "net_amount": net,
+        "currency": "USD",
+        "source": source_label,
+        "proof_url": f"csv://{filename}" if filename else None,
+        "notes": f"row {line_no} of {filename or 'upload.csv'}",
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }, None
+
+
 @router.post("/import-csv")
 async def import_ledger_csv(
     stream_id: str = Form(...),
@@ -170,10 +205,7 @@ async def import_ledger_csv(
     raw = await file.read()
     if not raw:
         raise HTTPException(status_code=400, detail="Empty CSV")
-    try:
-        text = raw.decode("utf-8", errors="replace")
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Cannot decode CSV: {e}") from e
+    text = raw.decode("utf-8", errors="replace")
 
     reader = csv.DictReader(io.StringIO(text))
     if not reader.fieldnames:
@@ -192,30 +224,13 @@ async def import_ledger_csv(
 
     entries: list[dict] = []
     errors: list[str] = []
+    keys = (date_key, gross_key, net_key)
     for i, row in enumerate(reader, start=2):  # data starts on line 2
-        try:
-            occurred = (row.get(date_key) or "").strip()[:10]
-            if not occurred:
-                continue
-            gross = float(str(row.get(gross_key, "0")).replace("$", "").replace(",", "").strip() or 0)
-            net = float(str(row.get(net_key, "0")).replace("$", "").replace(",", "").strip() or 0)
-            if net > gross:
-                errors.append(f"row {i}: net>{gross} > gross={gross}")
-                continue
-            entries.append({
-                "id": f"led-{uuid.uuid4().hex[:10]}",
-                "stream_id": stream_id,
-                "occurred_on": occurred,
-                "gross_amount": gross,
-                "net_amount": net,
-                "currency": "USD",
-                "source": source_label,
-                "proof_url": f"csv://{file.filename}",
-                "notes": f"row {i} of {file.filename}",
-                "created_at": datetime.now(timezone.utc).isoformat(),
-            })
-        except Exception as exc:
-            errors.append(f"row {i}: {exc}")
+        doc, err = _parse_csv_row(row, i, keys, stream_id, file.filename, source_label)
+        if err:
+            errors.append(err)
+        elif doc:
+            entries.append(doc)
 
     if entries:
         await db.revenue_ledger.insert_many(entries)

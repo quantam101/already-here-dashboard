@@ -41,6 +41,46 @@ async def get_db():
     return db
 
 
+def _make_idea_doc(opp, platform_list: list[str], cycle_id: str, timestamp_iso: str) -> dict:
+    """Convert one scout Opportunity into a content_idea document."""
+    return {
+        "id": f"idea-{uuid.uuid4().hex[:10]}",
+        "title": opp.title[:200],
+        "description": opp.summary or f"Source: {opp.source}",
+        "topic": opp.metadata.get("subreddit") or opp.source,
+        "target_platforms": platform_list,
+        "priority": "medium",
+        "status": "drafted",
+        "tags": [opp.source, opp.kind],
+        "inspiration_source": opp.url,
+        "metadata": {"opp_score": opp.score, "cycle_id": cycle_id},
+        "created_at": timestamp_iso,
+        "updated_at": timestamp_iso,
+    }
+
+
+def _make_publishing_draft(
+    idea_id: str, title: str, stream_id: str, platform: str,
+    cycle_id: str, source: str, timestamp_iso: str,
+) -> dict:
+    """Build a publishing_log draft record for an idea+platform pair."""
+    return {
+        "id": f"pub-{uuid.uuid4().hex[:10]}",
+        "stream_id": stream_id,
+        "platform": platform,
+        "title": title[:200],
+        "idea_id": idea_id,
+        "status": "drafted",
+        "post_url": None,
+        "notes": f"Cycle {cycle_id} - draft from {source}",
+        "metrics": {},
+        "posted_at": None,
+        "verified_at": None,
+        "created_at": timestamp_iso,
+        "updated_at": timestamp_iso,
+    }
+
+
 @router.post("/run", response_model=CycleResult)
 async def run_cycle(
     stream_id: str = "rev-001",
@@ -57,6 +97,7 @@ async def run_cycle(
     started = datetime.now(timezone.utc)
     cycle_id = f"cyc-{uuid.uuid4().hex[:8]}"
     platform_list = [p.strip() for p in platforms.split(",") if p.strip()]
+    opps: list = []  # explicit init - silences UnboundLocal false-positive
 
     # 1. Pull viral opportunities (free)
     try:
@@ -75,46 +116,20 @@ async def run_cycle(
     valid = [o for o in opps if o.id and "error" not in o.id]
     top = valid[:max_ideas]
 
-    # 2. Convert to content ideas
+    # 2. Convert to content ideas + 3. Create publishing drafts per platform
     ideas_created = 0
     drafts_created = 0
     timestamp_iso = datetime.now(timezone.utc).isoformat()
 
     for opp in top:
-        idea_doc = {
-            "id": f"idea-{uuid.uuid4().hex[:10]}",
-            "title": opp.title[:200],
-            "description": opp.summary or f"Source: {opp.source}",
-            "topic": opp.metadata.get("subreddit") or opp.source,
-            "target_platforms": platform_list,
-            "priority": "medium",
-            "status": "drafted",
-            "tags": [opp.source, opp.kind],
-            "inspiration_source": opp.url,
-            "metadata": {"opp_score": opp.score, "cycle_id": cycle_id},
-            "created_at": timestamp_iso,
-            "updated_at": timestamp_iso,
-        }
+        idea_doc = _make_idea_doc(opp, platform_list, cycle_id, timestamp_iso)
         await db.content_ideas.insert_one(idea_doc)
         ideas_created += 1
 
-        # 4. Create publishing draft for each platform
         for plat in platform_list:
-            pub_doc = {
-                "id": f"pub-{uuid.uuid4().hex[:10]}",
-                "stream_id": stream_id,
-                "platform": plat,
-                "title": opp.title[:200],
-                "idea_id": idea_doc["id"],
-                "status": "drafted",
-                "post_url": None,
-                "notes": f"Cycle {cycle_id} - draft from {opp.source}",
-                "metrics": {},
-                "posted_at": None,
-                "verified_at": None,
-                "created_at": timestamp_iso,
-                "updated_at": timestamp_iso,
-            }
+            pub_doc = _make_publishing_draft(
+                idea_doc["id"], opp.title, stream_id, plat, cycle_id, opp.source, timestamp_iso,
+            )
             await db.publishing_log.insert_one(pub_doc)
             drafts_created += 1
 

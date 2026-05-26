@@ -23,7 +23,16 @@ Build a complete enterprise-grade, governed multi-agent operating system consoli
 
 ## What's Been Implemented (2026-05-26)
 
-### Iteration 5 - Scout + Procurement Engine + Cycle + PWA (latest)
+### Iteration 6 - Code Quality Fixes (latest)
+- Extracted module-level constants: `SECTIONS_BY_TYPE` + `DEFAULT_COMPANY` in `proposals.py` (cut `_build_prompt` complexity 11→6)
+- Extracted helpers: `_format_bullet_list` (proposals), `_coerce_amount` + `_parse_csv_row` (ledger), `_make_idea_doc` + `_make_publishing_draft` (cycle) — reduces complexity across the board
+- Extracted `CONTENT_TYPE_OPTIONS`, `TONE_OPTIONS`, `LENGTH_OPTIONS` in ContentGenerateDialog (eliminates inline array re-render anti-pattern)
+- Explicit `opps: list = []` init in `cycle.py:run_cycle` (silences UnboundLocal linter false-positive)
+- Created `/app/pytest.ini` registering `timeout` mark (zero warnings)
+- All other "react hook dependency" / "is vs ==" warnings verified as false positives by ESLint + Python's own `SyntaxWarning` (skipped)
+- 50/50 pytest pass, Python ruff clean, JS eslint clean, zero warnings
+
+### Iteration 5 - Scout + Procurement Engine + Cycle + PWA
 **Real scrapers, real writers, real pipeline:**
 - New `/api/scout/` route — Reddit, HackerNews, Grants.gov, SAM.gov, Google News (all FREE, no auth) → returns Opportunity[] with id/title/source/kind/url/score
 - New `/api/proposals/` route — grant_proposal, contract_proposal, rfp_response, capability_statement, cover_letter, invoice. AI-generated via Emergent LLM Gemini 3 Flash ($0)

@@ -17,6 +17,26 @@ import {
 } from "@/components/ui/select";
 import { Sparkles } from "lucide-react";
 
+const CONTENT_TYPE_OPTIONS = [
+  { value: "blog", label: "Blog Post" },
+  { value: "social", label: "Social Media" },
+  { value: "email", label: "Email" },
+  { value: "proposal", label: "Proposal" },
+];
+
+const TONE_OPTIONS = [
+  { value: "professional", label: "Professional" },
+  { value: "casual", label: "Casual" },
+  { value: "technical", label: "Technical" },
+  { value: "persuasive", label: "Persuasive" },
+];
+
+const LENGTH_OPTIONS = [
+  { value: "short", label: "Short" },
+  { value: "medium", label: "Medium" },
+  { value: "long", label: "Long" },
+];
+
 export default function ContentGenerateDialog({
   open,
   onOpenChange,
@@ -42,12 +62,7 @@ export default function ContentGenerateDialog({
             label="Content Type"
             value={formData.content_type}
             onChange={(v) => setFormData((p) => ({ ...p, content_type: v }))}
-            options={[
-              { value: "blog", label: "Blog Post" },
-              { value: "social", label: "Social Media" },
-              { value: "email", label: "Email" },
-              { value: "proposal", label: "Proposal" },
-            ]}
+            options={CONTENT_TYPE_OPTIONS}
             testId="content-type-select"
           />
           <TextField
@@ -64,22 +79,13 @@ export default function ContentGenerateDialog({
               label="Tone"
               value={formData.tone}
               onChange={(v) => setFormData((p) => ({ ...p, tone: v }))}
-              options={[
-                { value: "professional", label: "Professional" },
-                { value: "casual", label: "Casual" },
-                { value: "technical", label: "Technical" },
-                { value: "persuasive", label: "Persuasive" },
-              ]}
+              options={TONE_OPTIONS}
             />
             <SelectField
               label="Length"
               value={formData.length}
               onChange={(v) => setFormData((p) => ({ ...p, length: v }))}
-              options={[
-                { value: "short", label: "Short" },
-                { value: "medium", label: "Medium" },
-                { value: "long", label: "Long" },
-              ]}
+              options={LENGTH_OPTIONS}
             />
           </div>
           <TextField
