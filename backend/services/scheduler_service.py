@@ -12,6 +12,7 @@ from datetime import datetime, timezone, timedelta
 logger = logging.getLogger("scheduler")
 
 _task: asyncio.Task | None = None
+_db = None  # injected via start_scheduler(db) - breaks any circular import on server.py
 
 
 async def _seconds_until_next_run(target_hour: int) -> float:
@@ -23,11 +24,17 @@ async def _seconds_until_next_run(target_hour: int) -> float:
 
 
 async def _run_cycle_safely():
-    """Call the cycle.run_cycle function directly (no HTTP roundtrip)."""
+    """Call the cycle.run_cycle function directly (no HTTP roundtrip).
+
+    The cycle module is imported lazily here (not at module-load) so that this
+    file can be imported by ``server.py`` without ever circling back into it.
+    """
+    if _db is None:
+        logger.warning("scheduler has no db handle - skipping cycle")
+        return
     try:
-        from routes import cycle
-        from server import db
-        result = await cycle.run_cycle(db=db)
+        from routes import cycle  # local import only - no top-level server dep
+        result = await cycle.run_cycle(db=_db)
         logger.info(
             "auto-cycle complete: ideas=%s drafts=%s cycle_id=%s",
             result.ideas_created, result.publishing_drafts, result.cycle_id,
@@ -51,9 +58,11 @@ async def _scheduler_loop(target_hour: int):
             await asyncio.sleep(60)
 
 
-def start_scheduler() -> None:
-    """Kick off the background task on app startup."""
-    global _task
+def start_scheduler(db=None) -> None:
+    """Kick off the background task on app startup. Pass `db` (injected from
+    server) so this module never needs to import the server module back."""
+    global _task, _db
+    _db = db
     if os.environ.get("SYSTEM_MODE") == "test":
         logger.info("SYSTEM_MODE=test - scheduler disabled")
         return

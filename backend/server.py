@@ -26,7 +26,7 @@ async def lifespan(app: FastAPI):
     app.state.db = db
     app.state.mongo_client = client
     logging.info("Database connected")
-    start_scheduler()
+    start_scheduler(db)
     yield
     # Shutdown
     stop_scheduler()

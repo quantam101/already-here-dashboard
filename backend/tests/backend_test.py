@@ -400,10 +400,10 @@ class TestProposals:
         assert len(d.get("content", "")) > 500, f"Content too short: {len(d.get('content', ''))}"
 
     def test_list_and_get_proposals(self, api):
-        # list
+        # list - no assertion on items, just verify the endpoint responds
         r = api.get(f"{BASE_URL}/api/proposals/")
         assert r.status_code == 200
-        items = r.json()
+        assert isinstance(r.json(), list)
 
 
 # ---------------- Payments (Stripe) ----------------
