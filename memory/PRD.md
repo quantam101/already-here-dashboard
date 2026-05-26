@@ -23,7 +23,21 @@ Build a complete enterprise-grade, governed multi-agent operating system consoli
 
 ## What's Been Implemented (2026-05-26)
 
-### Iteration 4 - Proof of Work System (latest)
+### Iteration 5 - Scout + Procurement Engine + Cycle + PWA (latest)
+**Real scrapers, real writers, real pipeline:**
+- New `/api/scout/` route — Reddit, HackerNews, Grants.gov, SAM.gov, Google News (all FREE, no auth) → returns Opportunity[] with id/title/source/kind/url/score
+- New `/api/proposals/` route — grant_proposal, contract_proposal, rfp_response, capability_statement, cover_letter, invoice. AI-generated via Emergent LLM Gemini 3 Flash ($0)
+- New `/api/cycle/run` route — one-click pipeline: scout viral → content ideas → publishing drafts (operator confirms then publishes manually)
+- New `/api/ledger/import-csv` — multipart CSV upload, bulk-creates ledger entries (Amazon Associates, Etsy, AdSense exports)
+- **Facebook + Reddit** platform connectors added (manual_free / free_external)
+- **Procurement Scout Agent** (agent-011) — 11 agents total
+- **Frontend Scout page** with 4 tabs (Viral, Grants, Contracts, News), live data, Draft button on grants/contracts
+- **Frontend Proposals page** with stat tiles + New Draft + New Invoice dialogs
+- **Run Cycle button on Command Center** — operator-driven pipeline
+- **PWA manifest** + apple-mobile-web-app meta tags → installable on iOS/Android home screen
+- **50/50 pytest** passing (added 13 new tests)
+
+### Iteration 4 - Proof of Work System
 **Real live data, not seeded:**
 - New `/api/ledger/` route: immutable revenue ledger for real net earnings
   - POST/GET, validation (net ≤ gross, stream must exist)
