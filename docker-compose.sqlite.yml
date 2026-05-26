@@ -1,0 +1,82 @@
+# Already Here Command OS — Lightweight 1GB-RAM Variant
+# Free-Only Build Directive compliant:
+#   - SQLite instead of MongoDB (~500MB RAM savings)
+#   - Frontend served as a pre-built static bundle by Caddy (no Node runtime)
+#   - Total steady-state memory target: < 700 MB
+#
+# Use this on the DashboardAlways Free host (VM.Standard.E2.1.Micro, 1 OCPU/1GB).
+# For development or larger nodes, use docker-compose.yml (MongoDB) instead.
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: command-os-backend
+    restart: unless-stopped
+    environment:
+      STORAGE_BACKEND: sqlite
+      SQLITE_PATH: /app/data/command_os.db
+      DB_NAME: ${DB_NAME:-command_os}
+      CORS_ORIGINS: ${CORS_ORIGINS:-*}
+      EMERGENT_LLM_KEY: ${EMERGENT_LLM_KEY}
+      STRIPE_API_KEY: ${STRIPE_API_KEY:-sk_test_emergent}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
+      OPERATOR_EMAIL: ${OPERATOR_EMAIL:-}
+      BW_SESSION: ${BW_SESSION:-}
+      WORKER_BASE_URL: ${WORKER_BASE_URL:-}   # optional - profitengine-server for heavy jobs
+      SYSTEM_MODE: production
+      COST_GUARD_ENABLED: "true"
+      ZERO_SPEND_MODE: "true"
+      AUTO_CYCLE_ENABLED: "true"
+      # Memory-conservative uvicorn settings (1 worker, no reload)
+      MONGO_URL: unused   # kept only so legacy code reading os.environ['MONGO_URL'] doesn't crash; SQLite path is taken
+    networks:
+      - command-os-net
+    ports:
+      - "127.0.0.1:8001:8001"
+    volumes:
+      - sqlite_data:/app/data
+      - ./exports:/app/exports
+      - ./logs:/app/logs
+    deploy:
+      resources:
+        limits:
+          memory: 400M
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/api/health/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  caddy:
+    # Caddy serves the pre-built frontend static bundle directly + reverse-proxies /api → backend
+    image: caddy:2-alpine
+    container_name: command-os-caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile.sqlite:/etc/caddy/Caddyfile:ro
+      - ./frontend/build:/srv/frontend:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      - command-os-net
+    depends_on:
+      - backend
+    deploy:
+      resources:
+        limits:
+          memory: 100M
+
+volumes:
+  sqlite_data:
+  caddy_data:
+  caddy_config:
+
+networks:
+  command-os-net:
+    driver: bridge

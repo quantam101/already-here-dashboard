@@ -2,18 +2,30 @@
 """
 Seed script to populate the Already Here Command OS with initial ecosystem data.
 Refactored into modular functions with builder pattern for entities.
+
+Backend-agnostic: honors STORAGE_BACKEND=sqlite if set, otherwise uses MongoDB.
 """
 import asyncio
 from typing import Any
-from motor.motor_asyncio import AsyncIOMotorClient
 import os
 from dotenv import load_dotenv
 from datetime import datetime, timezone
 
 load_dotenv()
 
-mongo_url = os.environ['MONGO_URL']
-db_name = os.environ['DB_NAME']
+STORAGE_BACKEND = os.environ.get("STORAGE_BACKEND", "mongodb").lower()
+
+
+def _make_client():
+    if STORAGE_BACKEND == "sqlite":
+        from services.sqlite_db import SqliteClient
+        path = os.environ.get("SQLITE_PATH", "./data/command_os.db")
+        return SqliteClient(path), path
+    from motor.motor_asyncio import AsyncIOMotorClient
+    return AsyncIOMotorClient(os.environ["MONGO_URL"]), os.environ["MONGO_URL"]
+
+
+db_name = os.environ.get("DB_NAME", "command_os")
 
 
 def now_iso() -> str:
@@ -392,10 +404,10 @@ async def seed_collection(db, collection_name: str, data: list[dict[str, Any]], 
 
 async def seed_database() -> None:
     """Main seeding orchestrator."""
-    client = AsyncIOMotorClient(mongo_url)
+    client, _ = _make_client()
     db = client[db_name]
 
-    print("Seeding Already Here Command OS Database...")
+    print(f"Seeding Already Here Command OS Database ({STORAGE_BACKEND})...")
     await clear_all_data(db)
 
     print("Seeding entities:")

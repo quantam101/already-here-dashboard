@@ -2,6 +2,8 @@ from fastapi import APIRouter, Depends
 from models import HealthCheck, StatusEnum
 from datetime import datetime, timezone
 import httpx
+import os
+import time
 
 router = APIRouter()
 
@@ -18,6 +20,56 @@ async def health_check():
         "service": "Already Here Command OS"
     }
 
+
+@router.get("/nodes")
+async def two_node_health():
+    """Two-node health report for the Free-Only Build Directive.
+
+    Returns dashboard host status + worker (profitengine-server) reachability.
+    """
+    dashboard_status = {
+        "name": "DashboardAlways Free",
+        "role": "dashboard / control plane",
+        "status": "healthy",
+        "backend": os.environ.get("STORAGE_BACKEND", "mongodb"),
+        "checked_at": datetime.now(timezone.utc).isoformat(),
+    }
+
+    worker_url = os.environ.get("WORKER_BASE_URL", "")
+    if not worker_url:
+        worker_status = {
+            "name": "profitengine-server",
+            "role": "runtime / worker",
+            "status": "not_configured",
+            "reason": "set WORKER_BASE_URL in backend/.env to enable cross-node health",
+        }
+    else:
+        try:
+            t0 = time.time()
+            async with httpx.AsyncClient(timeout=5.0) as cx:
+                r = await cx.get(f"{worker_url.rstrip('/')}/api/health/")
+            worker_status = {
+                "name": "profitengine-server",
+                "role": "runtime / worker",
+                "status": "healthy" if r.status_code == 200 else "degraded",
+                "http_status": r.status_code,
+                "response_ms": round((time.time() - t0) * 1000, 1),
+                "url": worker_url,
+                "checked_at": datetime.now(timezone.utc).isoformat(),
+            }
+        except Exception as exc:
+            worker_status = {
+                "name": "profitengine-server",
+                "role": "runtime / worker",
+                "status": "unreachable",
+                "error": str(exc)[:200],
+                "url": worker_url,
+                "checked_at": datetime.now(timezone.utc).isoformat(),
+            }
+
+    return {"nodes": [dashboard_status, worker_status]}
+
+
 @router.get("/check/{service_name}")
 async def check_service(service_name: str, url: str = None, db=Depends(get_db)):
     """Check health of a specific service"""
@@ -25,7 +77,6 @@ async def check_service(service_name: str, url: str = None, db=Depends(get_db)):
     
     if url:
         try:
-            import time
             start_time = time.time()
             async with httpx.AsyncClient(timeout=10.0) as client:
                 response = await client.get(url)

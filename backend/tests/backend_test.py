@@ -1067,3 +1067,53 @@ class TestSecrets:
         body = api.get(f"{BASE_URL}/api/secrets/items").text.lower()
         for needle in ('"password"', '"totp_seed"', '"secret"'):
             assert needle not in body, f"secret-like key leaked: {needle}"
+
+
+# ---------------- Free-Only Build Directive endpoints ----------------
+class TestFreeOnlyDirective:
+    def test_cost_status(self, api):
+        r = api.get(f"{BASE_URL}/api/cost/status")
+        assert r.status_code == 200, r.text
+        d = r.json()
+        for k in (
+            "target_monthly_usd", "estimated_monthly_usd", "compliant",
+            "connectors_by_class", "free_active", "paid_blocked",
+            "unknown_blocked", "requires_secret", "policy",
+        ):
+            assert k in d, f"missing key: {k}"
+        assert d["target_monthly_usd"] == 0.0
+        assert d["policy"]["block_paid"] is True
+        assert d["policy"]["block_unknown_cost"] is True
+
+    def test_cost_policy_static(self, api):
+        r = api.get(f"{BASE_URL}/api/cost/policy")
+        assert r.status_code == 200
+        d = r.json()
+        assert d["block_paid_connectors"] is True
+        assert len(d["approved_free_integrations"]) >= 5
+
+    def test_two_node_health(self, api):
+        r = api.get(f"{BASE_URL}/api/health/nodes")
+        assert r.status_code == 200, r.text
+        d = r.json()
+        assert "nodes" in d
+        assert len(d["nodes"]) == 2
+        names = {n["name"] for n in d["nodes"]}
+        assert "DashboardAlways Free" in names
+        assert "profitengine-server" in names
+        # Worker is "not_configured" in CI (no WORKER_BASE_URL set)
+        worker = next(n for n in d["nodes"] if n["name"] == "profitengine-server")
+        assert worker["status"] in ("not_configured", "healthy", "unreachable", "degraded")
+
+    def test_lcac_returns_findings(self, api):
+        r = api.get(f"{BASE_URL}/api/lifelong-catch-correct/")
+        assert r.status_code == 200, r.text
+        d = r.json()
+        for k in ("scanned_at", "findings_count", "by_severity", "findings"):
+            assert k in d
+        # Each finding has required keys
+        for f in d["findings"]:
+            for k in ("severity", "category", "message", "suggestion"):
+                assert k in f
+            assert f["severity"] in ("high", "medium", "low")
+

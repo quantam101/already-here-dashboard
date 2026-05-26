@@ -1,7 +1,6 @@
 from fastapi import FastAPI, APIRouter, HTTPException, Depends, Header
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
-from motor.motor_asyncio import AsyncIOMotorClient
 import os
 import logging
 from pathlib import Path
@@ -12,20 +11,30 @@ ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
 # Import routers
-from routes import revenue, content, agents, builds, deployments, audit, approvals, health, content_factory, ledger, publishing, scout, proposals, cycle, payments, analytics, advisor, auth, books, system, secrets, cost
+from routes import revenue, content, agents, builds, deployments, audit, approvals, health, content_factory, ledger, publishing, scout, proposals, cycle, payments, analytics, advisor, auth, books, system, secrets, cost, lcac
 from services.scheduler_service import start_scheduler, stop_scheduler
 
-# MongoDB connection
-mongo_url = os.environ['MONGO_URL']
-client = AsyncIOMotorClient(mongo_url)
-db = client[os.environ['DB_NAME']]
+# Storage backend — Mongo (preview/dev) or SQLite (1GB-RAM production host)
+STORAGE_BACKEND = os.environ.get("STORAGE_BACKEND", "mongodb").lower()
+if STORAGE_BACKEND == "sqlite":
+    from services.sqlite_db import SqliteClient
+    sqlite_path = os.environ.get("SQLITE_PATH", str(ROOT_DIR / "data" / "command_os.db"))
+    client = SqliteClient(sqlite_path)
+    db = client[os.environ.get("DB_NAME", "command_os")]
+    logging.info(f"Using SQLite backend at {sqlite_path}")
+else:
+    from motor.motor_asyncio import AsyncIOMotorClient
+    mongo_url = os.environ['MONGO_URL']
+    client = AsyncIOMotorClient(mongo_url)
+    db = client[os.environ['DB_NAME']]
+    logging.info("Using MongoDB backend")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
     app.state.db = db
-    app.state.mongo_client = client
-    logging.info("Database connected")
+    app.state.storage_backend = STORAGE_BACKEND
+    logging.info(f"Database connected ({STORAGE_BACKEND})")
     start_scheduler(db)
     yield
     # Shutdown
@@ -67,6 +76,7 @@ api_router.include_router(books.router, prefix="/books", tags=["books"])
 api_router.include_router(system.router, prefix="/system", tags=["system"])
 api_router.include_router(secrets.router, prefix="/secrets", tags=["secrets"])
 api_router.include_router(cost.router, prefix="/cost", tags=["cost"])
+api_router.include_router(lcac.router, prefix="/lifelong-catch-correct", tags=["lcac"])
 
 # Include router in main app
 app.include_router(api_router)

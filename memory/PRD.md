@@ -23,7 +23,24 @@ Build a complete enterprise-grade, governed multi-agent operating system consoli
 
 ## What's Been Implemented (2026-05-26)
 
-### Iteration 11 - Bitwarden CLI + Copy+Open Platform + Deploy Preflight (latest)
+### Iteration 12 - Free-Only Build Directive: SQLite Backend + Two-Node Health + LCAC (latest)
+**Honors operator's architecture directive. 104/104 pytest on BOTH backends. 200 MB RSS.**
+- **`services/sqlite_db.py`** — Motor-API-compatible shim over aiosqlite (363 lines). Each "collection" maps to one SQLite table `(id TEXT PRIMARY KEY, doc TEXT JSON)`. Supports every Mongo op the codebase actually uses (audited via grep): `find_one`, `find().sort().to_list()`, `insert_one/many`, `update_one` with `$set/$inc/$max`, `delete_one/many`, `count_documents`, `aggregate` with `$group/$sort/$limit`. Filter ops: equality, `$gte/$gt/$lte/$lt/$ne/$in/$nin/$exists`. Unsupported ops raise `NotImplementedError` (fail-loud)
+- **Env-gated backend switch** — `STORAGE_BACKEND=sqlite` flips engines without touching route code. Default stays MongoDB so preview/dev unaffected
+- **`docker-compose.sqlite.yml`** — 2-container stack for 1GB-RAM micro: backend (400 MB limit) + Caddy (100 MB limit, serves pre-built React static bundle from `frontend/build`). No MongoDB. No Node runtime
+- **`Caddyfile.sqlite`** — static frontend + `/api/*` reverse-proxy
+- **`oci-bootstrap.sh` v2** — auto-detects RAM via `/proc/meminfo`. `<1500 MB` → SQLite mode (compiles React bundle on host, no Node container in prod). `>=1500 MB` → MongoDB mode. New flags: `-b sqlite|mongodb` (force), `-w WORKER_URL` (link to profitengine-server)
+- **`GET /api/health/nodes`** — two-node health report (`DashboardAlways Free` + `profitengine-server`), polls worker if `WORKER_BASE_URL` env is set
+- **`GET /api/cost/status`** + **`/api/cost/policy`** — Free-Only enforcement: connector cost classifications, paid_blocked, unknown_blocked, requires_secret, optional_missing_secrets. Static policy doc lists 9 approved free integrations
+- **`GET /api/lifelong-catch-correct/`** — read-only anomaly scanner. Surfaces: missing OPERATOR_EMAIL, Stripe live without webhook, no EMERGENT_LLM_KEY, no ledger entries in 30d, agents with >25% failure rate, audit gaps, empty build registry
+- **`docs/COMMAND_OS_FREE_ONLY_FINAL_BUILD_DIRECTIVE.md`** — operator's directive committed as architectural source of truth + migration roadmap
+- **`seed_data.py`** — backend-agnostic, honors `STORAGE_BACKEND` env var
+- **`scripts/preflight.sh` v2** — now validates both compose variants; current state: **24 PASS · 0 FAIL**
+- **4 new pytest tests** for cost/status, cost/policy, health/nodes, lifelong-catch-correct. Total **104/104 PASSING** on Mongo, **104/104** on SQLite
+
+**Memory verified on SQLite stack:** backend process = 200 MB RSS · SQLite DB file = 200 KB after seed+tests · Caddy ~30 MB · **Total ~230 MB**, well under the 700 MB directive target.
+
+### Iteration 11 - Bitwarden CLI + Copy+Open Platform + Deploy Preflight
 **Real secrets vault, one-click posting, deploy gate. 100/100 pytest.**
 - **Real Bitwarden CLI integration** (replaces 45-line mock) — `services/bitwarden_service.py` async-wraps `bw` binary via `asyncio.create_subprocess_exec`. Endpoints: `GET /api/secrets/status` (installed/unlocked/server/user) + `GET /api/secrets/items` (metadata only, **no password values ever cross the wire**). Backend code calls `get_bitwarden_service().get_secret("NAME")` which falls back to env when vault is offline → existing code paths unchanged
 - **`/secrets` page** — sidebar nav under SYSTEM. Status banner + setup instructions (Bitwarden cloud OR self-hosted Vaultwarden Docker $0). Vault item browser with username + URI + has_password badge (read-only)

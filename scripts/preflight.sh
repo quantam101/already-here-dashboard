@@ -17,7 +17,7 @@ cd "$(dirname "$0")/.."
 ROOT=$(pwd)
 
 section "Required deploy artifacts"
-for f in docker-compose.yml Caddyfile DEPLOY-TO-OCI.md scripts/oci-bootstrap.sh backend/server.py backend/seed_data.py frontend/package.json; do
+for f in docker-compose.yml docker-compose.sqlite.yml Caddyfile Caddyfile.sqlite DEPLOY-TO-OCI.md docs/COMMAND_OS_FREE_ONLY_FINAL_BUILD_DIRECTIVE.md scripts/oci-bootstrap.sh backend/server.py backend/seed_data.py backend/services/sqlite_db.py frontend/package.json; do
   if [ -f "$ROOT/$f" ]; then check_pass "$f"; else check_fail "MISSING: $f"; fi
 done
 

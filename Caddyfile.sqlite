@@ -1,0 +1,38 @@
+# Caddy config for the SQLite/1GB-RAM build.
+# Serves the pre-built React static bundle from /srv/frontend and proxies /api → backend container.
+
+{$DOMAIN:alreadyherellc.com} {
+    encode gzip zstd
+
+    # API endpoints reverse-proxy to the FastAPI backend
+    handle /api/* {
+        reverse_proxy backend:8001
+    }
+
+    # Everything else: serve the React build with SPA fallback
+    handle {
+        root * /srv/frontend
+        try_files {path} /index.html
+        file_server
+    }
+
+    # Security headers
+    header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains"
+        X-Frame-Options "SAMEORIGIN"
+        X-Content-Type-Options "nosniff"
+        Referrer-Policy "strict-origin-when-cross-origin"
+        -Server
+    }
+
+    log {
+        output stdout
+        format json
+        level INFO
+    }
+}
+
+# Redirect bare www → apex
+www.{$DOMAIN:alreadyherellc.com} {
+    redir https://{$DOMAIN:alreadyherellc.com}{uri} permanent
+}
