@@ -29,37 +29,53 @@ class TestHealth:
 
 
 # ---------------- Revenue ----------------
+EXPECTED_REVENUE_NAMES = {
+    "AI Blog Network", "Faceless Videos", "Print-on-Demand A", "Print-on-Demand B",
+    "Affiliate Links", "Social Automation", "SEO Content Farm", "Federal Contracting",
+    "Service Automation", "Newsletter Sponsorships",
+}
+
+
 class TestRevenue:
-    def test_list_revenue(self, api):
+    def test_list_revenue_has_10_streams(self, api):
         r = api.get(f"{BASE_URL}/api/revenue/")
         assert r.status_code == 200
         data = r.json()
         assert isinstance(data, list)
-        # seeded 3 streams per request
-        assert len(data) >= 1
+        assert len(data) == 10, f"Expected exactly 10 streams, got {len(data)}"
+        names = {s["name"] for s in data}
+        assert names == EXPECTED_REVENUE_NAMES, f"Stream name mismatch. Got: {names}"
 
-    def test_revenue_stats(self, api):
+    def test_revenue_stats_totals(self, api):
         r = api.get(f"{BASE_URL}/api/revenue/stats/overview")
         assert r.status_code == 200
         d = r.json()
-        assert "total_monthly_target" in d
-        assert "total_monthly_actual" in d
-        assert "active_streams" in d
-        assert "total_streams" in d
+        # Targets sum = 4000+6000+3500+3500+5000+2500+4500+15000+10000+2000 = 56000
+        assert abs(d["total_monthly_target"] - 56000.0) < 1.0, f"target={d['total_monthly_target']}"
+        # Actuals sum = 1850+2400+1200+980+2100+1340+2780+3000+4250+820 = 20720
+        assert abs(d["total_monthly_actual"] - 20720.0) < 1.0, f"actual={d['total_monthly_actual']}"
+        # 20720/56000 = ~37%
+        ap = d.get("achievement_percentage", 0)
+        assert 36 <= ap <= 38, f"achievement_percentage={ap}"
+        assert d["active_streams"] == 10
+        assert d["total_streams"] == 10
 
 
 # ---------------- Agents ----------------
+NEW_AGENT_NAMES = {"SEO Scout Agent", "Faceless Video Agent", "POD Designer Agent",
+                   "Affiliate Link Agent", "Health Oracle Agent"}
+
+
 class TestAgents:
-    def test_list_agents(self, api):
+    def test_list_agents_has_10(self, api):
         r = api.get(f"{BASE_URL}/api/agents/")
         assert r.status_code == 200
         agents = r.json()
         assert isinstance(agents, list)
-        assert len(agents) >= 5, f"Expected 5 seeded agents, got {len(agents)}"
-        # check first has run_count and success metrics fields
-        a = agents[0]
-        assert "id" in a
-        assert "name" in a
+        assert len(agents) == 10, f"Expected 10 agents, got {len(agents)}"
+        names = {a["name"] for a in agents}
+        missing = NEW_AGENT_NAMES - names
+        assert not missing, f"Missing new agents: {missing}"
 
 
 # ---------------- Builds ----------------
@@ -69,15 +85,45 @@ class TestBuilds:
         assert r.status_code == 200
         builds = r.json()
         assert isinstance(builds, list)
-        assert len(builds) >= 5, f"Expected 5 seeded builds, got {len(builds)}"
+        assert len(builds) == 5, f"Expected 5 builds, got {len(builds)}"
+
+    def test_profitengine_v5_live_and_pass(self, api):
+        r = api.get(f"{BASE_URL}/api/builds/")
+        assert r.status_code == 200
+        builds = {b["id"]: b for b in r.json()}
+        b1 = builds.get("build-001")
+        assert b1 is not None, "build-001 missing"
+        assert b1["status"] == "live", f"build-001 status={b1['status']}"
+        assert b1["last_ci_status"] == "pass", f"build-001 ci={b1['last_ci_status']}"
+        assert b1["name"] == "ProfitEngine v5"
+
+    def test_vhll_distillation_live(self, api):
+        r = api.get(f"{BASE_URL}/api/builds/")
+        assert r.status_code == 200
+        builds = {b["id"]: b for b in r.json()}
+        b4 = builds.get("build-004")
+        assert b4 is not None, "build-004 missing"
+        assert b4["status"] == "live", f"build-004 status={b4['status']}"
+        assert b4["name"] == "VHLL Distillation Engine"
 
 
 # ---------------- Deployments ----------------
 class TestDeployments:
-    def test_list_deployments(self, api):
+    def test_list_deployments_all_success(self, api):
         r = api.get(f"{BASE_URL}/api/deployments/")
         assert r.status_code == 200
-        assert isinstance(r.json(), list)
+        deps = r.json()
+        assert isinstance(deps, list)
+        assert len(deps) == 4, f"Expected 4 deployments, got {len(deps)}"
+        bad = [d for d in deps if d["status"] != "success"]
+        assert not bad, f"Non-success deployments: {[(d['id'], d['status']) for d in bad]}"
+
+    def test_deployments_include_laptop_target(self, api):
+        r = api.get(f"{BASE_URL}/api/deployments/")
+        assert r.status_code == 200
+        targets = {d["target"] for d in r.json()}
+        assert "laptop" in targets, f"laptop target missing, got {targets}"
+        assert "oci" in targets, f"oci target missing, got {targets}"
 
 
 # ---------------- Content ----------------

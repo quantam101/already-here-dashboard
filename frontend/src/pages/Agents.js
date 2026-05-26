@@ -4,6 +4,64 @@ import { agentsAPI } from "../lib/api";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 
+function AgentCard({ agent, onExecute }) {
+  const total = (agent.success_count || 0) + (agent.failure_count || 0);
+  const successRate = total > 0 ? Math.round(((agent.success_count || 0) / total) * 100) : 100;
+
+  return (
+    <div
+      className="bg-[rgba(23,27,40,0.5)] border border-white/5 rounded-xl p-5 hover:border-green-500/30 transition-colors"
+      data-testid={`agent-${agent.id}`}
+    >
+      <div className="flex items-start justify-between mb-4 gap-3">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-3 mb-2">
+            <Bot className="w-5 h-5 text-purple-400 shrink-0" />
+            <h4 className="text-base font-semibold text-white truncate">{agent.name}</h4>
+          </div>
+          <div className="flex flex-wrap items-center gap-2 mb-3">
+            <span className={`content-badge status-badge-${agent.status}`}>{agent.status}</span>
+            <span className="content-badge bg-blue-500/15 text-blue-300 border border-blue-500/20">
+              {agent.type}
+            </span>
+          </div>
+          <p className="text-sm text-gray-400 mb-4 line-clamp-2">{agent.mission}</p>
+        </div>
+        <Button
+          onClick={() => onExecute(agent.id)}
+          size="sm"
+          className="bg-green-600 hover:bg-green-700 text-white shrink-0"
+          data-testid={`execute-agent-${agent.id}`}
+        >
+          <Activity className="w-4 h-4 mr-1.5" />
+          Execute
+        </Button>
+      </div>
+
+      <div className="grid grid-cols-3 gap-3 pt-3 border-t border-white/5">
+        <div>
+          <p className="text-xs text-gray-500 uppercase tracking-wider mb-0.5">Runs</p>
+          <p className="text-base font-semibold text-white">{agent.run_count || 0}</p>
+        </div>
+        <div>
+          <p className="text-xs text-gray-500 uppercase tracking-wider mb-0.5">Success</p>
+          <p className="text-base font-semibold text-green-400 flex items-center gap-1">
+            <CheckCircle className="w-3.5 h-3.5" />
+            {successRate}%
+          </p>
+        </div>
+        <div>
+          <p className="text-xs text-gray-500 uppercase tracking-wider mb-0.5">Fails</p>
+          <p className="text-base font-semibold text-red-400 flex items-center gap-1">
+            <XCircle className="w-3.5 h-3.5" />
+            {agent.failure_count || 0}
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function Agents() {
   const { data: agents = [] } = useQuery({
     queryKey: ["agents"],
@@ -19,112 +77,46 @@ export default function Agents() {
     }
   };
 
+  const stats = [
+    { label: "Total Agents", value: agents.length, accent: "text-blue-400" },
+    { label: "Active", value: agents.filter((a) => a.status === "active").length, accent: "text-green-400" },
+    { label: "Total Runs", value: agents.reduce((sum, a) => sum + (a.run_count || 0), 0), accent: "text-purple-400" },
+    { label: "Successes", value: agents.reduce((sum, a) => sum + (a.success_count || 0), 0), accent: "text-cyan-400" },
+  ];
+
   return (
-    <div data-testid="agents-page">
+    <div data-testid="agents-page" className="p-6 dark-themed-page">
       <div className="page-header">
         <h1>Agent Command Center</h1>
-        <p>Manage and monitor autonomous agents across the ecosystem</p>
+        <p>Manage and monitor {agents.length} autonomous agents across the ecosystem</p>
       </div>
 
-      {/* Agent Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-        {[
-          {
-            label: "Total Agents",
-            value: agents.length,
-            color: "bg-blue-100 text-blue-600",
-          },
-          {
-            label: "Active",
-            value: agents.filter((a) => a.status === "active").length,
-            color: "bg-green-100 text-green-600",
-          },
-          {
-            label: "Total Runs",
-            value: agents.reduce((sum, a) => sum + (a.run_count || 0), 0),
-            color: "bg-purple-100 text-purple-600",
-          },
-          {
-            label: "Success Rate",
-            value: agents.reduce((sum, a) => sum + (a.success_count || 0), 0),
-            color: "bg-cyan-100 text-cyan-600",
-          },
-        ].map((stat) => (
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+        {stats.map((stat) => (
           <div key={stat.label} className="stat-card">
-            <p className="text-sm text-gray-600 mb-1">{stat.label}</p>
-            <p className="text-3xl font-bold text-gray-900">{stat.value}</p>
+            <p className="text-xs text-gray-400 uppercase tracking-wider mb-2">{stat.label}</p>
+            <p className={`text-3xl font-bold ${stat.accent}`}>{stat.value}</p>
           </div>
         ))}
       </div>
 
-      {/* Agents List */}
       <div className="metric-card">
-        <h3 className="text-lg font-semibold mb-6">Agents</h3>
+        <div className="flex items-center justify-between mb-6">
+          <h3 className="text-lg font-semibold text-white">Agent Fleet</h3>
+          <span className="px-3 py-1 bg-green-500/20 text-green-400 rounded-full text-xs font-medium">
+            {agents.length} AGENTS
+          </span>
+        </div>
         {agents.length === 0 ? (
           <div className="text-center py-12" data-testid="no-agents-message">
-            <Bot className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-            <p className="text-gray-600 mb-2">No agents configured</p>
+            <Bot className="w-12 h-12 text-gray-500 mx-auto mb-4" />
+            <p className="text-gray-300 mb-2">No agents configured</p>
             <p className="text-sm text-gray-500">Agents will appear here once created</p>
           </div>
         ) : (
-          <div className="space-y-4" data-testid="agents-list">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4" data-testid="agents-list">
             {agents.map((agent) => (
-              <div
-                key={agent.id}
-                className="p-5 border border-gray-200 rounded-lg hover:shadow-md transition-shadow"
-                data-testid={`agent-${agent.id}`}
-              >
-                <div className="flex items-start justify-between mb-4">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-3 mb-2">
-                      <Bot className="w-6 h-6 text-purple-600" />
-                      <h4 className="text-lg font-semibold text-gray-900">{agent.name}</h4>
-                      <span
-                        className={`content-badge ${agent.status === "active" ? "status-badge-active" : "bg-gray-100 text-gray-600"}`}
-                      >
-                        {agent.status}
-                      </span>
-                      <span className="content-badge bg-blue-100 text-blue-700">
-                        {agent.type}
-                      </span>
-                    </div>
-                    <p className="text-sm text-gray-600 mb-3">{agent.mission}</p>
-                    <div className="grid grid-cols-3 gap-4 text-sm">
-                      <div>
-                        <p className="text-gray-500">Run Count</p>
-                        <p className="font-semibold text-gray-900">{agent.run_count || 0}</p>
-                      </div>
-                      <div>
-                        <p className="text-gray-500">Success</p>
-                        <p className="font-semibold text-green-600 flex items-center gap-1">
-                          <CheckCircle className="w-4 h-4" />
-                          {agent.success_count || 0}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-gray-500">Failures</p>
-                        <p className="font-semibold text-red-600 flex items-center gap-1">
-                          <XCircle className="w-4 h-4" />
-                          {agent.failure_count || 0}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                  <Button
-                    onClick={() => handleExecute(agent.id)}
-                    className="flex items-center gap-2"
-                    data-testid={`execute-agent-${agent.id}`}
-                  >
-                    <Activity className="w-4 h-4" />
-                    Execute
-                  </Button>
-                </div>
-                {agent.last_run && (
-                  <div className="text-xs text-gray-500 border-t pt-3">
-                    Last run: {new Date(agent.last_run).toLocaleString()}
-                  </div>
-                )}
-              </div>
+              <AgentCard key={agent.id} agent={agent} onExecute={handleExecute} />
             ))}
           </div>
         )}

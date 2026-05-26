@@ -17,9 +17,9 @@ const INITIAL_FORM = {
 
 function ContentStats({ content }) {
   const stats = [
-    { label: "Total", value: content.length },
-    { label: "Published", value: content.filter((c) => c.status === "published").length },
-    { label: "Draft", value: content.filter((c) => c.status === "draft").length },
+    { label: "Total", value: content.length, accent: "text-blue-400" },
+    { label: "Published", value: content.filter((c) => c.status === "published").length, accent: "text-green-400" },
+    { label: "Draft", value: content.filter((c) => c.status === "draft").length, accent: "text-yellow-400" },
     {
       label: "This Month",
       value: content.filter((c) => {
@@ -30,15 +30,16 @@ function ContentStats({ content }) {
           created.getFullYear() === now.getFullYear()
         );
       }).length,
+      accent: "text-purple-400",
     },
   ];
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
       {stats.map((stat) => (
         <div key={stat.label} className="stat-card">
-          <p className="text-sm text-gray-600 mb-1">{stat.label}</p>
-          <p className="text-3xl font-bold text-gray-900">{stat.value}</p>
+          <p className="text-xs text-gray-400 uppercase tracking-wider mb-2">{stat.label}</p>
+          <p className={`text-3xl font-bold ${stat.accent}`}>{stat.value}</p>
         </div>
       ))}
     </div>
@@ -48,8 +49,8 @@ function ContentStats({ content }) {
 function ContentEmptyState() {
   return (
     <div className="text-center py-12" data-testid="no-content-message">
-      <FileText className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-      <p className="text-gray-600 mb-2">No content yet</p>
+      <FileText className="w-12 h-12 text-gray-500 mx-auto mb-4" />
+      <p className="text-gray-300 mb-2">No content yet</p>
       <p className="text-sm text-gray-500">Generate your first AI-powered content piece</p>
     </div>
   );
@@ -89,8 +90,8 @@ export default function Content() {
   };
 
   return (
-    <div data-testid="content-page">
-      <div className="page-header flex items-center justify-between">
+    <div data-testid="content-page" className="p-6 dark-themed-page">
+      <div className="page-header flex items-center justify-between gap-4">
         <div>
           <h1>Content Library</h1>
           <p>AI-powered content generation for blogs, social media, and proposals</p>
@@ -108,11 +109,11 @@ export default function Content() {
       <ContentStats content={content} />
 
       <div className="metric-card">
-        <h3 className="text-lg font-semibold mb-6">Content Library</h3>
+        <h3 className="text-lg font-semibold text-white mb-6">Content Library</h3>
         {content.length === 0 ? (
           <ContentEmptyState />
         ) : (
-          <div className="space-y-4" data-testid="content-list">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4" data-testid="content-list">
             {content.map((item) => (
               <ContentLibraryCard key={item.id} item={item} />
             ))}

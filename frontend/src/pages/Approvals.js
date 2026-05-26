@@ -5,45 +5,45 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 
 const PRIORITY_COLORS = {
-  critical: "text-red-600 bg-red-100",
-  high: "text-orange-600 bg-orange-100",
-  medium: "text-yellow-600 bg-yellow-100",
+  critical: "bg-red-500/15 text-red-300 border border-red-500/20",
+  high: "bg-orange-500/15 text-orange-300 border border-orange-500/20",
+  medium: "bg-yellow-500/15 text-yellow-300 border border-yellow-500/20",
 };
-const DEFAULT_PRIORITY_COLOR = "text-gray-600 bg-gray-100";
+const DEFAULT_PRIORITY_COLOR = "bg-gray-500/15 text-gray-300 border border-gray-500/20";
 
 const STATUS_BADGE_CLASSES = {
   pending: "status-badge-pending",
   approved: "status-badge-active",
+  rejected: "status-badge-failed",
 };
-const DEFAULT_STATUS_BADGE = "bg-red-100 text-red-700";
 
 function getPriorityColor(priority) {
   return PRIORITY_COLORS[priority] || DEFAULT_PRIORITY_COLOR;
 }
 
 function getStatusBadgeClass(status) {
-  return STATUS_BADGE_CLASSES[status] || DEFAULT_STATUS_BADGE;
+  return STATUS_BADGE_CLASSES[status] || "status-badge-failed";
 }
 
 function ApprovalStats({ approvals, pendingCount }) {
   const stats = [
-    { label: "Pending", value: pendingCount, icon: Clock },
-    { label: "Approved", value: approvals.filter((a) => a.status === "approved").length, icon: CheckCircle2 },
-    { label: "Rejected", value: approvals.filter((a) => a.status === "rejected").length, icon: AlertTriangle },
-    { label: "Total", value: approvals.length, icon: CheckCircle2 },
+    { label: "Pending", value: pendingCount, icon: Clock, accent: "text-yellow-400" },
+    { label: "Approved", value: approvals.filter((a) => a.status === "approved").length, icon: CheckCircle2, accent: "text-green-400" },
+    { label: "Rejected", value: approvals.filter((a) => a.status === "rejected").length, icon: AlertTriangle, accent: "text-red-400" },
+    { label: "Total", value: approvals.length, icon: CheckCircle2, accent: "text-blue-400" },
   ];
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
       {stats.map((stat) => {
         const Icon = stat.icon;
         return (
           <div key={stat.label} className="stat-card">
-            <div className="flex items-center gap-3 mb-2">
-              <Icon className="w-5 h-5 text-blue-600" />
-              <p className="text-sm text-gray-600">{stat.label}</p>
+            <div className="flex items-center gap-2 mb-2">
+              <Icon className={`w-4 h-4 ${stat.accent}`} />
+              <p className="text-xs text-gray-400 uppercase tracking-wider">{stat.label}</p>
             </div>
-            <p className="text-3xl font-bold text-gray-900">{stat.value}</p>
+            <p className={`text-3xl font-bold ${stat.accent}`}>{stat.value}</p>
           </div>
         );
       })}
@@ -53,19 +53,19 @@ function ApprovalStats({ approvals, pendingCount }) {
 
 function ApprovalActions({ approvalId, onDecide }) {
   return (
-    <div className="flex gap-2 ml-4">
+    <div className="flex gap-2 shrink-0">
       <Button
         onClick={() => onDecide(approvalId, "approved")}
-        variant="default"
         size="sm"
+        className="bg-green-600 hover:bg-green-700 text-white"
         data-testid={`approve-${approvalId}`}
       >
         Approve
       </Button>
       <Button
         onClick={() => onDecide(approvalId, "rejected")}
-        variant="destructive"
         size="sm"
+        variant="destructive"
         data-testid={`reject-${approvalId}`}
       >
         Reject
@@ -77,13 +77,13 @@ function ApprovalActions({ approvalId, onDecide }) {
 function ApprovalCard({ approval, onDecide }) {
   return (
     <div
-      className="p-5 border border-gray-200 rounded-lg hover:shadow-md transition-shadow"
+      className="bg-[rgba(23,27,40,0.5)] border border-white/5 rounded-xl p-5 hover:border-green-500/30 transition-colors"
       data-testid={`approval-${approval.id}`}
     >
-      <div className="flex items-start justify-between">
-        <div className="flex-1">
-          <div className="flex items-center gap-3 mb-2">
-            <h4 className="text-lg font-semibold text-gray-900">{approval.action}</h4>
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex-1 min-w-0">
+          <div className="flex flex-wrap items-center gap-2 mb-2">
+            <h4 className="text-base font-semibold text-white">{approval.action}</h4>
             <span className={`content-badge ${getPriorityColor(approval.priority)}`}>
               {approval.priority}
             </span>
@@ -91,20 +91,20 @@ function ApprovalCard({ approval, onDecide }) {
               {approval.status}
             </span>
           </div>
-          <p className="text-sm text-gray-600 mb-3">{approval.reason}</p>
-          <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 text-sm">
+          <p className="text-sm text-gray-400 mb-3">{approval.reason}</p>
+          <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 text-sm">
             <div>
-              <p className="text-gray-500">Resource</p>
-              <p className="font-semibold text-gray-900">{approval.resource_type}</p>
+              <p className="text-xs text-gray-500 uppercase tracking-wider mb-0.5">Resource</p>
+              <p className="font-semibold text-gray-300">{approval.resource_type}</p>
             </div>
             <div>
-              <p className="text-gray-500">Requested By</p>
-              <p className="font-semibold text-gray-900">{approval.requested_by}</p>
+              <p className="text-xs text-gray-500 uppercase tracking-wider mb-0.5">Requested By</p>
+              <p className="font-semibold text-gray-300">{approval.requested_by}</p>
             </div>
             {approval.approved_by && (
               <div>
-                <p className="text-gray-500">Approved By</p>
-                <p className="font-semibold text-gray-900">{approval.approved_by}</p>
+                <p className="text-xs text-gray-500 uppercase tracking-wider mb-0.5">Approved By</p>
+                <p className="font-semibold text-gray-300">{approval.approved_by}</p>
               </div>
             )}
           </div>
@@ -113,7 +113,7 @@ function ApprovalCard({ approval, onDecide }) {
           <ApprovalActions approvalId={approval.id} onDecide={onDecide} />
         )}
       </div>
-      <div className="text-xs text-gray-500 mt-3 border-t pt-3">
+      <div className="text-xs text-gray-500 mt-3 pt-3 border-t border-white/5">
         Requested {new Date(approval.created_at).toLocaleString()}
       </div>
     </div>
@@ -146,7 +146,7 @@ export default function Approvals() {
   const pendingApprovals = approvals.filter((a) => a.status === "pending");
 
   return (
-    <div data-testid="approvals-page">
+    <div data-testid="approvals-page" className="p-6 dark-themed-page">
       <div className="page-header">
         <h1>Approval Queue</h1>
         <p>Review and approve actions requiring human oversight</p>
@@ -155,11 +155,11 @@ export default function Approvals() {
       <ApprovalStats approvals={approvals} pendingCount={pendingApprovals.length} />
 
       <div className="metric-card">
-        <h3 className="text-lg font-semibold mb-6">Approval Requests</h3>
+        <h3 className="text-lg font-semibold text-white mb-6">Approval Requests</h3>
         {approvals.length === 0 ? (
           <div className="text-center py-12" data-testid="no-approvals-message">
-            <CheckCircle2 className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-            <p className="text-gray-600 mb-2">No approval requests</p>
+            <CheckCircle2 className="w-12 h-12 text-gray-500 mx-auto mb-4" />
+            <p className="text-gray-300 mb-2">No approval requests</p>
             <p className="text-sm text-gray-500">Requests requiring approval will appear here</p>
           </div>
         ) : (
