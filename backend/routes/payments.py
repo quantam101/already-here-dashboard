@@ -57,6 +57,10 @@ REVENUE_STREAM_FOR_PAYMENTS = "rev-saas"
 class CheckoutCreateRequest(BaseModel):
     package_id: str
     origin_url: str  # frontend's window.location.origin (used for success/cancel)
+    utm_source: Optional[str] = None  # reddit, linkedin, twitter, blog, ...
+    utm_medium: Optional[str] = None  # post, dm, email, organic, paid
+    utm_campaign: Optional[str] = None
+    referrer: Optional[str] = None
 
 
 class CheckoutCreateResponse(BaseModel):
@@ -138,6 +142,10 @@ async def create_checkout(payload: CheckoutCreateRequest, http_request: Request,
             "package_name": pkg["name"],
             "kind": pkg["kind"],
             "source": "command_os_checkout",
+            "utm_source": payload.utm_source or "",
+            "utm_medium": payload.utm_medium or "",
+            "utm_campaign": payload.utm_campaign or "",
+            "referrer": payload.referrer or "",
         },
     )
     session = await stripe_checkout.create_checkout_session(req)
@@ -151,7 +159,13 @@ async def create_checkout(payload: CheckoutCreateRequest, http_request: Request,
         "currency": pkg["currency"],
         "kind": pkg["kind"],
         "payment_status": "initiated",
-        "metadata": {"package_name": pkg["name"]},
+        "metadata": {
+            "package_name": pkg["name"],
+            "utm_source": payload.utm_source or "",
+            "utm_medium": payload.utm_medium or "",
+            "utm_campaign": payload.utm_campaign or "",
+            "referrer": payload.referrer or "",
+        },
         "ledger_entry_id": None,
         "created_at": datetime.now(timezone.utc).isoformat(),
         "updated_at": datetime.now(timezone.utc).isoformat(),
@@ -171,6 +185,7 @@ async def _record_paid_to_ledger(db, txn: dict) -> str:
         return txn["ledger_entry_id"]  # already recorded
     today = datetime.now(timezone.utc).date().isoformat()
     entry_id = f"led-{uuid.uuid4().hex[:10]}"
+    utm_meta = {k: txn.get("metadata", {}).get(k, "") for k in ("utm_source", "utm_medium", "utm_campaign", "referrer")}
     await db.revenue_ledger.insert_one({
         "id": entry_id,
         "stream_id": REVENUE_STREAM_FOR_PAYMENTS,
@@ -180,7 +195,9 @@ async def _record_paid_to_ledger(db, txn: dict) -> str:
         "currency": txn["currency"].upper(),
         "source": "stripe",
         "proof_url": f"stripe://session/{txn['session_id']}",
-        "notes": f"Stripe checkout - package {txn['package_id']}",
+        "notes": f"Stripe checkout - package {txn['package_id']}"
+                 + (f" via {utm_meta['utm_source']}" if utm_meta["utm_source"] else ""),
+        "metadata": {**utm_meta, "package_id": txn["package_id"]},
         "created_at": datetime.now(timezone.utc).isoformat(),
     })
     await db.payment_transactions.update_one(
@@ -190,7 +207,7 @@ async def _record_paid_to_ledger(db, txn: dict) -> str:
     await log_audit_event(
         db, "payment.recorded_to_ledger", "stripe", "record",
         "ledger_entry", entry_id,
-        metadata={"session_id": txn["session_id"], "amount": txn["amount"]},
+        metadata={"session_id": txn["session_id"], "amount": txn["amount"], **utm_meta},
     )
     return entry_id
 
@@ -265,12 +282,49 @@ async def payment_stats(db=Depends(get_db)):
     total_paid = sum(t["amount"] for t in txns if t.get("payment_status") == "paid")
     by_package: dict[str, int] = {}
     by_status: dict[str, int] = {}
+    by_utm_source: dict[str, dict] = {}
     for t in txns:
         by_package[t.get("package_id", "?")] = by_package.get(t.get("package_id", "?"), 0) + 1
         by_status[t.get("payment_status", "?")] = by_status.get(t.get("payment_status", "?"), 0) + 1
+        src = (t.get("metadata", {}).get("utm_source") or "direct").lower() or "direct"
+        bucket = by_utm_source.setdefault(src, {"clicks": 0, "paid": 0, "paid_usd": 0.0})
+        bucket["clicks"] += 1
+        if t.get("payment_status") == "paid":
+            bucket["paid"] += 1
+            bucket["paid_usd"] += t.get("amount", 0.0)
     return {
         "total_transactions": len(txns),
         "total_paid_usd": round(total_paid, 2),
         "by_package": by_package,
         "by_status": by_status,
+        "by_utm_source": {k: {**v, "paid_usd": round(v["paid_usd"], 2)} for k, v in by_utm_source.items()},
+    }
+
+
+@router.get("/share-link")
+async def generate_share_link(
+    package_id: str = "starter",
+    utm_source: str = "reddit",
+    utm_medium: str = "post",
+    utm_campaign: str = "launch",
+    origin_url: str = "https://alreadyherellc.com",
+):
+    """Generate a pre-tagged share URL the operator can drop in DMs / posts.
+
+    The pricing page reads utm_* query params and forwards them to /checkout so
+    the eventual sale credits the right channel in by_utm_source analytics.
+    """
+    if package_id not in PACKAGES:
+        raise HTTPException(status_code=400, detail=f"Unknown package: {package_id}")
+    from urllib.parse import urlencode
+    qs = urlencode({
+        "pkg": package_id,
+        "utm_source": utm_source,
+        "utm_medium": utm_medium,
+        "utm_campaign": utm_campaign,
+    })
+    return {
+        "share_url": f"{origin_url.rstrip('/')}/pricing?{qs}",
+        "package_id": package_id,
+        "amount": PACKAGES[package_id]["amount"],
     }

@@ -1,14 +1,14 @@
 # Caddyfile for Already Here Command OS
 # Free HTTPS via Let's Encrypt - $0/month
-# Replace {YOUR_DOMAIN} with your actual domain
+# DOMAIN defaults to alreadyherellc.com; override with: DOMAIN=other.com docker compose up -d
 
-{$DOMAIN:command-os.local} {
-    # Frontend (React)
+{$DOMAIN:alreadyherellc.com} {
+    # Backend API
     handle /api/* {
         reverse_proxy backend:8001
     }
 
-    # Backend API
+    # Frontend SPA
     handle {
         reverse_proxy frontend:3000
     }
@@ -22,12 +22,15 @@
         -Server
     }
 
-    # Compression
     encode gzip
 
-    # Logging
     log {
         output file /var/log/caddy/access.log
         format json
     }
+}
+
+# Also handle www subdomain - redirects to apex
+www.{$DOMAIN:alreadyherellc.com} {
+    redir https://{$DOMAIN:alreadyherellc.com}{uri} permanent
 }

@@ -440,6 +440,33 @@ class TestPayments:
         assert r.status_code == 200
         d = r.json()
         assert "total_paid_usd" in d and "by_package" in d
+        assert "by_utm_source" in d  # UTM attribution surfaced
+
+    def test_share_link_generates(self, api):
+        r = api.get(f"{BASE_URL}/api/payments/share-link", params={
+            "package_id": "starter", "utm_source": "reddit",
+            "utm_medium": "post", "utm_campaign": "launch",
+            "origin_url": "https://alreadyherellc.com",
+        })
+        assert r.status_code == 200
+        d = r.json()
+        assert "alreadyherellc.com/pricing" in d["share_url"]
+        assert "utm_source=reddit" in d["share_url"]
+        assert d["amount"] == 49.0
+
+    def test_share_link_unknown_package(self, api):
+        r = api.get(f"{BASE_URL}/api/payments/share-link", params={"package_id": "bogus"})
+        assert r.status_code == 400
+
+    def test_checkout_with_utm_persists_metadata(self, api):
+        r = api.post(f"{BASE_URL}/api/payments/checkout", json={
+            "package_id": "starter", "origin_url": "http://localhost:3000",
+            "utm_source": "linkedin", "utm_medium": "dm", "utm_campaign": "q1-2026",
+        })
+        assert r.status_code == 200
+        # stats should now show linkedin in by_utm_source
+        stats = api.get(f"{BASE_URL}/api/payments/stats").json()
+        assert "linkedin" in stats["by_utm_source"]
 
 
 # ---------------- Analytics ----------------
