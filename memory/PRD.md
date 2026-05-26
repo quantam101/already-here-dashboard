@@ -23,7 +23,16 @@ Build a complete enterprise-grade, governed multi-agent operating system consoli
 
 ## What's Been Implemented (2026-05-26)
 
-### Iteration 10 - Read/Copy/Post Content Flow + Agents UX Polish (latest)
+### Iteration 11 - Bitwarden CLI + Copy+Open Platform + Deploy Preflight (latest)
+**Real secrets vault, one-click posting, deploy gate. 100/100 pytest.**
+- **Real Bitwarden CLI integration** (replaces 45-line mock) — `services/bitwarden_service.py` async-wraps `bw` binary via `asyncio.create_subprocess_exec`. Endpoints: `GET /api/secrets/status` (installed/unlocked/server/user) + `GET /api/secrets/items` (metadata only, **no password values ever cross the wire**). Backend code calls `get_bitwarden_service().get_secret("NAME")` which falls back to env when vault is offline → existing code paths unchanged
+- **`/secrets` page** — sidebar nav under SYSTEM. Status banner + setup instructions (Bitwarden cloud OR self-hosted Vaultwarden Docker $0). Vault item browser with username + URI + has_password badge (read-only)
+- **`bw` CLI auto-installed in `oci-bootstrap.sh`** (step 3b) — fails gracefully on ARM-mismatch, doesn't block deploy. `BW_SESSION` passed through `docker-compose.yml` env
+- **"Copy + Open Platform" buttons** in `IdeaDetailDialog` — each script's target_platform gets a button (Reddit/LinkedIn/X open the platform's post composer pre-filled with script; TikTok/IG/YouTube copy + open the upload page). `lib/platformShare.js` builds the URLs per-platform
+- **`scripts/preflight.sh`** — 23-check pre-deploy validator: artifacts exist, scripts have valid bash syntax, Python imports clean, pytest passes, frontend env present, git state. Run `bash scripts/preflight.sh` BEFORE oci-bootstrap to fail-fast. Currently: **20 PASS · 0 FAIL · 3 expected warnings**
+- **4 new pytest tests** for secrets endpoints (shape, empty when uninstalled, no-leak verification, system status block). Total **100/100 PASSING** (was 96)
+
+### Iteration 10 - Read/Copy/Post Content Flow + Agents UX Polish
 **Fixes the "I can't access my generated content" pain. 96/96 pytest.**
 - **`GET /api/studio/scripts/`** + **`GET /api/studio/ideas/{id}/scripts`** — operator can now read every script Gemini generated (was previously written to DB with no surfaced UI)
 - **`<IdeaDetailDialog>`** — clicking an idea card opens a 3xl dialog showing description, target platforms, inspiration source URL, and **all generated scripts** (newest first). Each script section (Hook / Script Body / CTA / Shot List) has its own `copy` button, plus a top-level "Copy Full Script" that bundles everything in CapCut-import-ready format. "Generate Another" button inside the dialog calls Gemini-3-Flash and refreshes the list

@@ -17,6 +17,7 @@ import Analytics from "./pages/Analytics";
 import Pricing from "./pages/Pricing";
 import PaymentSuccess from "./pages/PaymentSuccess";
 import Books from "./pages/Books";
+import Secrets from "./pages/Secrets";
 import AuthGate from "./components/AuthGate";
 import { Toaster } from "sonner";
 
@@ -43,6 +44,7 @@ function App() {
               <Route path="analytics" element={<Analytics />} />
               <Route path="pricing" element={<Pricing />} />
               <Route path="books" element={<Books />} />
+              <Route path="secrets" element={<Secrets />} />
             </Route>
             <Route path="/payment-success" element={<PaymentSuccess />} />
           </Routes>

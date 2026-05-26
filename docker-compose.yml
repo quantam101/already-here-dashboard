@@ -33,7 +33,9 @@ services:
       CORS_ORIGINS: ${CORS_ORIGINS:-*}
       EMERGENT_LLM_KEY: ${EMERGENT_LLM_KEY}
       STRIPE_API_KEY: ${STRIPE_API_KEY:-sk_test_emergent}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
       OPERATOR_EMAIL: ${OPERATOR_EMAIL:-}
+      BW_SESSION: ${BW_SESSION:-}
       SYSTEM_MODE: production
       COST_GUARD_ENABLED: "true"
       ZERO_SPEND_MODE: "true"

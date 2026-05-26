@@ -1032,3 +1032,38 @@ class TestStudioScripts:
         assert r.status_code == 200
         assert r.json() == []
 
+
+
+
+# ---------------- Secrets / Bitwarden ----------------
+class TestSecrets:
+    def test_status_returns_shape_even_when_uninstalled(self, api):
+        r = api.get(f"{BASE_URL}/api/secrets/status")
+        assert r.status_code == 200, r.text
+        d = r.json()
+        for k in ("installed", "unlocked", "server", "user", "reason"):
+            assert k in d
+        assert isinstance(d["installed"], bool)
+        assert isinstance(d["unlocked"], bool)
+
+    def test_items_returns_empty_when_unavailable(self, api):
+        r = api.get(f"{BASE_URL}/api/secrets/items")
+        assert r.status_code == 200
+        d = r.json()
+        assert "items" in d
+        assert "available" in d
+        assert isinstance(d["items"], list)
+
+    def test_system_status_exposes_bitwarden_block(self, api):
+        r = api.get(f"{BASE_URL}/api/system/status")
+        d = r.json()
+        assert "bitwarden" in d
+        bw = d["bitwarden"]
+        for k in ("installed", "unlocked", "server", "user_masked"):
+            assert k in bw
+
+    def test_secrets_endpoints_never_leak_password_field(self, api):
+        # In CI bw is not installed, so this confirms zero-info-leak posture
+        body = api.get(f"{BASE_URL}/api/secrets/items").text.lower()
+        for needle in ('"password"', '"totp_seed"', '"secret"'):
+            assert needle not in body, f"secret-like key leaked: {needle}"

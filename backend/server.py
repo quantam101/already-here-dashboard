@@ -12,7 +12,7 @@ ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
 # Import routers
-from routes import revenue, content, agents, builds, deployments, audit, approvals, health, content_factory, ledger, publishing, scout, proposals, cycle, payments, analytics, advisor, auth, books, system
+from routes import revenue, content, agents, builds, deployments, audit, approvals, health, content_factory, ledger, publishing, scout, proposals, cycle, payments, analytics, advisor, auth, books, system, secrets
 from services.scheduler_service import start_scheduler, stop_scheduler
 
 # MongoDB connection
@@ -65,6 +65,7 @@ api_router.include_router(advisor.router, prefix="/advisor", tags=["advisor"])
 api_router.include_router(auth.router, prefix="/auth", tags=["auth"])
 api_router.include_router(books.router, prefix="/books", tags=["books"])
 api_router.include_router(system.router, prefix="/system", tags=["system"])
+api_router.include_router(secrets.router, prefix="/secrets", tags=["secrets"])
 
 # Include router in main app
 app.include_router(api_router)

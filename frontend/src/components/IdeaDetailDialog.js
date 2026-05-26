@@ -1,10 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
-import { Copy, ExternalLink, Wand2, Loader2 } from "lucide-react";
+import { Copy, ExternalLink, Wand2, Loader2, Share2 } from "lucide-react";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { studioAPI } from "../lib/api";
+import { platformShareUrl, platformLabel } from "../lib/platformShare";
 import { toast } from "sonner";
 
 function copyText(text, label = "Script") {
@@ -22,7 +23,26 @@ function fullScript(s) {
   return parts.join("\n");
 }
 
-function ScriptCard({ script }) {
+function ScriptCard({ script, idea }) {
+  const platforms = idea?.target_platforms || [];
+  const fullText = fullScript(script);
+
+  const copyAndOpen = (platform) => {
+    const shareUrl = platformShareUrl(platform, {
+      title: idea?.title || "",
+      body: fullText,
+      url: idea?.inspiration_source || "",
+    });
+    // Always copy the full script — sites that don't accept prefill at least let you paste
+    navigator.clipboard.writeText(fullText);
+    if (shareUrl) {
+      window.open(shareUrl, "_blank", "noopener,noreferrer");
+      toast.success(`Script copied · opening ${platformLabel(platform)}…`);
+    } else {
+      toast.success(`Script copied · open ${platformLabel(platform)} manually and paste`);
+    }
+  };
+
   return (
     <div className="bg-black/40 border border-white/10 rounded-lg p-4 space-y-3" data-testid={`script-${script.id}`}>
       <div className="flex items-center justify-between">
@@ -33,12 +53,38 @@ function ScriptCard({ script }) {
           size="sm"
           variant="outline"
           className="border-green-500/30 text-green-300 hover:bg-green-500/10 h-7"
-          onClick={() => copyText(fullScript(script), "Full script")}
+          onClick={() => copyText(fullText, "Full script")}
           data-testid={`copy-script-${script.id}`}
         >
           <Copy className="w-3.5 h-3.5 mr-1.5" /> Copy Full Script
         </Button>
       </div>
+
+      {platforms.length > 0 && (
+        <div>
+          <p className="text-xs text-gray-500 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+            <Share2 className="w-3 h-3" /> One-click Post
+          </p>
+          <div className="flex flex-wrap gap-1.5">
+            {platforms.map((p) => (
+              <Button
+                key={p}
+                size="sm"
+                variant="outline"
+                className="border-cyan-500/30 text-cyan-300 hover:bg-cyan-500/10 h-7 text-xs"
+                onClick={() => copyAndOpen(p)}
+                data-testid={`copy-open-${script.id}-${p}`}
+              >
+                <Share2 className="w-3 h-3 mr-1" />
+                Copy + Open {platformLabel(p)}
+              </Button>
+            ))}
+          </div>
+          <p className="text-xs text-gray-500 mt-1.5">
+            Opens the platform's post composer in a new tab with the script pre-filled (Reddit, LinkedIn, X) or copies to clipboard for paste (TikTok, IG, YouTube).
+          </p>
+        </div>
+      )}
 
       <div>
         <div className="flex items-center justify-between mb-1">
@@ -167,7 +213,7 @@ export default function IdeaDetailDialog({ idea, open, onOpenChange, onGenerateS
               </div>
             ) : (
               <div className="space-y-3">
-                {scripts.map((s) => <ScriptCard key={s.id} script={s} />)}
+                {scripts.map((s) => <ScriptCard key={s.id} script={s} idea={idea} />)}
               </div>
             )}
           </div>

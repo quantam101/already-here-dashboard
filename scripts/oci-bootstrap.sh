@@ -63,6 +63,18 @@ ufw --force enable || true
 # add ingress rules in OCI Networking → Security Lists for ports 80 + 443.
 warn "OCI Security List rules: add ingress for tcp/80 and tcp/443 in the OCI Console"
 
+log "3b/6  installing Bitwarden CLI (optional - skipped on failure)..."
+if ! command -v bw >/dev/null 2>&1; then
+  ( set -e
+    apt-get install -y -qq unzip
+    curl -fL "https://vault.bitwarden.com/download/?app=cli&platform=linux" -o /tmp/bw.zip
+    unzip -o /tmp/bw.zip -d /usr/local/bin/
+    chmod +x /usr/local/bin/bw
+    rm -f /tmp/bw.zip
+  ) && log "bw CLI installed: $(bw --version 2>/dev/null || echo n/a)" \
+    || warn "bw CLI install skipped (offline / arch mismatch). Run later: see /secrets page in dashboard."
+fi
+
 log "4/6  cloning repo to /opt/command-os..."
 mkdir -p /opt
 [ -d /opt/command-os ] || git clone "$REPO" /opt/command-os
@@ -76,7 +88,9 @@ DB_NAME="command_os"
 CORS_ORIGINS="https://${DOMAIN}"
 EMERGENT_LLM_KEY="${EMERGENT_LLM_KEY:-}"
 STRIPE_API_KEY="${STRIPE_API_KEY:-sk_test_emergent}"
+STRIPE_WEBHOOK_SECRET="${STRIPE_WEBHOOK_SECRET:-}"
 OPERATOR_EMAIL="${OPERATOR_EMAIL:-${EMAIL}}"
+BW_SESSION="${BW_SESSION:-}"
 ZERO_SPEND_MODE=true
 EOF
 cat > frontend/.env <<EOF

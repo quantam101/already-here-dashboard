@@ -182,3 +182,9 @@ export const authAPI = {
 export const systemAPI = {
   status: () => api.get("/system/status"),
 };
+
+// Secrets (Bitwarden/Vaultwarden read-only browser)
+export const secretsAPI = {
+  status: () => api.get("/secrets/status"),
+  items: () => api.get("/secrets/items"),
+};

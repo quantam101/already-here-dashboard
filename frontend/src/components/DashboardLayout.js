@@ -18,6 +18,7 @@ import {
   BookOpen,
   BarChart3,
   CreditCard,
+  Shield as ShieldIcon,
   Menu,
   X,
 } from "lucide-react";
@@ -38,6 +39,7 @@ const NAVIGATION = [
   { name: "Deployments", path: "/deployments", icon: Package, section: "revenue" },
   { name: "Approval Queue", path: "/approvals", icon: LinkIcon, section: "revenue" },
   { name: "Audit Log", path: "/audit", icon: Rocket, section: "system" },
+  { name: "Secrets Vault", path: "/secrets", icon: ShieldIcon, section: "system" },
   { name: "LGAC Monitor", path: "/audit", icon: Shield, section: "system" },
 ];
 

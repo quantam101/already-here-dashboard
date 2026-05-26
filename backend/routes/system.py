@@ -6,6 +6,7 @@ set, not the values themselves.
 """
 from fastapi import APIRouter, Depends
 import os
+from services.bitwarden_service import get_bitwarden_service
 
 router = APIRouter()
 
@@ -50,6 +51,8 @@ async def system_status(db=Depends(get_db)):
     # Daily scheduler hour for the Run Cycle automation
     daily_cycle_hour = os.environ.get("DAILY_CYCLE_HOUR_UTC", "7")
 
+    bw = await get_bitwarden_service().status()
+
     return {
         "operator_email_set": bool(operator_email),
         "operator_email_masked": (
@@ -63,4 +66,10 @@ async def system_status(db=Depends(get_db)):
         "counts": counts,
         "is_seeded": counts["revenue_streams"] >= 3 and counts["agents"] >= 3,
         "system_mode": os.environ.get("SYSTEM_MODE", "production"),
+        "bitwarden": {
+            "installed": bw["installed"],
+            "unlocked": bw["unlocked"],
+            "server": bw["server"],
+            "user_masked": (bw["user"][0] + "***@" + bw["user"].split("@", 1)[1]) if bw["user"] and "@" in bw["user"] else None,
+        },
     }
