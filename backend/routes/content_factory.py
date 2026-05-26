@@ -1,5 +1,6 @@
 from fastapi import APIRouter, HTTPException, Depends
-from typing import List
+from typing import List, Optional
+from pydantic import BaseModel, Field
 from content_models import (
     ContentIdea, ContentScript, ContentAsset, PlatformConnector,
     ScheduledPost, ContentAnalytics, PlatformVariant,
@@ -10,14 +11,25 @@ from services.audit_service import log_audit_event
 
 router = APIRouter()
 
+
+class ContentIdeaCreate(BaseModel):
+    title: str
+    description: str
+    topic: str
+    target_platforms: List[PlatformEnum] = Field(default_factory=list)
+    priority: Optional[str] = "medium"
+    tags: List[str] = Field(default_factory=list)
+    inspiration_source: Optional[str] = None
+
+
 async def get_db():
     from server import db
     return db
 
 # Content Ideas
 @router.post("/ideas/", response_model=ContentIdea)
-async def create_idea(idea: dict, db=Depends(get_db)):
-    idea_obj = ContentIdea(**idea)
+async def create_idea(idea: ContentIdeaCreate, db=Depends(get_db)):
+    idea_obj = ContentIdea(**idea.model_dump())
     doc = idea_obj.model_dump()
     doc['created_at'] = doc['created_at'].isoformat()
     doc['updated_at'] = doc['updated_at'].isoformat()

@@ -21,9 +21,9 @@ const NAVIGATION = [
   { name: "AI Agents", path: "/agents", icon: Bot, section: "operations" },
   { name: "Content Factory", path: "/studio", icon: Sparkles, section: "operations" },
   { name: "Content Library", path: "/content", icon: FileText, section: "revenue" },
-  { name: "Revenue Intel", path: "/builds", icon: TrendingUp, section: "revenue" },
+  { name: "Build Registry", path: "/builds", icon: TrendingUp, section: "revenue" },
   { name: "Deployments", path: "/deployments", icon: Package, section: "revenue" },
-  { name: "Affiliate Links", path: "/approvals", icon: LinkIcon, section: "revenue" },
+  { name: "Approval Queue", path: "/approvals", icon: LinkIcon, section: "revenue" },
   { name: "Audit Log", path: "/audit", icon: Rocket, section: "system" },
   { name: "LGAC Monitor", path: "/audit", icon: Shield, section: "system" },
 ];
