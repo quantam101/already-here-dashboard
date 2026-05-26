@@ -23,7 +23,18 @@ Build a complete enterprise-grade, governed multi-agent operating system consoli
 
 ## What's Been Implemented (2026-05-26)
 
-### Iteration 7 - Stripe Payments + Analytics + AI Advisor + Auto-Cycle (latest)
+### Iteration 8 - Books / Audiobooks Agent + Auth Gate + OCI Bootstrap (latest)
+**New revenue stream: rev-books. Auth wired (gated by env). OCI fully scripted.**
+- **`/api/books/` route** — full book/manual/journal/workbook/guide/memoir generation via Emergent LLM Gemini 3 Flash, chapter-by-chapter; types validated; chapter count 1..20; outline auto-parsed (JSON-array tolerant); `.md` and `.txt` download endpoints; `download_count` tracked; new `rev-books` revenue stream auto-created on first book (idempotent)
+- **Audiobook playback** — frontend `Books.js` uses browser `window.speechSynthesis` API → **truly $0**, no third-party TTS dependency
+- **`/api/auth/` route** — Emergent-managed Google Auth, single-operator allowlist via `OPERATOR_EMAIL` env. When env unset, falls OPEN (legacy behavior, tests stay green). Endpoints: `/config`, `/session`, `/me`, `/logout`
+- **`<AuthGate>` component** — wraps all routes in App.js; checks `/api/auth/config` then `/api/auth/me`; redirects to Emergent Google OAuth when required; handles `#session_id=...` callback fragment
+- **`/app/scripts/oci-bootstrap.sh`** — one-command sudo installer for OCI Always Free: installs Docker + Compose, opens firewall, clones repo, writes `.env` files, generates Caddyfile with auto-HTTPS, runs `docker compose up -d`
+- **`docker-compose.yml`** updated with `STRIPE_API_KEY` + `OPERATOR_EMAIL` passthrough
+- All shell scripts chmod +x and validated (`bash -n` clean)
+- **87/87 pytest** passing (67 regression + 10 TestBooks E2E + 4 TestAuth + tooling)
+
+### Iteration 7 - Stripe Payments + Analytics + AI Advisor + Auto-Cycle
 **Real money receiving, real analytics, real intelligence:**
 - **`/api/payments/` route** (Stripe via emergentintegrations) — 3 fixed packages: starter $49 one-time, pro $99/mo, enterprise $499/mo. Successful checkouts auto-write a ledger entry to `rev-saas` stream so the $25K Proof-of-Work meter ticks on REAL money. Webhook handler at `/api/payments/webhook` for Stripe events. Idempotent recording (no double-credit).
 - **`/api/analytics/` route** — 6 endpoints: funnel, posting-times, stream-roi, platform-mix, viral-themes, momentum + combined `/dashboard` payload. All data live from ledger + publishing_log + content_ideas (zero seeded analytics)
