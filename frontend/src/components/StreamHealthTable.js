@@ -1,16 +1,22 @@
 import { TrendingUp, TrendingDown } from "lucide-react";
+import {
+  HEALTH_THRESHOLD_EXCELLENT,
+  HEALTH_THRESHOLD_GOOD,
+  HEALTH_THRESHOLD_FAIR,
+  DAYS_PER_MONTH,
+} from "../lib/chartConfig";
 
 function getHealthClass(health) {
-  if (health >= 95) return 'health-100';
-  if (health >= 85) return 'health-90';
-  if (health >= 70) return 'health-75';
+  if (health >= HEALTH_THRESHOLD_EXCELLENT) return 'health-100';
+  if (health >= HEALTH_THRESHOLD_GOOD) return 'health-90';
+  if (health >= HEALTH_THRESHOLD_FAIR) return 'health-75';
   return 'health-50';
 }
 
 function StreamRow({ stream }) {
-  const health = stream.health || 90;
+  const health = stream.health || HEALTH_THRESHOLD_GOOD;
   const revenue30d = stream.monthly_actual || 0;
-  const revenueToday = revenue30d / 30;
+  const revenueToday = revenue30d / DAYS_PER_MONTH;
   const trend = stream.trend !== false;
 
   return (

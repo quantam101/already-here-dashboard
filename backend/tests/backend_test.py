@@ -127,6 +127,20 @@ class TestStudio:
         assert r.status_code == 200
         assert isinstance(r.json(), list)
 
+    def test_create_idea_missing_topic_returns_422(self, api):
+        payload = {
+            "title": "TEST_Missing_Topic",
+            "description": "No topic provided",
+            "target_platforms": ["tiktok"],
+        }
+        r = api.post(f"{BASE_URL}/api/studio/ideas/", json=payload)
+        assert r.status_code == 422, f"Expected 422 for missing topic, got {r.status_code}: {r.text[:300]}"
+        data = r.json()
+        assert "detail" in data
+        # ensure 'topic' is mentioned in validation error
+        details_str = str(data["detail"]).lower()
+        assert "topic" in details_str
+
     def test_create_idea_and_persist(self, api):
         payload = {
             "title": "TEST_Idea_From_Backend_Test",

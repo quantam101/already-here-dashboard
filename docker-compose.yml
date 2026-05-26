@@ -1,0 +1,93 @@
+# Already Here Command OS - Docker Compose
+# Zero-cost deployment for Oracle Cloud Always Free
+version: '3.8'
+
+services:
+  mongodb:
+    image: mongo:7
+    container_name: command-os-mongo
+    restart: unless-stopped
+    volumes:
+      - mongo_data:/data/db
+      - ./backups:/backups
+    networks:
+      - command-os-net
+    # Bind to localhost only - never expose to internet
+    ports:
+      - "127.0.0.1:27017:27017"
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: command-os-backend
+    restart: unless-stopped
+    environment:
+      MONGO_URL: mongodb://mongodb:27017
+      DB_NAME: ${DB_NAME:-command_os_prod}
+      CORS_ORIGINS: ${CORS_ORIGINS:-*}
+      EMERGENT_LLM_KEY: ${EMERGENT_LLM_KEY}
+      SYSTEM_MODE: production
+      COST_GUARD_ENABLED: "true"
+      ZERO_SPEND_MODE: "true"
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    networks:
+      - command-os-net
+    ports:
+      - "127.0.0.1:8001:8001"
+    volumes:
+      - ./exports:/app/exports
+      - ./logs:/app/logs
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/api/health/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: command-os-frontend
+    restart: unless-stopped
+    environment:
+      REACT_APP_BACKEND_URL: ${REACT_APP_BACKEND_URL}
+    depends_on:
+      - backend
+    networks:
+      - command-os-net
+    ports:
+      - "127.0.0.1:3000:3000"
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: command-os-caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      - command-os-net
+    depends_on:
+      - frontend
+      - backend
+
+volumes:
+  mongo_data:
+  caddy_data:
+  caddy_config:
+
+networks:
+  command-os-net:
+    driver: bridge

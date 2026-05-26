@@ -1,6 +1,16 @@
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 import { revenueAPI, contentAPI, agentsAPI } from "../lib/api";
+import {
+  REVENUE_CHART_DAYS,
+  REVENUE_CHART_MIN,
+  REVENUE_CHART_RANGE,
+  DAYS_PER_MONTH,
+  HEALTH_BASE,
+  HEALTH_INCREMENT_FACTOR,
+  HEALTH_INCREMENT_RANGE,
+  TREND_DOWN_INTERVAL,
+} from "../lib/chartConfig";
 import MetricsCards from "../components/MetricsCards";
 import RevenueChart from "../components/RevenueChart";
 import ActivityFeed from "../components/ActivityFeed";
@@ -38,9 +48,9 @@ export default function Overview() {
 
   // Memoize computed values
   const revenueChartData = useMemo(
-    () => Array.from({ length: 14 }, (_, i) => ({
+    () => Array.from({ length: REVENUE_CHART_DAYS }, (_, i) => ({
       day: `Day ${i + 1}`,
-      revenue: Math.floor(Math.random() * 200) + 100,
+      revenue: Math.floor(Math.random() * REVENUE_CHART_RANGE) + REVENUE_CHART_MIN,
     })),
     []
   );
@@ -62,14 +72,14 @@ export default function Overview() {
   const enrichedStreams = useMemo(
     () => streams.map((s, i) => ({
       ...s,
-      health: 85 + ((i * 7) % 15),
-      trend: i % 3 !== 0,
+      health: HEALTH_BASE + ((i * HEALTH_INCREMENT_FACTOR) % HEALTH_INCREMENT_RANGE),
+      trend: i % TREND_DOWN_INTERVAL !== 0,
     })),
     [streams]
   );
 
   const todayProfit = useMemo(
-    () => streams.reduce((sum, s) => sum + (s.monthly_actual || 0) / 30, 0),
+    () => streams.reduce((sum, s) => sum + (s.monthly_actual || 0) / DAYS_PER_MONTH, 0),
     [streams]
   );
 

@@ -4,37 +4,50 @@ import os
 import uuid
 from datetime import datetime, timezone
 
+SECTION_MARKERS = {
+    "HOOK:": "hook",
+    "SCRIPT:": "script",
+    "CTA:": "cta",
+    "SHOTS:": "shots",
+}
+
+DEFAULT_HOOK = "Stop scrolling! This is important."
+DEFAULT_CTA = "Follow for more content like this!"
+DEFAULT_SHOTS = ["Opening shot", "Main content", "B-roll", "CTA visual"]
+
+
+def _extract_section(line: str) -> tuple[str | None, str]:
+    """Return (section_name, content) if line starts with a known marker, else (None, '')."""
+    for marker, name in SECTION_MARKERS.items():
+        if line.startswith(marker):
+            return name, line.replace(marker, "").strip()
+    return None, ""
+
+
 def parse_script_response(response: str) -> dict:
     """Parse AI response into script components."""
-    lines = response.split('\n')
-    hook = ""
-    script_body = ""
-    cta = ""
-    shot_list = []
-    
+    sections = {"hook": "", "script_body": "", "cta": "", "shot_list": []}
     current_section = None
-    for line in lines:
-        if line.startswith("HOOK:"):
-            hook = line.replace("HOOK:", "").strip()
-            current_section = "hook"
-        elif line.startswith("SCRIPT:"):
-            script_body = line.replace("SCRIPT:", "").strip()
-            current_section = "script"
-        elif line.startswith("CTA:"):
-            cta = line.replace("CTA:", "").strip()
-            current_section = "cta"
-        elif line.startswith("SHOTS:"):
-            shots_text = line.replace("SHOTS:", "").strip()
-            shot_list = [s.strip() for s in shots_text.split(',')]
-            current_section = "shots"
+
+    for line in response.split('\n'):
+        section_name, content = _extract_section(line)
+
+        if section_name:
+            current_section = section_name
+            if section_name == "shots":
+                sections["shot_list"] = [s.strip() for s in content.split(',') if s.strip()]
+            elif section_name == "script":
+                sections["script_body"] = content
+            else:
+                sections[section_name] = content
         elif current_section == "script" and line.strip():
-            script_body += " " + line.strip()
-    
+            sections["script_body"] += " " + line.strip()
+
     return {
-        "hook": hook or "Stop scrolling! This is important.",
-        "script_body": script_body or response,
-        "cta": cta or "Follow for more content like this!",
-        "shot_list": shot_list or ["Opening shot", "Main content", "B-roll", "CTA visual"]
+        "hook": sections["hook"] or DEFAULT_HOOK,
+        "script_body": sections["script_body"] or response,
+        "cta": sections["cta"] or DEFAULT_CTA,
+        "shot_list": sections["shot_list"] or DEFAULT_SHOTS,
     }
 
 def create_script_prompt(idea: dict) -> str:
