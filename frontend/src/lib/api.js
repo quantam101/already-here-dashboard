@@ -166,3 +166,8 @@ export const authAPI = {
   session: (sessionId) => api.post("/auth/session", { session_id: sessionId }),
   logout: () => api.post("/auth/logout"),
 };
+
+// System status (drives Quickstart Wizard)
+export const systemAPI = {
+  status: () => api.get("/system/status"),
+};

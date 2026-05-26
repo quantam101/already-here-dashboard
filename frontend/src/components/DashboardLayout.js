@@ -1,5 +1,6 @@
 import { Outlet, NavLink, useLocation } from "react-router-dom";
 import { useMemo, useState } from "react";
+import QuickstartWizard from "./QuickstartWizard";
 import {
   LayoutDashboard,
   DollarSign,
@@ -71,6 +72,7 @@ function NavSection({ title, items, pathname, onLinkClick }) {
 export default function DashboardLayout() {
   const location = useLocation();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [wizardKey, setWizardKey] = useState(0);
 
   // Memoize grouped navigation to prevent re-computation on every render
   const navGroups = useMemo(() => {
@@ -114,6 +116,16 @@ export default function DashboardLayout() {
             </div>
             <div className="text-xs text-gray-400">All services operational</div>
             <div className="text-xs text-green-400 mt-1">$0/month cost</div>
+            <button
+              onClick={() => {
+                window.localStorage.removeItem("ah_quickstart_completed_v1");
+                setWizardKey((k) => k + 1);
+              }}
+              className="mt-3 w-full text-xs text-green-300 hover:text-green-200 border border-green-500/20 rounded px-2 py-1.5 hover:bg-green-500/10 transition-colors"
+              data-testid="sidebar-quickstart-trigger"
+            >
+              Re-open Quickstart
+            </button>
           </div>
         </div>
       </aside>
@@ -151,6 +163,7 @@ export default function DashboardLayout() {
       <main className="min-h-screen mt-16 lg:mt-0" data-testid="main-content">
         <Outlet />
       </main>
+      <QuickstartWizard key={wizardKey} />
     </div>
   );
 }

@@ -964,3 +964,43 @@ class TestAuth:
         # Call again - still 200
         r2 = api.post(f"{BASE_URL}/api/auth/logout")
         assert r2.status_code == 200
+
+
+
+# ---------------- System Status (Quickstart Wizard) ----------------
+class TestSystemStatus:
+    def test_status_shape(self, api):
+        r = api.get(f"{BASE_URL}/api/system/status")
+        assert r.status_code == 200, r.text
+        d = r.json()
+        for k in (
+            "operator_email_set", "stripe_mode", "stripe_webhook_secret_set",
+            "emergent_llm_key_set", "daily_cycle_hour_utc", "counts",
+            "is_seeded", "system_mode",
+        ):
+            assert k in d, f"missing key: {k}"
+        # counts must include core collections
+        for c in ("revenue_streams", "agents", "builds", "ledger_entries", "books"):
+            assert c in d["counts"]
+        # types
+        assert isinstance(d["operator_email_set"], bool)
+        assert isinstance(d["emergent_llm_key_set"], bool)
+        assert isinstance(d["is_seeded"], bool)
+        assert d["stripe_mode"] in ("live", "test", "missing", "unknown")
+
+    def test_status_no_secrets_leaked(self, api):
+        """Endpoint must not leak any actual secret values, only set/unset flags."""
+        r = api.get(f"{BASE_URL}/api/system/status")
+        assert r.status_code == 200
+        body = r.text.lower()
+        # Common secret prefixes must not appear
+        for needle in ("sk_test_", "sk_live_", "whsec_", "sk-emergent-"):
+            assert needle not in body, f"secret prefix leaked: {needle}"
+
+    def test_status_seeded_true_when_seed_data_run(self, api):
+        r = api.get(f"{BASE_URL}/api/system/status")
+        d = r.json()
+        # CI re-seeds before run; expect counts above thresholds
+        assert d["counts"]["revenue_streams"] >= 3
+        assert d["counts"]["agents"] >= 3
+        assert d["is_seeded"] is True

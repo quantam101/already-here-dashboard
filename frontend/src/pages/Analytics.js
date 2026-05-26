@@ -1,6 +1,6 @@
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Brain, RefreshCw, Sparkles, TrendingUp, Clock, BarChart3 } from "lucide-react";
-import { analyticsAPI, advisorAPI } from "../lib/api";
+import { Brain, RefreshCw, Sparkles, TrendingUp, Clock, BarChart3, Share2 } from "lucide-react";
+import { analyticsAPI, advisorAPI, paymentsAPI } from "../lib/api";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import {
@@ -182,6 +182,63 @@ function PlatformMixCard({ data }) {
   );
 }
 
+function UTMAttributionCard() {
+  const { data: stats } = useQuery({
+    queryKey: ["paymentStats"],
+    queryFn: () => paymentsAPI.stats().then((r) => r.data),
+    refetchInterval: 60000,
+  });
+  const sources = stats?.by_utm_source || {};
+  const rows = Object.entries(sources)
+    .map(([source, v]) => ({ source, ...v }))
+    .sort((a, b) => b.paid_usd - a.paid_usd);
+
+  return (
+    <div className="enterprise-card" data-testid="utm-attribution-card">
+      <h3 className="text-base font-semibold text-white mb-1 flex items-center gap-2">
+        <Share2 className="w-4 h-4 text-cyan-400" /> Channel Attribution (UTM)
+      </h3>
+      <p className="text-xs text-gray-400 mb-3">
+        Paid sales credited to each share-link source. Generate links on{" "}
+        <a href="/pricing" className="text-cyan-300 hover:underline">/pricing</a>.
+      </p>
+      {rows.length === 0 ? (
+        <p className="text-sm text-gray-500">
+          No paid transactions yet. Generate a share-link on the Pricing page and post it to start tracking.
+        </p>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-white/10">
+                <th className="text-left py-2 px-2 text-xs text-gray-400 uppercase tracking-wider">Source</th>
+                <th className="text-right py-2 px-2 text-xs text-gray-400 uppercase tracking-wider">Clicks</th>
+                <th className="text-right py-2 px-2 text-xs text-gray-400 uppercase tracking-wider">Paid</th>
+                <th className="text-right py-2 px-2 text-xs text-gray-400 uppercase tracking-wider">Revenue</th>
+                <th className="text-right py-2 px-2 text-xs text-gray-400 uppercase tracking-wider">CVR</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r) => {
+                const cvr = r.clicks > 0 ? Math.round((r.paid / r.clicks) * 1000) / 10 : 0;
+                return (
+                  <tr key={r.source} className="border-b border-white/5" data-testid={`utm-row-${r.source}`}>
+                    <td className="py-2 px-2 text-white capitalize">{r.source}</td>
+                    <td className="py-2 px-2 text-right text-gray-300">{r.clicks}</td>
+                    <td className="py-2 px-2 text-right text-yellow-400">{r.paid}</td>
+                    <td className="py-2 px-2 text-right text-green-400 font-semibold">${r.paid_usd}</td>
+                    <td className="py-2 px-2 text-right text-cyan-300">{cvr}%</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function AdvisorCard() {
   const { data: recent = [] } = useQuery({
     queryKey: ["advisorRecent"],
@@ -269,6 +326,7 @@ export default function Analytics() {
         <PostingTimesCard data={data?.posting_times} />
         <StreamROITable data={data?.stream_roi} />
         <PlatformMixCard data={data?.platform_mix} />
+        <UTMAttributionCard />
         <ViralThemesCard data={data?.viral_themes} />
       </div>
     </div>

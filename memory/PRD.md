@@ -23,7 +23,16 @@ Build a complete enterprise-grade, governed multi-agent operating system consoli
 
 ## What's Been Implemented (2026-05-26)
 
-### Iteration 8 - Books / Audiobooks Agent + Auth Gate + OCI Bootstrap (latest)
+### Iteration 9 - Quickstart Wizard + UTM Channel Attribution + Deploy Guide (latest)
+**First-run operator onboarding + live channel-of-sale attribution. 93/93 pytest.**
+- **`/api/system/status` route** — operator-facing config snapshot: `operator_email_set`, `stripe_mode` (live/test/missing), `stripe_webhook_secret_set`, `emergent_llm_key_set`, `daily_cycle_hour_utc`, collection counts (revenue_streams/agents/builds/ledger_entries/books/payment_transactions), `is_seeded`. Never leaks secret values — only set/unset flags + masked operator email
+- **QuickstartWizard component** — auto-opens on first visit (gated by `localStorage` key `ah_quickstart_completed_v1`), 5 steps: Welcome → Operator Access → Stripe Mode → Seed Data & LLM → Test Auto-Cycle (one-click `POST /api/cycle/run`). Each step shows live ✓/⚠ from `/api/system/status`. Re-openable from sidebar's "Re-open Quickstart" button
+- **Channel Attribution (UTM) card on `/analytics`** — reads `/api/payments/stats.by_utm_source` and renders a sortable Source / Clicks / Paid / Revenue / CVR table. Auto-refreshes every 60s. Empty-state when no transactions
+- **UTM share-link tracking already complete in earlier batch** (forwarded into Stripe metadata + ledger entries + `/api/payments/share-link` generator on `/pricing`)
+- **`/app/DEPLOY-TO-OCI.md`** — complete 7-step deployment guide for `alreadyherellc.com`: OCI Always Free provisioning → GoDaddy A-records → SSH bootstrap → Stripe webhook → PWA install on phone → daily-ops cheat sheet → rollback/test-mode toggle
+- **3 new pytest tests** for `/api/system/status` (shape, no-secrets-leaked, seeded). Total **93/93 PASSING** (was 87)
+
+### Iteration 8 - Books / Audiobooks Agent + Auth Gate + OCI Bootstrap
 **New revenue stream: rev-books. Auth wired (gated by env). OCI fully scripted.**
 - **`/api/books/` route** — full book/manual/journal/workbook/guide/memoir generation via Emergent LLM Gemini 3 Flash, chapter-by-chapter; types validated; chapter count 1..20; outline auto-parsed (JSON-array tolerant); `.md` and `.txt` download endpoints; `download_count` tracked; new `rev-books` revenue stream auto-created on first book (idempotent)
 - **Audiobook playback** — frontend `Books.js` uses browser `window.speechSynthesis` API → **truly $0**, no third-party TTS dependency
