@@ -96,15 +96,53 @@ Expected:
 
 If `go_live_ready` is `false`, the `issues` array tells you exactly what's missing.
 
-## 7. End-to-end smoke test
+## 7. End-to-end smoke test — **auto-refunding $0.50 test charge**
 
-- Browser: `https://alreadyherellc.com/pricing`
-- Click **Starter — $49**
-- Use a **real card** (your own) — Stripe will charge $49 → it lands in your Stripe balance, plus you can immediately refund yourself via the Stripe dashboard
-- After redirect, you'll land on `/payment-success` → status should poll to `paid`
-- Check `/proof-of-work` → ledger entry should appear under `rev-saas` for $49 (net ≈ $47.58 after Stripe fees)
+The Command OS has a built-in live-mode smoke runner that creates a $0.50 live charge and **auto-refunds it within seconds** via the webhook. This lets you verify live keys + webhook signature + ledger plumbing **end-to-end** without losing money.
 
-## 8. (Optional) Set up Stripe Tax / VAT
+```bash
+# 1. Create the smoke session
+curl -fsS -X POST https://alreadyherellc.com/api/payments/smoke-test/create | python3 -m json.tool
+```
+
+Response includes a `url`. Open it in a browser, pay $0.50 with a real card (yours).
+
+```bash
+# 2. Poll the status — flips from "initiated" → "paid" → refunded within ~10 sec
+SID="<the session_id from step 1>"
+curl -fsS https://alreadyherellc.com/api/payments/smoke-test/status/$SID | python3 -m json.tool
+```
+
+Look for:
+
+```json
+{
+  "payment_status": "refunded",
+  "smoke_refund_status": "succeeded",
+  "verified_live_pipeline": true
+}
+```
+
+If `verified_live_pipeline: true` → **your live Stripe integration is wired correctly.**
+
+If `smoke_refund_status` is `"error: ..."` → the webhook fired but the refund call failed (usually wrong API key or the charge hasn't settled yet — wait 30s and re-poll).
+
+Smoke-test charges:
+- Never write to the ledger (the webhook short-circuits before `_record_paid_to_ledger`)
+- Are tagged `package_id=smoke_test` in `payment_transactions` so they're trivially distinguishable from real revenue.
+- List the last 10 via: `GET /api/payments/smoke-test/recent`.
+
+### Why this matters
+
+Without this, the only way to verify a fresh live integration is to wait for your first real customer — and discover only at that point that the webhook secret is wrong or the refund flow is broken. With this, you confirm the pipeline before risking real revenue.
+
+---
+
+## 8. (Optional) Regular E2E smoke test
+
+After major env changes (rotating keys, swapping webhook secret), re-run the smoke test from step 7. It's idempotent and free.
+
+## 9. (Optional) Set up Stripe Tax / VAT
 
 - Stripe dashboard → **Tax → Settings** → enable for jurisdictions you sell into
 - This is automatic — no code change required

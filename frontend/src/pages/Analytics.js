@@ -1,6 +1,6 @@
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Brain, RefreshCw, Sparkles, TrendingUp, Clock, BarChart3, Share2 } from "lucide-react";
-import { analyticsAPI, advisorAPI, paymentsAPI } from "../lib/api";
+import { Brain, RefreshCw, Sparkles, TrendingUp, Clock, BarChart3, Share2, Zap } from "lucide-react";
+import { analyticsAPI, advisorAPI, paymentsAPI, distillationAPI } from "../lib/api";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import {
@@ -299,6 +299,129 @@ function AdvisorCard() {
   );
 }
 
+function DistillationCard() {
+  const { data: stats, refetch: refetchStats } = useQuery({
+    queryKey: ["distillationStats"],
+    queryFn: () => distillationAPI.stats().then((r) => r.data),
+    refetchInterval: 60000,
+  });
+  const { data: budget, refetch: refetchBudget } = useQuery({
+    queryKey: ["distillationBudget"],
+    queryFn: () => distillationAPI.budget().then((r) => r.data),
+    refetchInterval: 60000,
+  });
+  const { data: history, refetch: refetchHistory } = useQuery({
+    queryKey: ["distillationHistory"],
+    queryFn: () => distillationAPI.budgetHistory(14).then((r) => r.data),
+    refetchInterval: 60000,
+  });
+
+  const refetch = () => { refetchStats(); refetchBudget(); refetchHistory(); };
+
+  const tokensSaved = stats?.tokens_saved_est ?? 0;
+  const usdSaved = stats?.usd_saved_est ?? 0;
+  const rows = stats?.rows ?? 0;
+  const hits = stats?.hits ?? 0;
+  const cap = budget?.daily_cap ?? 0;
+  const used = budget?.tokens_total ?? 0;
+  const remaining = budget?.remaining;
+  const capPct = cap > 0 ? Math.min(100, Math.round((used / cap) * 100)) : 0;
+
+  // Build hit-rate per day from history (oldest → newest for left-to-right chart)
+  const chartData = (history ?? [])
+    .slice()
+    .reverse()
+    .map((d) => {
+      const calls = Number(d.calls || 0);
+      const hits = Number(d.cache_hits || 0);
+      const total = calls;  // calls includes cache hits — every call increments `calls`
+      const rate = total > 0 ? Math.round((hits / total) * 100) : 0;
+      return { date: (d.date || "").slice(5), hit_rate: rate, calls: total };
+    });
+  const avgHitRate = chartData.length
+    ? Math.round(chartData.reduce((s, p) => s + p.hit_rate, 0) / chartData.length)
+    : 0;
+
+  return (
+    <div className="enterprise-card" data-testid="distillation-card">
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="text-base font-semibold text-white flex items-center gap-2">
+          <Zap className="w-4 h-4 text-amber-400" /> Data Distillation
+          <span className="text-[10px] uppercase tracking-wider text-amber-300/70 ml-1">cost guard</span>
+        </h3>
+        <Button onClick={refetch} variant="outline" size="sm"
+          className="border-amber-500/30 text-amber-300 hover:bg-amber-500/10 h-7 px-2"
+          data-testid="distillation-refresh-btn">
+          <RefreshCw className="w-3 h-3 mr-1" /> refresh
+        </Button>
+      </div>
+
+      <div className="grid grid-cols-4 gap-3 mb-3">
+        <div className="stat-card" data-testid="distillation-tokens-saved">
+          <p className="text-[10px] text-gray-400 uppercase tracking-wider mb-1">Tokens saved</p>
+          <p className="text-xl font-bold text-amber-300">{tokensSaved.toLocaleString()}</p>
+        </div>
+        <div className="stat-card" data-testid="distillation-usd-saved">
+          <p className="text-[10px] text-gray-400 uppercase tracking-wider mb-1">$ saved (est)</p>
+          <p className="text-xl font-bold text-green-300">${usdSaved.toFixed(4)}</p>
+        </div>
+        <div className="stat-card" data-testid="distillation-cache-rows">
+          <p className="text-[10px] text-gray-400 uppercase tracking-wider mb-1">Cache rows</p>
+          <p className="text-xl font-bold text-white">{rows}</p>
+        </div>
+        <div className="stat-card" data-testid="distillation-cache-hits">
+          <p className="text-[10px] text-gray-400 uppercase tracking-wider mb-1">Cache hits</p>
+          <p className="text-xl font-bold text-cyan-300">{hits}</p>
+        </div>
+      </div>
+
+      <div className="text-xs text-gray-300 mb-1 flex items-center justify-between">
+        <span>
+          Today: <span className="text-white font-semibold">{used.toLocaleString()}</span> tokens
+          {cap > 0 ? ` / ${cap.toLocaleString()} cap` : ""}
+        </span>
+        <span className="text-gray-400">
+          {cap > 0 ? `${(remaining ?? 0).toLocaleString()} remaining` : "no daily cap set"}
+        </span>
+      </div>
+      {cap > 0 && (
+        <div className="w-full bg-black/40 rounded h-2 overflow-hidden mb-3">
+          <div className={`h-full transition-all ${capPct >= 90 ? "bg-red-500" : capPct >= 60 ? "bg-amber-400" : "bg-emerald-500"}`}
+               style={{ width: `${capPct}%` }} />
+        </div>
+      )}
+
+      {chartData.length > 0 && (
+        <div className="mt-3" data-testid="distillation-hitrate-chart">
+          <div className="flex items-center justify-between text-xs text-gray-400 mb-1">
+            <span>Cache hit rate — last {chartData.length} days</span>
+            <span className="text-cyan-300 font-semibold">{avgHitRate}% avg</span>
+          </div>
+          <ResponsiveContainer width="100%" height={90}>
+            <LineChart data={chartData} margin={{ top: 5, right: 4, left: -20, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#222" />
+              <XAxis dataKey="date" stroke="#666" tick={{ fontSize: 10 }} />
+              <YAxis domain={[0, 100]} stroke="#666" tick={{ fontSize: 10 }}
+                tickFormatter={(v) => `${v}%`} />
+              <Tooltip contentStyle={{ background: "#0a0e1a", border: "1px solid #444", fontSize: 11 }}
+                formatter={(v, n) => n === "hit_rate" ? [`${v}%`, "Hit rate"] : [v, n]} />
+              <Line type="monotone" dataKey="hit_rate" stroke="#22d3ee" strokeWidth={2}
+                dot={{ r: 2, fill: "#22d3ee" }} activeDot={{ r: 4 }} />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+
+      <p className="text-[10px] text-gray-500 mt-2 leading-snug">
+        Semantic compression + YAML payloads + sha256 prompt cache. Set
+        <code className="text-amber-300 mx-1">LLM_DAILY_TOKEN_CAP</code>
+        to enforce a hard ceiling (returns 429 when exceeded).
+      </p>
+    </div>
+  );
+}
+
+
 export default function Analytics() {
   const { data, isFetching, refetch } = useQuery({
     queryKey: ["analyticsDashboard"],
@@ -318,6 +441,8 @@ export default function Analytics() {
           Refresh
         </Button>
       </div>
+
+      <DistillationCard />
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <AdvisorCard />

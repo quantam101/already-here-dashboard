@@ -4,20 +4,18 @@ and asks Claude Sonnet for the single best next action.
 
 Cost Guard: uses Emergent LLM Key ($0 to operator).
 """
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 from datetime import datetime, timezone
-import os
 import json
 import uuid
 
-from emergentintegrations.llm.chat import LlmChat, UserMessage
+from emergentintegrations.llm.chat import LlmChat, UserMessage  # noqa: F401
 from routes.analytics import (
     conversion_funnel, stream_roi, momentum, viral_themes, platform_mix,
 )
-from services.distillation_service import (
-    cache_lookup, cache_store, distill_text, to_yaml_payload,
-)
+from services.distillation_service import to_yaml_payload
+from services.llm_runner import run_cached
 
 router = APIRouter()
 
@@ -54,10 +52,6 @@ SYSTEM_MSG = (
 @router.post("/recommend", response_model=AdvisorRecommendation)
 async def get_recommendation(db=Depends(get_db)):
     """Pull live context, ask Claude, return a single next-action."""
-    api_key = os.environ.get("EMERGENT_LLM_KEY")
-    if not api_key:
-        raise HTTPException(status_code=503, detail="EMERGENT_LLM_KEY not configured")
-
     # Gather live snapshot
     context = {
         "funnel": await conversion_funnel(db),
@@ -67,38 +61,18 @@ async def get_recommendation(db=Depends(get_db)):
         "platform_mix": await platform_mix(db),
     }
 
-    chat = LlmChat(
-        api_key=api_key,
-        session_id=f"adv_{uuid.uuid4().hex[:8]}",
-        system_message=SYSTEM_MSG,
-    )
-    chat.with_model("anthropic", "claude-sonnet-4-5-20250929")
     # YAML payload is ~25-40% fewer tokens than the equivalent indented JSON.
     yaml_ctx = to_yaml_payload(context)
-    prompt = distill_text(
+    prompt = (
         "Live dashboard snapshot below (YAML). Return ONE prioritized next "
         "action as JSON.\n\n```yaml\n" + yaml_ctx[:5000] + "\n```"
     )
 
-    # Cache lookup — identical snapshots within TTL skip the LLM entirely
-    model_id = "anthropic/claude-sonnet-4-5-20250929"
-    cached = None
-    try:
-        cached = await cache_lookup(db, model_id, SYSTEM_MSG, prompt)
-    except Exception:
-        cached = None
-
-    if cached and cached.get("response"):
-        raw = cached["response"]
-    else:
-        try:
-            raw = await chat.send_message(UserMessage(text=prompt))
-        except Exception as e:
-            raise HTTPException(status_code=502, detail=f"LLM call failed: {e}") from e
-        try:
-            await cache_store(db, model_id, SYSTEM_MSG, prompt, raw, tier=3)
-        except Exception:
-            pass
+    raw = await run_cached(
+        db, "anthropic", "claude-sonnet-4-5-20250929",
+        SYSTEM_MSG, prompt,
+        session_id=f"adv_{uuid.uuid4().hex[:8]}",
+    )
 
     # Extract first JSON object from response
     parsed: dict = {}

@@ -23,6 +23,40 @@ Build a complete enterprise-grade, governed multi-agent operating system consoli
 
 ## What's Been Implemented (2026-05-26)
 
+### Iteration 15 - Live-Mode Smoke Runner + Cache Hit Rate Chart + Final Go-Live Runbook (latest)
+**Operator can now verify live Stripe keys with a self-refunding $0.50 charge. 116/116 pytest.**
+- **Auto-refunding Stripe smoke test** (`routes/payments.py`):
+  - `POST /api/payments/smoke-test/create` — creates a $0.50 live-mode checkout session tagged `package_id=smoke_test`, `metadata.smoke_test=true`. Refuses to run in test mode or without webhook secret.
+  - `GET /api/payments/smoke-test/status/{session_id}` — operator polls this; flips `verified_live_pipeline=true` once the refund lands.
+  - `GET /api/payments/smoke-test/recent` — list last N smoke runs.
+  - **Webhook handler extended**: smoke-test sessions trigger an immediate full refund via the official `stripe` SDK (`stripe.Refund.create(payment_intent=...)`) instead of recording to ledger. Operator pays $0.50 with a real card, sees the refund within ~10s, knows the full live pipeline (keys + webhook secret + signature verification + refund flow) is wired correctly **before** routing any real customers through it.
+- **Cache hit rate line chart** added to the Distillation card on `/analytics`:
+  - Pulls `GET /api/distillation/budget/history?days=14`
+  - Renders a 90px Recharts line chart (0-100% Y-axis, daily X-axis), with rolling average displayed top-right.
+  - Visualizes the compounding savings: every time you regenerate the same proposal/book chapter, the hit-rate line climbs.
+- **`GO-LIVE.md`** — single 3-phase final runbook tying together deploy + Stripe live + backup cron. Each phase ends with a copy-paste curl verification.
+- **4 new pytest tests** for smoke-test endpoints (refuses in test mode, recent shape, status 404). Total **116/116 PASSING** (was 113).
+
+### Iteration 14 - Unified LLM Runner + Daily Budget Cap + Backup Cron + Analytics UI (latest)
+**Every LLM call now cached + budget-tracked. Operator-visible Cost Guard. 113/113 pytest.**
+- **`services/llm_runner.py`** — single chokepoint for all LLM calls:
+  - `run_cached(db, provider, model, system_msg, prompt, *, session_id)` — distill → cache lookup → daily-budget pre-check → LLM call → cache store → token-counter bump. One call replaces ~20 lines of boilerplate.
+  - `get_today_usage(db)` + `daily_usage_history(db, days)` — operator telemetry.
+  - `check_daily_budget(db, expected_tokens)` — raises HTTP 429 when `LLM_DAILY_TOKEN_CAP` env (default 0 = unlimited) would be exceeded.
+- **All LLM consumers refactored** to use the runner:
+  - `routes/books.py` — outline + every chapter now cached independently. Regenerating a book with one tweaked outline only re-bills the changed chapter.
+  - `routes/proposals.py` — identical grant/contract drafts hit cache.
+  - `routes/advisor.py` — identical dashboard snapshots within TTL skip the LLM.
+  - `services/content_generation_service.py` — script generation runs through the runner when `db` is passed (which the route always does).
+- **New endpoints:**
+  - `GET /api/distillation/budget` — today's tokens in/out/total, cap, remaining, over_cap flag.
+  - `GET /api/distillation/budget/history?days=14` — last N days of usage rows.
+- **Frontend `<DistillationCard />` on `/analytics`** — top-of-page Cost Guard card showing tokens saved, $ saved (est), cache rows, cache hits, today's usage vs cap with a color-coded progress bar. Auto-refreshes every 60s. Hooked into `distillationAPI` in `lib/api.js`.
+- **Backup automation:**
+  - `scripts/backup-sqlite.sh` — atomic SQLite snapshot via `sqlite3 .backup`, 14-day retention, tars + exports.
+  - `scripts/install-backup-cron.sh` — one-shot installer that writes a systemd timer firing nightly at 03:00 UTC (1h jitter), enables it, runs one backup immediately. Pure $0 host-disk backups, no S3 dependency.
+- **6 new pytest tests** (TestDistillation budget shape, budget history, plus 4 from iteration 13). Total **113/113 PASSING** (was 104 pre-iteration-13).
+
 ### Iteration 13 - Data Distillation + Stripe Live-Mode Gate + Final OCI Deploy (latest)
 **Token-cheap LLM pipeline, live-key safety net, single-command deploy. 111/111 pytest.**
 - **`services/distillation_service.py`** — pure utility module:

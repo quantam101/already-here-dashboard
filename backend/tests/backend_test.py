@@ -487,6 +487,21 @@ class TestPayments:
         assert "sk_live_" not in body or body.count("sk_live_") == 1  # only in checklist text
         assert "sk_test_emergent" not in body
 
+    def test_smoke_test_refuses_in_test_mode(self, api):
+        r = api.post(f"{BASE_URL}/api/payments/smoke-test/create")
+        # In CI the env is sk_test_emergent → should refuse
+        assert r.status_code == 400, r.text
+        assert "live" in r.text.lower()
+
+    def test_smoke_test_recent_empty_shape(self, api):
+        r = api.get(f"{BASE_URL}/api/payments/smoke-test/recent")
+        assert r.status_code == 200
+        assert isinstance(r.json(), list)
+
+    def test_smoke_test_status_404_for_unknown(self, api):
+        r = api.get(f"{BASE_URL}/api/payments/smoke-test/status/cs_unknown_xxx")
+        assert r.status_code == 404
+
 
 # ---------------- Data Distillation ----------------
 class TestDistillation:
@@ -539,6 +554,29 @@ class TestDistillation:
         assert r.status_code == 200
         d = r.json()
         assert "deleted" in d and isinstance(d["deleted"], int)
+
+    def test_budget_today_shape(self, api):
+        r = api.get(f"{BASE_URL}/api/distillation/budget")
+        assert r.status_code == 200, r.text
+        d = r.json()
+        for k in ("date", "tokens_in", "tokens_out", "tokens_total",
+                  "calls", "cache_hits", "blocked", "daily_cap",
+                  "remaining", "over_cap"):
+            assert k in d, f"missing key {k}"
+        assert isinstance(d["tokens_total"], int)
+        assert isinstance(d["over_cap"], bool)
+        # date is ISO YYYY-MM-DD
+        assert len(d["date"]) == 10 and d["date"][4] == "-"
+
+    def test_budget_history_returns_list(self, api):
+        r = api.get(f"{BASE_URL}/api/distillation/budget/history?days=7")
+        assert r.status_code == 200
+        d = r.json()
+        assert isinstance(d, list)
+        # at least today's row should exist after any LLM activity
+        if d:
+            for k in ("date", "tokens_in", "tokens_out", "calls"):
+                assert k in d[0]
 
 
 # ---------------- Analytics ----------------

@@ -188,3 +188,12 @@ export const secretsAPI = {
   status: () => api.get("/secrets/status"),
   items: () => api.get("/secrets/items"),
 };
+
+// Data Distillation telemetry
+export const distillationAPI = {
+  stats: () => api.get("/distillation/stats"),
+  config: () => api.get("/distillation/config"),
+  budget: () => api.get("/distillation/budget"),
+  budgetHistory: (days = 14) => api.get(`/distillation/budget/history?days=${days}`),
+  clear: () => api.post("/distillation/clear"),
+};

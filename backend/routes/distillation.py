@@ -22,6 +22,7 @@ from services.distillation_service import (
     estimate_tokens,
     to_yaml_payload,
 )
+from services.llm_runner import daily_usage_history, get_today_usage
 
 router = APIRouter()
 
@@ -100,3 +101,16 @@ async def preview(body: PreviewRequest):
 async def clear(db=Depends(get_db)):
     n = await cache_clear(db)
     return {"deleted": n}
+
+
+@router.get("/budget")
+async def budget(db=Depends(get_db)):
+    """Today's LLM token usage and daily cap status (Cost Guard hard floor)."""
+    return await get_today_usage(db)
+
+
+@router.get("/budget/history")
+async def budget_history(days: int = 14, db=Depends(get_db)):
+    """Last N days of LLM token usage rows (newest first)."""
+    days = max(1, min(int(days), 90))
+    return await daily_usage_history(db, days=days)

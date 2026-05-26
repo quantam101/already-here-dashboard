@@ -18,8 +18,9 @@ from datetime import datetime, timezone
 import os
 import uuid
 
-from emergentintegrations.llm.chat import LlmChat, UserMessage
+from emergentintegrations.llm.chat import LlmChat, UserMessage  # noqa: F401 (kept for downstream imports)
 from services.audit_service import log_audit_event
+from services.llm_runner import run_cached
 
 router = APIRouter()
 
@@ -189,20 +190,12 @@ Produce the FULL document in clean markdown. Each numbered section must be prese
 async def draft_proposal(req: ProposalDraftRequest, db=Depends(get_db)):
     """Generate a full draft using Emergent LLM (Gemini 3 Flash - FREE)."""
     _validate_doc_type(req.doc_type)
-    api_key = os.environ.get("EMERGENT_LLM_KEY")
-    if not api_key:
-        raise HTTPException(status_code=503, detail="EMERGENT_LLM_KEY not configured")
 
-    chat = LlmChat(
-        api_key=api_key,
+    response = await run_cached(
+        db, "gemini", "gemini-3-flash-preview",
+        DEFAULT_SYSTEM_MESSAGE, _build_prompt(req),
         session_id=f"prop_{uuid.uuid4().hex[:8]}",
-        system_message=DEFAULT_SYSTEM_MESSAGE,
     )
-    chat.with_model("gemini", "gemini-3-flash-preview")
-    try:
-        response = await chat.send_message(UserMessage(text=_build_prompt(req)))
-    except Exception as e:
-        raise HTTPException(status_code=502, detail=f"LLM generation failed: {e}") from e
 
     doc = ProposalDocument(
         doc_type=req.doc_type,

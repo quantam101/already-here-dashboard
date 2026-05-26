@@ -17,8 +17,9 @@ from datetime import datetime, timezone
 import os
 import uuid
 
-from emergentintegrations.llm.chat import LlmChat, UserMessage
+from emergentintegrations.llm.chat import LlmChat, UserMessage  # noqa: F401 (kept for downstream imports/tests)
 from services.audit_service import log_audit_event
+from services.llm_runner import run_cached
 
 router = APIRouter()
 
@@ -26,6 +27,8 @@ ALLOWED_BOOK_TYPES = {"ebook", "manual", "journal", "workbook", "guide", "memoir
 DEFAULT_CHAPTER_COUNT = 6
 MAX_CHAPTER_COUNT = 20
 REVENUE_STREAM_BOOKS = "rev-books"
+
+BOOK_SYSTEM_MSG = "You are an expert author and editor. Write clear, valuable, well-structured content."
 
 
 class BookCreateRequest(BaseModel):
@@ -122,18 +125,6 @@ concrete examples, and actionable insights. Do NOT include the chapter number or
 (it will be added separately). Just write the chapter body."""
 
 
-def _new_chat(session_id: str) -> LlmChat:
-    api_key = os.environ.get("EMERGENT_LLM_KEY")
-    if not api_key:
-        raise HTTPException(status_code=503, detail="EMERGENT_LLM_KEY not configured")
-    chat = LlmChat(
-        api_key=api_key, session_id=session_id,
-        system_message="You are an expert author and editor. Write clear, valuable, well-structured content.",
-    )
-    chat.with_model("gemini", "gemini-3-flash-preview")
-    return chat
-
-
 def _parse_outline(raw: str, fallback_count: int) -> list[dict]:
     """Robust parse of outline JSON array - falls back to numbered list."""
     import json as _json
@@ -181,17 +172,25 @@ async def create_book(req: BookCreateRequest, db=Depends(get_db)):
 
     session = f"book_{book.id}"
     try:
-        # 1) outline
-        outline_chat = _new_chat(session)
-        outline_raw = await outline_chat.send_message(UserMessage(text=_build_outline_prompt(req)))
+        # 1) outline — cached on (title, type, audience, tone, chapter_count, hints)
+        outline_raw = await run_cached(
+            db, "gemini", "gemini-3-flash-preview",
+            BOOK_SYSTEM_MSG, _build_outline_prompt(req),
+            session_id=f"{session}_outline",
+        )
         outline = _parse_outline(outline_raw, req.chapter_count)[:req.chapter_count]
 
-        # 2) chapters
+        # 2) chapters — each chapter cached independently (so regenerating one
+        #    book with a tweaked outline only re-bills the changed chapters)
         chapters: list[BookChapter] = []
         prev_titles: list[str] = []
         for entry in outline:
-            chap_chat = _new_chat(f"{session}_c{entry['number']}")
-            body = await chap_chat.send_message(UserMessage(text=_build_chapter_prompt(req, entry, prev_titles)))
+            body = await run_cached(
+                db, "gemini", "gemini-3-flash-preview",
+                BOOK_SYSTEM_MSG,
+                _build_chapter_prompt(req, entry, prev_titles),
+                session_id=f"{session}_c{entry['number']}",
+            )
             word_count = len(body.split())
             chapters.append(BookChapter(number=entry["number"], title=entry["title"], content=body, word_count=word_count))
             prev_titles.append(entry["title"])

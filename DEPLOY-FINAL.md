@@ -121,7 +121,10 @@ sudo docker compose -f /opt/command-os/docker-compose.sqlite.yml logs -f
 sudo docker compose -f /opt/command-os/docker-compose.sqlite.yml restart
 
 # Backup the SQLite DB:
-sudo bash /opt/command-os/scripts/backup.sh
+sudo bash /opt/command-os/scripts/backup-sqlite.sh
+
+# Install automated nightly backups (one-time, ~30 sec):
+sudo bash /opt/command-os/scripts/install-backup-cron.sh
 
 # Update to latest code from GitHub:
 cd /opt/command-os

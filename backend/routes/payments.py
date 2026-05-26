@@ -21,9 +21,14 @@ from emergentintegrations.payments.stripe.checkout import (
     StripeCheckout,
     CheckoutSessionRequest,
 )
+import stripe as stripe_sdk
 from services.audit_service import log_audit_event
 
 router = APIRouter()
+
+# Sentinel package id used by the live-mode smoke runner (auto-refunds itself)
+SMOKE_TEST_PACKAGE = "smoke_test"
+SMOKE_TEST_AMOUNT_USD = 0.50
 
 # Server-side fixed packages - frontend can only choose the package_id
 # CAUTION: amount must be a FLOAT (1.00) not int (1) per Stripe SDK rules
@@ -322,7 +327,12 @@ async def get_checkout_status(session_id: str, http_request: Request, db=Depends
 
 @router.post("/webhook")
 async def stripe_webhook(request: Request, db=Depends(get_db)):
-    """Stripe will POST here on every paid event. Idempotently mirrors to ledger."""
+    """Stripe will POST here on every paid event. Idempotently mirrors to ledger.
+
+    Smoke-test sessions (metadata.smoke_test=true) are auto-refunded the
+    moment they're paid — so the operator can verify live keys + webhook
+    plumbing end-to-end with a real card and never actually lose the money.
+    """
     stripe_checkout = _get_stripe(request)
     body = await request.body()
     signature = request.headers.get("Stripe-Signature", "")
@@ -333,10 +343,158 @@ async def stripe_webhook(request: Request, db=Depends(get_db)):
 
     if evt.payment_status == "paid" and evt.session_id:
         txn = await db.payment_transactions.find_one({"session_id": evt.session_id}, {"_id": 0})
-        if txn and not txn.get("ledger_entry_id"):
-            await _record_paid_to_ledger(db, txn)
+        if txn:
+            is_smoke = (txn.get("package_id") == SMOKE_TEST_PACKAGE) or \
+                       (txn.get("metadata", {}).get("smoke_test") in ("true", True, "1"))
+            if is_smoke:
+                # Auto-refund — never record to ledger
+                await _refund_smoke_test(db, txn)
+            elif not txn.get("ledger_entry_id"):
+                await _record_paid_to_ledger(db, txn)
 
     return {"received": True, "event": evt.event_type, "session": evt.session_id}
+
+
+async def _refund_smoke_test(db, txn: dict) -> None:
+    """Issue a full Stripe refund for a smoke-test session and stamp the txn."""
+    api_key = os.environ.get("STRIPE_API_KEY")
+    if not api_key:
+        return
+    stripe_sdk.api_key = api_key
+    session_id = txn["session_id"]
+    refund_id = None
+    refund_status = "failed"
+    try:
+        # Fetch the session → payment_intent
+        sess = stripe_sdk.checkout.Session.retrieve(session_id)
+        payment_intent_id = getattr(sess, "payment_intent", None)
+        if payment_intent_id:
+            refund = stripe_sdk.Refund.create(
+                payment_intent=payment_intent_id,
+                reason="requested_by_customer",
+                metadata={"source": "command_os_smoke_test"},
+            )
+            refund_id = refund.id
+            refund_status = refund.status
+    except Exception as e:
+        refund_status = f"error: {e}"
+
+    await db.payment_transactions.update_one(
+        {"session_id": session_id},
+        {"$set": {
+            "smoke_refund_id": refund_id,
+            "smoke_refund_status": refund_status,
+            "payment_status": "refunded" if refund_status == "succeeded" else txn.get("payment_status"),
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        }},
+    )
+    await log_audit_event(
+        db, "payment.smoke_refunded", "stripe", "refund",
+        "payment_transaction", session_id,
+        metadata={"refund_id": refund_id, "status": refund_status, "amount": txn.get("amount")},
+    )
+
+
+@router.post("/smoke-test/create")
+async def smoke_test_create(http_request: Request, db=Depends(get_db)):
+    """Create a $0.50 live-mode checkout session that auto-refunds on payment.
+
+    Refuses to run if stripe is in test mode (the smoke test only makes sense
+    against your real live key + real webhook secret). The operator opens the
+    returned URL in a browser, completes payment with a real card, and the
+    webhook handler fires a full refund within seconds — confirming end-to-end
+    that live keys + webhook secret + signature verification all work BEFORE
+    routing real customers through the same path.
+    """
+    mode = _stripe_mode()
+    if mode != "live":
+        raise HTTPException(
+            status_code=400,
+            detail=f"smoke-test requires live Stripe key (current mode: {mode}). See /api/payments/readiness.",
+        )
+    if not os.environ.get("STRIPE_WEBHOOK_SECRET"):
+        raise HTTPException(
+            status_code=400,
+            detail="smoke-test requires STRIPE_WEBHOOK_SECRET (otherwise the auto-refund webhook never fires).",
+        )
+
+    origin = str(http_request.base_url).rstrip("/")
+    success_url = f"{origin}/payment-success?session_id={{CHECKOUT_SESSION_ID}}&smoke=1"
+    cancel_url = f"{origin}/pricing?cancelled=1&smoke=1"
+
+    stripe_checkout = _get_stripe(http_request)
+    req = CheckoutSessionRequest(
+        amount=SMOKE_TEST_AMOUNT_USD,
+        currency="usd",
+        success_url=success_url,
+        cancel_url=cancel_url,
+        metadata={
+            "package_id": SMOKE_TEST_PACKAGE,
+            "package_name": "Live-mode smoke test (auto-refunded)",
+            "smoke_test": "true",
+            "source": "command_os_smoke_test",
+        },
+    )
+    session = await stripe_checkout.create_checkout_session(req)
+
+    await db.payment_transactions.insert_one({
+        "id": f"smoke-{uuid.uuid4().hex[:10]}",
+        "session_id": session.session_id,
+        "package_id": SMOKE_TEST_PACKAGE,
+        "amount": SMOKE_TEST_AMOUNT_USD,
+        "currency": "usd",
+        "kind": "smoke_test",
+        "payment_status": "initiated",
+        "metadata": {"smoke_test": "true"},
+        "ledger_entry_id": None,
+        "smoke_refund_id": None,
+        "smoke_refund_status": None,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    })
+    await log_audit_event(
+        db, "payment.smoke_test_created", "operator", "smoke_test",
+        "payment_transaction", session.session_id,
+        metadata={"amount": SMOKE_TEST_AMOUNT_USD},
+    )
+    return {
+        "url": session.url,
+        "session_id": session.session_id,
+        "amount": SMOKE_TEST_AMOUNT_USD,
+        "instructions": [
+            "1. Open `url` in a browser logged into your Stripe-issued card.",
+            "2. Complete the $0.50 charge with a REAL card.",
+            "3. Watch /api/payments/smoke-test/status/<session_id> — it will flip to 'refunded' within ~10 seconds.",
+            "4. If `smoke_refund_status` == 'succeeded' → your live keys + webhook are wired correctly.",
+        ],
+    }
+
+
+@router.get("/smoke-test/status/{session_id}")
+async def smoke_test_status(session_id: str, db=Depends(get_db)):
+    """Polled by the operator (or the frontend) to verify auto-refund landed."""
+    txn = await db.payment_transactions.find_one({"session_id": session_id}, {"_id": 0})
+    if not txn:
+        raise HTTPException(status_code=404, detail="smoke-test session not found")
+    return {
+        "session_id": session_id,
+        "amount": txn.get("amount"),
+        "payment_status": txn.get("payment_status"),
+        "smoke_refund_id": txn.get("smoke_refund_id"),
+        "smoke_refund_status": txn.get("smoke_refund_status"),
+        "verified_live_pipeline": txn.get("smoke_refund_status") == "succeeded",
+        "created_at": txn.get("created_at"),
+        "updated_at": txn.get("updated_at"),
+    }
+
+
+@router.get("/smoke-test/recent")
+async def smoke_test_recent(limit: int = 10, db=Depends(get_db)):
+    """List the last N smoke-test runs."""
+    rows = await db.payment_transactions.find(
+        {"package_id": SMOKE_TEST_PACKAGE}, {"_id": 0},
+    ).sort("created_at", -1).to_list(limit)
+    return rows
 
 
 @router.get("/transactions")

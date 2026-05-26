@@ -1,11 +1,10 @@
 from content_models import ContentScript
-from emergentintegrations.llm.chat import LlmChat, UserMessage
-import os
+from emergentintegrations.llm.chat import LlmChat, UserMessage  # noqa: F401
+import os  # noqa: F401 (kept for backward-compat with callers)
 import logging
 
-from services.distillation_service import (
-    cache_lookup, cache_store, distill_text, to_yaml_payload,
-)
+from services.distillation_service import distill_text, to_yaml_payload
+from services.llm_runner import run_cached
 
 logger = logging.getLogger(__name__)
 
@@ -103,76 +102,52 @@ async def generate_script_from_idea(idea: dict, db=None) -> ContentScript:
     Generate a content script from an idea using AI.
     Uses Emergent LLM key with Gemini for zero-cost generation.
 
-    Tier-2 distillation: cache lookup on a fingerprint of
-    (model, system_msg, distilled_prompt). On cache hit we skip the LLM
-    entirely and reconstruct the ContentScript from the cached response.
+    Runs through the unified llm_runner so:
+      - Identical idea prompts hit the cache and skip the LLM call
+      - Tokens consumed are tracked in the daily budget collection
+      - Daily cap (LLM_DAILY_TOKEN_CAP) is enforced
     """
     prompt = create_script_prompt(idea)
-    api_key = os.getenv('EMERGENT_LLM_KEY')
-    model_id = "gemini/gemini-3-flash-preview"
     system_msg = (
         "You are an expert content creator specializing in viral short-form "
         "and long-form content. Create engaging, high-converting scripts."
     )
 
-    # Cache lookup (best-effort — never fails the request)
-    cached_response: str | None = None
-    if db is not None:
+    # `db` is optional for legacy callers. If absent we fall back to the
+    # legacy direct-call path (no caching, no budget tracking).
+    if db is None:
+        api_key = os.getenv('EMERGENT_LLM_KEY')
+        chat = LlmChat(
+            api_key=api_key,
+            session_id=f"script_gen_{idea['id']}",
+            system_message=system_msg,
+        )
+        chat.with_model("gemini", "gemini-3-flash-preview")
         try:
-            hit = await cache_lookup(db, model_id, system_msg, prompt)
-            if hit and hit.get("response"):
-                cached_response = hit["response"]
-                logger.info("distillation: cache HIT idea=%s tokens_saved≈%s",
-                            idea.get("id"), hit.get("tokens_out_est", 0))
+            response = await chat.send_message(UserMessage(text=prompt))
         except Exception as e:
-            logger.warning("distillation cache lookup failed: %s", e)
+            return create_fallback_script(idea, str(e))
+    else:
+        try:
+            response = await run_cached(
+                db, "gemini", "gemini-3-flash-preview",
+                system_msg, prompt,
+                session_id=f"script_gen_{idea['id']}",
+            )
+        except Exception as e:
+            logger.warning("script gen via runner failed: %s", e)
+            return create_fallback_script(idea, str(e))
 
-    if cached_response is not None:
-        parsed = parse_script_response(cached_response)
-        return ContentScript(
-            idea_id=idea['id'],
-            hook=parsed["hook"],
-            script_body=parsed["script_body"],
-            cta=parsed["cta"],
-            duration_seconds=60,
-            shot_list=parsed["shot_list"],
-            metadata={"generated_by": "ai_cached", "model": "gemini-3-flash", "cache_hit": True}
-        )
-
-    chat = LlmChat(
-        api_key=api_key,
-        session_id=f"script_gen_{idea['id']}",
-        system_message=system_msg,
+    parsed = parse_script_response(response)
+    return ContentScript(
+        idea_id=idea['id'],
+        hook=parsed["hook"],
+        script_body=parsed["script_body"],
+        cta=parsed["cta"],
+        duration_seconds=60,
+        shot_list=parsed["shot_list"],
+        metadata={"generated_by": "ai", "model": "gemini-3-flash"},
     )
-
-    chat.with_model("gemini", "gemini-3-flash-preview")
-    user_message = UserMessage(text=prompt)
-
-    try:
-        response = await chat.send_message(user_message)
-        parsed = parse_script_response(response)
-
-        # Best-effort cache store
-        if db is not None:
-            try:
-                await cache_store(db, model_id, system_msg, prompt, response, tier=3)
-            except Exception as e:
-                logger.warning("distillation cache store failed: %s", e)
-
-        script = ContentScript(
-            idea_id=idea['id'],
-            hook=parsed["hook"],
-            script_body=parsed["script_body"],
-            cta=parsed["cta"],
-            duration_seconds=60,
-            shot_list=parsed["shot_list"],
-            metadata={"generated_by": "ai", "model": "gemini-3-flash", "cache_hit": False}
-        )
-
-        return script
-
-    except Exception as e:
-        return create_fallback_script(idea, str(e))
 
 async def generate_captions_for_platform(script: dict, platform: str) -> str:
     """Generate platform-specific captions with hashtags."""
