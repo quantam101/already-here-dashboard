@@ -1,7 +1,7 @@
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, Depends
 from typing import List
 from models import AuditEvent, AuditEventCreate
-from datetime import datetime, timezone
+from datetime import datetime
 
 router = APIRouter()
 

@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException, Depends
 from typing import List
-from models import Agent, AgentCreate, StatusEnum
+from models import Agent, AgentCreate
 from datetime import datetime, timezone
 from services.audit_service import log_audit_event
 

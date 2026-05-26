@@ -11,7 +11,7 @@ under a "rev-saas" stream, so the $25K Proof-of-Work meter increments on REAL
 revenue. This is the bridge between the dashboard and actual cash.
 """
 from fastapi import APIRouter, HTTPException, Request, Depends
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 from typing import Optional
 from datetime import datetime, timezone
 import os

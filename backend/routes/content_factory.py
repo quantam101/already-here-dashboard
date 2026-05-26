@@ -2,9 +2,9 @@ from fastapi import APIRouter, HTTPException, Depends
 from typing import List, Optional
 from pydantic import BaseModel, Field
 from content_models import (
-    ContentIdea, ContentScript, ContentAsset, PlatformConnector,
-    ScheduledPost, ContentAnalytics, PlatformVariant,
-    ContentStatusEnum, PlatformEnum, CostClassEnum
+    ContentIdea, ContentScript, PlatformConnector,
+    ScheduledPost, ContentAnalytics,
+    ContentStatusEnum, PlatformEnum
 )
 from datetime import datetime, timezone
 from services.audit_service import log_audit_event

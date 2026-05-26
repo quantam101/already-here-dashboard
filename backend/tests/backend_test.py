@@ -52,8 +52,9 @@ class TestRevenue:
         r = api.get(f"{BASE_URL}/api/revenue/stats/overview")
         assert r.status_code == 200
         d = r.json()
-        # 10 seeded streams target sum = 56000 (rev-saas adds 5000 if present)
-        assert d["total_monthly_target"] in (56000.0, 61000.0), f"target={d['total_monthly_target']}"
+        # 10 seeded streams target sum = 56000. Auto-created streams may add:
+        # rev-saas (5000) when Stripe checkout used; rev-books (3000) when book generated.
+        assert d["total_monthly_target"] in (56000.0, 59000.0, 61000.0, 64000.0), f"target={d['total_monthly_target']}"
         # Actuals computed LIVE from the ledger - depends on state, just sanity-check.
         assert d["total_monthly_actual"] >= 0.0
         assert d["active_streams"] >= 10

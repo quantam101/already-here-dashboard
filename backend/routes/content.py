@@ -4,7 +4,6 @@ from models import ContentPiece, ContentGenerateRequest, ContentUpdateRequest, S
 from datetime import datetime, timezone
 from services.content_service import generate_content
 from services.audit_service import log_audit_event
-import os
 
 router = APIRouter()
 

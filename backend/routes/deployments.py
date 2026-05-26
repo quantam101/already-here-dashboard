@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException, Depends
 from typing import List
-from models import Deployment, DeploymentCreate, StatusEnum
+from models import Deployment, DeploymentCreate
 from datetime import datetime, timezone
 from services.audit_service import log_audit_event
 

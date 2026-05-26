@@ -12,7 +12,7 @@ All endpoints return structured opportunities. Operator + content agents can
 queue them as ContentIdeas, or the Proposal Engine can use grants/contracts
 to draft responses.
 """
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Query
 from pydantic import BaseModel
 from typing import Optional
 import httpx

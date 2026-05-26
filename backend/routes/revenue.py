@@ -1,9 +1,8 @@
 from fastapi import APIRouter, HTTPException, Depends
 from typing import List
-from models import RevenueStream, RevenueStreamCreate, StatusEnum
+from models import RevenueStream, RevenueStreamCreate
 from datetime import datetime, timezone
 from services.audit_service import log_audit_event
-import os
 
 router = APIRouter()
 

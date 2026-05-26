@@ -1,8 +1,6 @@
-from content_models import ContentScript, ContentIdea
+from content_models import ContentScript
 from emergentintegrations.llm.chat import LlmChat, UserMessage
 import os
-import uuid
-from datetime import datetime, timezone
 
 SECTION_MARKERS = {
     "HOOK:": "hook",

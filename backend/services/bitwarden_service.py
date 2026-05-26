@@ -1,6 +1,5 @@
 import os
 from typing import Dict, Any, Optional
-import json
 
 class BitwartdenService:
     """
