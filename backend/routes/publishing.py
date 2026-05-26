@@ -1,0 +1,155 @@
+"""
+Publishing Log - Proof-of-work for actual content distribution.
+
+Every post the operator publishes (manually or via approved API) is logged here:
+  - drafted: AI generated, in studio
+  - exported: ready-to-post pack delivered to operator
+  - posted:   operator pasted/uploaded to the platform, captured URL
+  - verified: post URL confirmed live + (optionally) metrics ingested
+
+This is the auditable chain: idea -> script -> export -> post URL -> verified.
+"""
+from fastapi import APIRouter, HTTPException, Depends
+from pydantic import BaseModel, Field
+from typing import Optional
+from datetime import datetime, timezone
+import uuid
+
+from services.audit_service import log_audit_event
+
+router = APIRouter()
+
+ALLOWED_STATUSES = {"drafted", "exported", "posted", "verified"}
+
+
+class PublishingCreate(BaseModel):
+    stream_id: str
+    platform: str  # blog | medium | youtube | tiktok | instagram | linkedin | etsy | redbubble | ...
+    title: str
+    content_id: Optional[str] = None
+    idea_id: Optional[str] = None
+    status: str = "drafted"
+    post_url: Optional[str] = None
+    notes: Optional[str] = None
+
+
+class PublishingRecord(PublishingCreate):
+    id: str = Field(default_factory=lambda: f"pub-{uuid.uuid4().hex[:10]}")
+    metrics: dict = Field(default_factory=dict)
+    posted_at: Optional[str] = None
+    verified_at: Optional[str] = None
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    updated_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+
+class PublishingUpdate(BaseModel):
+    status: Optional[str] = None
+    post_url: Optional[str] = None
+    metrics: Optional[dict] = None
+    notes: Optional[str] = None
+
+
+async def get_db():
+    from server import db
+    return db
+
+
+def _validate_status(status: str) -> None:
+    if status not in ALLOWED_STATUSES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"status must be one of {sorted(ALLOWED_STATUSES)}",
+        )
+
+
+@router.post("/", response_model=PublishingRecord, status_code=201)
+async def create_publishing_record(payload: PublishingCreate, db=Depends(get_db)):
+    """Log a new publishing event (idea/exported/posted)."""
+    _validate_status(payload.status)
+    stream = await db.revenue_streams.find_one({"id": payload.stream_id}, {"_id": 0})
+    if not stream:
+        raise HTTPException(status_code=404, detail=f"Revenue stream '{payload.stream_id}' not found")
+
+    record = PublishingRecord(**payload.model_dump())
+    if payload.status == "posted" and payload.post_url:
+        record.posted_at = record.created_at
+    doc = record.model_dump()
+    await db.publishing_log.insert_one(doc)
+    await log_audit_event(
+        db, f"publishing.{payload.status}", "operator", "publish",
+        "publishing_record", record.id,
+        metadata={"platform": payload.platform, "stream_id": payload.stream_id},
+    )
+    return record
+
+
+@router.get("/", response_model=list[PublishingRecord])
+async def list_publishing_records(
+    stream_id: Optional[str] = None,
+    platform: Optional[str] = None,
+    status: Optional[str] = None,
+    limit: int = 500,
+    db=Depends(get_db),
+):
+    """List publishing records with optional filters."""
+    query: dict = {}
+    if stream_id:
+        query["stream_id"] = stream_id
+    if platform:
+        query["platform"] = platform
+    if status:
+        _validate_status(status)
+        query["status"] = status
+    cursor = db.publishing_log.find(query, {"_id": 0}).sort("created_at", -1).limit(limit)
+    return await cursor.to_list(limit)
+
+
+@router.patch("/{record_id}", response_model=PublishingRecord)
+async def update_publishing_record(record_id: str, updates: PublishingUpdate, db=Depends(get_db)):
+    """Advance a publishing record (e.g. drafted -> posted -> verified)."""
+    record = await db.publishing_log.find_one({"id": record_id}, {"_id": 0})
+    if not record:
+        raise HTTPException(status_code=404, detail="Publishing record not found")
+
+    patch: dict = {"updated_at": datetime.now(timezone.utc).isoformat()}
+    payload = updates.model_dump(exclude_none=True)
+    if "status" in payload:
+        _validate_status(payload["status"])
+        if payload["status"] == "posted":
+            patch["posted_at"] = patch["updated_at"]
+        if payload["status"] == "verified":
+            patch["verified_at"] = patch["updated_at"]
+            if not record.get("posted_at"):
+                patch["posted_at"] = patch["updated_at"]
+    patch.update(payload)
+
+    await db.publishing_log.update_one({"id": record_id}, {"$set": patch})
+    await log_audit_event(
+        db, f"publishing.{payload.get('status', 'updated')}", "operator", "update",
+        "publishing_record", record_id, metadata=payload,
+    )
+    merged = {**record, **patch}
+    return merged
+
+
+@router.get("/stats/overview")
+async def publishing_stats(db=Depends(get_db)):
+    """Counts by status + platform for the proof-of-work feed."""
+    records = await db.publishing_log.find({}, {"_id": 0}).to_list(10000)
+    by_status: dict[str, int] = {s: 0 for s in ALLOWED_STATUSES}
+    by_platform: dict[str, int] = {}
+    verified_urls: list[str] = []
+    for r in records:
+        st = r.get("status", "drafted")
+        if st in by_status:
+            by_status[st] += 1
+        plat = r.get("platform", "unknown")
+        by_platform[plat] = by_platform.get(plat, 0) + 1
+        if st == "verified" and r.get("post_url"):
+            verified_urls.append(r["post_url"])
+    return {
+        "total": len(records),
+        "by_status": by_status,
+        "by_platform": by_platform,
+        "verified_post_count": len(verified_urls),
+    }

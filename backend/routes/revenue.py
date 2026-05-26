@@ -25,9 +25,21 @@ async def create_revenue_stream(stream: RevenueStreamCreate, db=Depends(get_db))
 
 @router.get("/", response_model=List[RevenueStream])
 async def list_revenue_streams(db=Depends(get_db)):
-    """List all revenue streams"""
+    """List all revenue streams - monthly_actual enriched live from ledger (current month)."""
     streams = await db.revenue_streams.find({}, {"_id": 0}).to_list(1000)
+
+    today = datetime.now(timezone.utc).date()
+    month_start = today.replace(day=1).isoformat()
+    entries = await db.revenue_ledger.find(
+        {"occurred_on": {"$gte": month_start}}, {"_id": 0}
+    ).to_list(10000)
+    actual_by_stream: dict = {}
+    for e in entries:
+        sid = e.get("stream_id", "")
+        actual_by_stream[sid] = actual_by_stream.get(sid, 0.0) + e.get("net_amount", 0.0)
+
     for stream in streams:
+        stream["monthly_actual"] = round(actual_by_stream.get(stream["id"], 0.0), 2)
         if isinstance(stream.get('created_at'), str):
             stream['created_at'] = datetime.fromisoformat(stream['created_at'])
         if isinstance(stream.get('updated_at'), str):
@@ -80,18 +92,39 @@ async def delete_revenue_stream(stream_id: str, db=Depends(get_db)):
 
 @router.get("/stats/overview")
 async def get_revenue_stats(db=Depends(get_db)):
-    """Get revenue statistics overview"""
+    """Get revenue statistics overview.
+
+    `total_monthly_actual` is computed LIVE from the immutable revenue_ledger
+    collection (current month's net entries) - never from seeded values. This
+    is the proof-of-work read-side.
+    """
     streams = await db.revenue_streams.find({}, {"_id": 0}).to_list(1000)
-    
+
+    today = datetime.now(timezone.utc).date()
+    month_start = today.replace(day=1).isoformat()
+
+    ledger_entries = await db.revenue_ledger.find(
+        {"occurred_on": {"$gte": month_start}}, {"_id": 0}
+    ).to_list(10000)
+
+    actual_by_stream: dict[str, float] = {}
+    for e in ledger_entries:
+        sid = e.get("stream_id", "")
+        actual_by_stream[sid] = actual_by_stream.get(sid, 0.0) + e.get("net_amount", 0.0)
+
+    # Overlay live actuals onto stream documents (read-only enrichment)
+    for s in streams:
+        s["monthly_actual"] = round(actual_by_stream.get(s["id"], 0.0), 2)
+
     total_target = sum(s.get('monthly_target', 0) for s in streams)
     total_actual = sum(s.get('monthly_actual', 0) for s in streams)
     active_streams = sum(1 for s in streams if s.get('status') == 'active')
-    
+
     return {
         "total_monthly_target": total_target,
-        "total_monthly_actual": total_actual,
+        "total_monthly_actual": round(total_actual, 2),
         "achievement_percentage": (total_actual / total_target * 100) if total_target > 0 else 0,
         "active_streams": active_streams,
         "total_streams": len(streams),
-        "streams": streams
+        "streams": streams,
     }

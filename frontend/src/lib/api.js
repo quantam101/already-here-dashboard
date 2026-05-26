@@ -75,3 +75,19 @@ export const healthAPI = {
     api.get(`/health/check/${service}`, { params: { url } }),
   getHistory: (params) => api.get("/health/history", { params }),
 };
+
+// Ledger API - proof-of-work revenue entries
+export const ledgerAPI = {
+  getAll: (params) => api.get("/ledger/", { params }),
+  create: (data) => api.post("/ledger/", data),
+  progress: () => api.get("/ledger/stats/profit-progress"),
+  byStream: () => api.get("/ledger/stats/by-stream"),
+};
+
+// Publishing API - proof-of-work content distribution log
+export const publishingAPI = {
+  getAll: (params) => api.get("/publishing/", { params }),
+  create: (data) => api.post("/publishing/", data),
+  update: (id, data) => api.patch(`/publishing/${id}`, data),
+  stats: () => api.get("/publishing/stats/overview"),
+};

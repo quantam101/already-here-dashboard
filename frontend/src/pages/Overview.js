@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
-import { revenueAPI, contentAPI, agentsAPI } from "../lib/api";
+import { revenueAPI, contentAPI, agentsAPI, ledgerAPI } from "../lib/api";
 import {
   REVENUE_CHART_DAYS,
   REVENUE_CHART_MIN,
@@ -15,6 +15,9 @@ import MetricsCards from "../components/MetricsCards";
 import RevenueChart from "../components/RevenueChart";
 import ActivityFeed from "../components/ActivityFeed";
 import StreamHealthTable from "../components/StreamHealthTable";
+import ProfitMeter from "../components/ProfitMeter";
+import RecordEarningsDialog from "../components/RecordEarningsDialog";
+import LogPostDialog from "../components/LogPostDialog";
 
 // Static activity data - extracted from render to prevent re-creation
 const ACTIVITIES = [
@@ -44,6 +47,11 @@ export default function Overview() {
   const { data: agents = [] } = useQuery({
     queryKey: ["agents"],
     queryFn: () => agentsAPI.getAll().then((res) => res.data),
+  });
+
+  const { data: progress } = useQuery({
+    queryKey: ["ledgerProgress"],
+    queryFn: () => ledgerAPI.progress().then((res) => res.data),
   });
 
   // Memoize computed values
@@ -96,6 +104,8 @@ export default function Overview() {
           </p>
         </div>
         <div className="flex flex-wrap gap-3">
+          <LogPostDialog />
+          <RecordEarningsDialog />
           <button data-testid="run-cycle-btn" className="px-4 py-2 bg-transparent border border-gray-600 text-gray-300 rounded-lg hover:bg-gray-800 transition-colors text-sm">
             Run Cycle
           </button>
@@ -110,6 +120,9 @@ export default function Overview() {
           </button>
         </div>
       </div>
+
+      {/* Profit-to-25K Proof of Work meter */}
+      <ProfitMeter progress={progress} />
 
       {/* Top Metrics */}
       <MetricsCards {...metrics} />

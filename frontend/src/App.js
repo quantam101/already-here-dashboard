@@ -10,6 +10,7 @@ import Deployments from "./pages/Deployments";
 import Approvals from "./pages/Approvals";
 import Audit from "./pages/Audit";
 import ContentStudio from "./pages/ContentStudio";
+import ProofOfWork from "./pages/ProofOfWork";
 import { Toaster } from "sonner";
 
 function App() {
@@ -28,6 +29,7 @@ function App() {
             <Route path="deployments" element={<Deployments />} />
             <Route path="approvals" element={<Approvals />} />
             <Route path="audit" element={<Audit />} />
+            <Route path="proof-of-work" element={<ProofOfWork />} />
           </Route>
         </Routes>
       </BrowserRouter>

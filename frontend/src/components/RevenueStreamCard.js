@@ -1,5 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { Trash2 } from "lucide-react";
+import RecordEarningsDialog from "./RecordEarningsDialog";
 
 export default function RevenueStreamCard({ stream, onDelete }) {
   const target = stream.monthly_target || 0;
@@ -40,16 +41,16 @@ export default function RevenueStreamCard({ stream, onDelete }) {
 
       <div className="grid grid-cols-2 gap-4 mb-4">
         <div>
-          <p className="text-xs text-gray-500 mb-1 uppercase tracking-wider">Target</p>
+          <p className="text-xs text-gray-500 mb-1 uppercase tracking-wider">Target / mo</p>
           <p className="text-lg font-semibold text-white">${target.toLocaleString()}</p>
         </div>
         <div>
-          <p className="text-xs text-gray-500 mb-1 uppercase tracking-wider">Actual</p>
+          <p className="text-xs text-gray-500 mb-1 uppercase tracking-wider">Actual (live)</p>
           <p className="text-lg font-semibold text-green-400">${actual.toLocaleString()}</p>
         </div>
       </div>
 
-      <div>
+      <div className="mb-4">
         <div className="flex items-center justify-between mb-1.5">
           <span className="text-xs text-gray-500">Progress</span>
           <span className="text-xs text-gray-400 font-medium">{pct}%</span>
@@ -61,6 +62,12 @@ export default function RevenueStreamCard({ stream, onDelete }) {
           />
         </div>
       </div>
+
+      <RecordEarningsDialog
+        defaultStreamId={stream.id}
+        triggerLabel="Record Earnings"
+        triggerVariant="outline"
+      />
     </div>
   );
 }
