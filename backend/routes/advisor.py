@@ -15,6 +15,9 @@ from emergentintegrations.llm.chat import LlmChat, UserMessage
 from routes.analytics import (
     conversion_funnel, stream_roi, momentum, viral_themes, platform_mix,
 )
+from services.distillation_service import (
+    cache_lookup, cache_store, distill_text, to_yaml_payload,
+)
 
 router = APIRouter()
 
@@ -70,14 +73,32 @@ async def get_recommendation(db=Depends(get_db)):
         system_message=SYSTEM_MSG,
     )
     chat.with_model("anthropic", "claude-sonnet-4-5-20250929")
-    prompt = (
-        "Here is the live dashboard snapshot. Return ONE prioritized next action as JSON.\n\n"
-        f"```json\n{json.dumps(context, indent=2)[:5000]}\n```"
+    # YAML payload is ~25-40% fewer tokens than the equivalent indented JSON.
+    yaml_ctx = to_yaml_payload(context)
+    prompt = distill_text(
+        "Live dashboard snapshot below (YAML). Return ONE prioritized next "
+        "action as JSON.\n\n```yaml\n" + yaml_ctx[:5000] + "\n```"
     )
+
+    # Cache lookup — identical snapshots within TTL skip the LLM entirely
+    model_id = "anthropic/claude-sonnet-4-5-20250929"
+    cached = None
     try:
-        raw = await chat.send_message(UserMessage(text=prompt))
-    except Exception as e:
-        raise HTTPException(status_code=502, detail=f"LLM call failed: {e}") from e
+        cached = await cache_lookup(db, model_id, SYSTEM_MSG, prompt)
+    except Exception:
+        cached = None
+
+    if cached and cached.get("response"):
+        raw = cached["response"]
+    else:
+        try:
+            raw = await chat.send_message(UserMessage(text=prompt))
+        except Exception as e:
+            raise HTTPException(status_code=502, detail=f"LLM call failed: {e}") from e
+        try:
+            await cache_store(db, model_id, SYSTEM_MSG, prompt, raw, tier=3)
+        except Exception:
+            pass
 
     # Extract first JSON object from response
     parsed: dict = {}

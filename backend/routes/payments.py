@@ -93,6 +93,51 @@ def _get_stripe(http_request: Request) -> StripeCheckout:
     return StripeCheckout(api_key=api_key, webhook_url=webhook_url)
 
 
+def _stripe_mode() -> str:
+    """test | live | unknown | missing — matches /api/system/status."""
+    key = os.environ.get("STRIPE_API_KEY", "") or ""
+    if key.startswith("sk_live_"):
+        return "live"
+    if key.startswith("sk_test_") or key == "sk_test_emergent":
+        return "test"
+    if not key:
+        return "missing"
+    return "unknown"
+
+
+def _readiness() -> dict:
+    """Production-readiness gate for going live. Operator checklist."""
+    key = os.environ.get("STRIPE_API_KEY", "") or ""
+    mode = _stripe_mode()
+    webhook_set = bool(os.environ.get("STRIPE_WEBHOOK_SECRET"))
+    operator_email = os.environ.get("OPERATOR_EMAIL", "") or ""
+    issues: list[str] = []
+    if mode == "missing":
+        issues.append("STRIPE_API_KEY is not set")
+    if mode == "unknown":
+        issues.append("STRIPE_API_KEY is set but doesn't look like sk_test_ or sk_live_")
+    if mode == "live" and not webhook_set:
+        issues.append("Live mode requires STRIPE_WEBHOOK_SECRET (set via Stripe Dashboard → Webhooks)")
+    if mode == "live" and not operator_email:
+        issues.append("OPERATOR_EMAIL should be set in live mode so the Command OS is access-locked")
+    return {
+        "stripe_mode": mode,
+        "stripe_key_prefix": (key[:7] + "***") if key else "",
+        "webhook_secret_set": webhook_set,
+        "operator_email_set": bool(operator_email),
+        "go_live_ready": mode == "live" and webhook_set,
+        "issues": issues,
+        "checklist": [
+            "1. Replace STRIPE_API_KEY with sk_live_... from dashboard.stripe.com → Developers → API keys",
+            "2. Add webhook endpoint: https://<your-domain>/api/payments/webhook listening on `checkout.session.completed`",
+            "3. Paste the webhook signing secret into STRIPE_WEBHOOK_SECRET",
+            "4. Set OPERATOR_EMAIL so only you can access /api routes that need auth",
+            "5. Restart backend: `docker compose -f docker-compose.sqlite.yml restart backend`",
+            "6. Run a $0.50 test purchase against /api/payments/checkout to confirm ledger entry appears",
+        ],
+    }
+
+
 async def _ensure_saas_stream(db):
     """Make sure the rev-saas stream exists so paid checkouts have a home."""
     existing = await db.revenue_streams.find_one({"id": REVENUE_STREAM_FOR_PAYMENTS})
@@ -118,12 +163,36 @@ async def list_packages():
     return {pid: {**pkg, "id": pid} for pid, pkg in PACKAGES.items()}
 
 
+@router.get("/mode")
+async def get_mode():
+    """Lightweight mode probe for frontend banners."""
+    return {"mode": _stripe_mode()}
+
+
+@router.get("/readiness")
+async def get_readiness():
+    """Operator checklist for switching test → live keys safely."""
+    return _readiness()
+
+
 @router.post("/checkout", response_model=CheckoutCreateResponse)
 async def create_checkout(payload: CheckoutCreateRequest, http_request: Request, db=Depends(get_db)):
     """Create a Stripe Checkout session for a FIXED, server-defined package."""
     if payload.package_id not in PACKAGES:
         raise HTTPException(status_code=400, detail=f"Unknown package: {payload.package_id}")
     pkg = PACKAGES[payload.package_id]
+
+    # Safety gate: in live mode, refuse to accept money without a webhook secret.
+    # Without the secret, Stripe's webhook events can't be verified → silent
+    # double-charges or missed ledger entries are possible.
+    if _stripe_mode() == "live" and not os.environ.get("STRIPE_WEBHOOK_SECRET"):
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "Live Stripe key detected but STRIPE_WEBHOOK_SECRET is missing. "
+                "Refusing to create a paid checkout — see /api/payments/readiness."
+            ),
+        )
 
     await _ensure_saas_stream(db)
 

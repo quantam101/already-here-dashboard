@@ -1,6 +1,13 @@
 from content_models import ContentScript
 from emergentintegrations.llm.chat import LlmChat, UserMessage
 import os
+import logging
+
+from services.distillation_service import (
+    cache_lookup, cache_store, distill_text, to_yaml_payload,
+)
+
+logger = logging.getLogger(__name__)
 
 SECTION_MARKERS = {
     "HOOK:": "hook",
@@ -49,26 +56,35 @@ def parse_script_response(response: str) -> dict:
     }
 
 def create_script_prompt(idea: dict) -> str:
-    """Create the AI prompt for script generation."""
-    return f"""Create a compelling content script for the following idea:
+    """Create the AI prompt for script generation.
 
-Title: {idea['title']}
-Description: {idea['description']}
-Topic: {idea['topic']}
-Target Platforms: {', '.join(idea.get('target_platforms', []))}
+    Uses YAML for the idea payload (token-cheaper than embedding fields inline
+    in prose) and applies semantic compression to the wrapper text.
+    """
+    payload = to_yaml_payload({
+        "title": idea.get("title", ""),
+        "description": idea.get("description", ""),
+        "topic": idea.get("topic", ""),
+        "platforms": idea.get("target_platforms", []),
+    })
+    raw = f"""Create a compelling content script for this idea.
 
-Generate:
-1. A powerful hook (first 3 seconds that stops the scroll)
-2. Main script body (engaging, concise, value-driven)
-3. Strong call-to-action
+IDEA (YAML):
+{payload}
+
+Produce:
+1. Hook (first 3 seconds, stop-the-scroll)
+2. Script body (engaging, concise, value-driven)
+3. CTA (call to action)
 4. Shot list (5-7 visual scenes)
 
-Format as:
+Format exactly:
 HOOK: [hook text]
 SCRIPT: [script body]
 CTA: [call to action]
-SHOTS: [shot 1], [shot 2], [shot 3], etc.
+SHOTS: [shot 1], [shot 2], [shot 3], ...
 """
+    return distill_text(raw)
 
 def create_fallback_script(idea: dict, error: str) -> ContentScript:
     """Create a template script when AI generation fails."""
@@ -82,27 +98,67 @@ def create_fallback_script(idea: dict, error: str) -> ContentScript:
         metadata={"generated_by": "template", "error": error}
     )
 
-async def generate_script_from_idea(idea: dict) -> ContentScript:
+async def generate_script_from_idea(idea: dict, db=None) -> ContentScript:
     """
     Generate a content script from an idea using AI.
     Uses Emergent LLM key with Gemini for zero-cost generation.
+
+    Tier-2 distillation: cache lookup on a fingerprint of
+    (model, system_msg, distilled_prompt). On cache hit we skip the LLM
+    entirely and reconstruct the ContentScript from the cached response.
     """
     prompt = create_script_prompt(idea)
     api_key = os.getenv('EMERGENT_LLM_KEY')
-    
+    model_id = "gemini/gemini-3-flash-preview"
+    system_msg = (
+        "You are an expert content creator specializing in viral short-form "
+        "and long-form content. Create engaging, high-converting scripts."
+    )
+
+    # Cache lookup (best-effort — never fails the request)
+    cached_response: str | None = None
+    if db is not None:
+        try:
+            hit = await cache_lookup(db, model_id, system_msg, prompt)
+            if hit and hit.get("response"):
+                cached_response = hit["response"]
+                logger.info("distillation: cache HIT idea=%s tokens_saved≈%s",
+                            idea.get("id"), hit.get("tokens_out_est", 0))
+        except Exception as e:
+            logger.warning("distillation cache lookup failed: %s", e)
+
+    if cached_response is not None:
+        parsed = parse_script_response(cached_response)
+        return ContentScript(
+            idea_id=idea['id'],
+            hook=parsed["hook"],
+            script_body=parsed["script_body"],
+            cta=parsed["cta"],
+            duration_seconds=60,
+            shot_list=parsed["shot_list"],
+            metadata={"generated_by": "ai_cached", "model": "gemini-3-flash", "cache_hit": True}
+        )
+
     chat = LlmChat(
         api_key=api_key,
         session_id=f"script_gen_{idea['id']}",
-        system_message="You are an expert content creator specializing in viral short-form and long-form content. Create engaging, high-converting scripts."
+        system_message=system_msg,
     )
-    
+
     chat.with_model("gemini", "gemini-3-flash-preview")
     user_message = UserMessage(text=prompt)
-    
+
     try:
         response = await chat.send_message(user_message)
         parsed = parse_script_response(response)
-        
+
+        # Best-effort cache store
+        if db is not None:
+            try:
+                await cache_store(db, model_id, system_msg, prompt, response, tier=3)
+            except Exception as e:
+                logger.warning("distillation cache store failed: %s", e)
+
         script = ContentScript(
             idea_id=idea['id'],
             hook=parsed["hook"],
@@ -110,11 +166,11 @@ async def generate_script_from_idea(idea: dict) -> ContentScript:
             cta=parsed["cta"],
             duration_seconds=60,
             shot_list=parsed["shot_list"],
-            metadata={"generated_by": "ai", "model": "gemini-3-flash"}
+            metadata={"generated_by": "ai", "model": "gemini-3-flash", "cache_hit": False}
         )
-        
+
         return script
-        
+
     except Exception as e:
         return create_fallback_script(idea, str(e))
 

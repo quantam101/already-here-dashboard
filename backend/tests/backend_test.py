@@ -468,6 +468,78 @@ class TestPayments:
         stats = api.get(f"{BASE_URL}/api/payments/stats").json()
         assert "linkedin" in stats["by_utm_source"]
 
+    def test_mode_probe(self, api):
+        r = api.get(f"{BASE_URL}/api/payments/mode")
+        assert r.status_code == 200
+        assert r.json()["mode"] in ("test", "live", "unknown", "missing")
+
+    def test_readiness_returns_checklist(self, api):
+        r = api.get(f"{BASE_URL}/api/payments/readiness")
+        assert r.status_code == 200
+        d = r.json()
+        for k in ("stripe_mode", "webhook_secret_set", "operator_email_set",
+                  "go_live_ready", "issues", "checklist"):
+            assert k in d, f"missing key {k}"
+        assert isinstance(d["issues"], list)
+        assert len(d["checklist"]) >= 5
+        # Never leak the raw key
+        body = r.text
+        assert "sk_live_" not in body or body.count("sk_live_") == 1  # only in checklist text
+        assert "sk_test_emergent" not in body
+
+
+# ---------------- Data Distillation ----------------
+class TestDistillation:
+    def test_config(self, api):
+        r = api.get(f"{BASE_URL}/api/distillation/config")
+        assert r.status_code == 200, r.text
+        d = r.json()
+        for k in ("ttl_seconds", "token_cost_per_1k_usd",
+                  "compression_enabled", "yaml_payloads_enabled", "tiers"):
+            assert k in d
+        assert d["compression_enabled"] is True
+        assert "tier_1" in d["tiers"] and "tier_2" in d["tiers"] and "tier_3" in d["tiers"]
+
+    def test_stats_initial_shape(self, api):
+        r = api.get(f"{BASE_URL}/api/distillation/stats")
+        assert r.status_code == 200, r.text
+        d = r.json()
+        for k in ("rows", "hits", "tokens_saved_est", "usd_saved_est",
+                  "by_model", "by_tier", "ttl_seconds"):
+            assert k in d
+        assert isinstance(d["rows"], int)
+        assert isinstance(d["by_model"], dict)
+
+    def test_preview_compresses(self, api):
+        text = (
+            "It is important to note that, in order to literally maximize "
+            "tokens, basically you should use very concise wording."
+        )
+        r = api.post(f"{BASE_URL}/api/distillation/preview", json={"text": text})
+        assert r.status_code == 200, r.text
+        d = r.json()
+        assert d["distilled"]["chars"] < d["original"]["chars"]
+        assert d["savings"]["percent"] > 20.0
+        assert "distilled" in d and "savings" in d
+
+    def test_preview_yaml_payload(self, api):
+        payload = {"funnel": {"clicks": 100, "paid": 3, "revenue": 297.0},
+                   "themes": ["ai", "automation", "money"]}
+        r = api.post(f"{BASE_URL}/api/distillation/preview",
+                     json={"text": "hi", "payload": payload})
+        assert r.status_code == 200
+        d = r.json()
+        assert "yaml_payload" in d and d["yaml_payload"]
+        assert "json_payload" in d and d["json_payload"]
+        # YAML representation should be <= JSON in chars for nested-dict-of-prims
+        assert len(d["yaml_payload"]) <= len(d["json_payload"]) + 5  # tolerate edge
+
+    def test_clear_returns_count(self, api):
+        r = api.post(f"{BASE_URL}/api/distillation/clear")
+        assert r.status_code == 200
+        d = r.json()
+        assert "deleted" in d and isinstance(d["deleted"], int)
+
 
 # ---------------- Analytics ----------------
 class TestAnalytics:

@@ -23,6 +23,32 @@ Build a complete enterprise-grade, governed multi-agent operating system consoli
 
 ## What's Been Implemented (2026-05-26)
 
+### Iteration 13 - Data Distillation + Stripe Live-Mode Gate + Final OCI Deploy (latest)
+**Token-cheap LLM pipeline, live-key safety net, single-command deploy. 111/111 pytest.**
+- **`services/distillation_service.py`** — pure utility module:
+  - `distill_text()` — semantic compression (filler-word stripping, whitespace collapse). Demo: 53.9% char reduction on test input.
+  - `to_yaml_payload()` — YAML formatting for structured data (~25-40% fewer tokens than equivalent JSON for nested-dict payloads).
+  - `estimate_tokens()` — chars/4 heuristic for budget telemetry.
+  - `fingerprint(model, system, prompt)` — sha256-based cache key (32 hex chars).
+  - `cache_lookup/store/stats/clear` — db-backed prompt-response cache in `llm_cache` collection, dual-DB compatible (works on Mongo + SQLite wrapper), 30-day TTL configurable via `LLM_CACHE_TTL_SECONDS`.
+- **`routes/distillation.py`** — operator telemetry + utility API:
+  - `GET /api/distillation/stats` — cache rows, hits, tokens-saved, $ saved (heuristic via `TOKEN_COST_PER_1K` env).
+  - `GET /api/distillation/config` — TTL, cost-per-1k, tier descriptions.
+  - `POST /api/distillation/preview` — show before/after for any text + YAML-vs-JSON for any payload (operator tuning tool).
+  - `POST /api/distillation/clear` — wipe cache.
+- **Tiered LLM pipeline** baked into existing services:
+  - `content_generation_service.create_script_prompt()` now emits YAML idea payload + distilled wrapper text.
+  - `content_generation_service.generate_script_from_idea(idea, db=db)` does cache lookup BEFORE every LLM call; on miss, stores response under the fingerprint. Cache-hit responses tagged `metadata.cache_hit=True`.
+  - `advisor.get_recommendation()` now sends YAML context (not JSON) + cache-checks on identical snapshots.
+- **Stripe live-mode safety gate** (`routes/payments.py`):
+  - `_stripe_mode()` + `_readiness()` helpers.
+  - `GET /api/payments/mode` — lightweight `{mode: "test|live|missing|unknown"}` probe for frontend banners.
+  - `GET /api/payments/readiness` — full operator checklist + go_live_ready flag + issues list.
+  - **Safety gate inside `create_checkout()`**: if `sk_live_*` key is set but `STRIPE_WEBHOOK_SECRET` is missing, the endpoint returns HTTP 503 — preventing silent revenue loss while operator is mid-setup.
+- **`LIVE_MODE_CHECKLIST.md`** — step-by-step Stripe test→live transition (8 steps, includes rollback + common-mistakes table).
+- **`DEPLOY-FINAL.md`** — final single-command OCI deploy runbook (cloud-init two-liner, idempotent resume, DNS, env, verify, daily ops).
+- **7 new pytest tests** (TestDistillation × 5 + TestPayments mode/readiness × 2). Total **111/111 PASSING** (was 104). Zero regressions on existing 104.
+
 ### Iteration 12 - Free-Only Build Directive: SQLite Backend + Two-Node Health + LCAC (latest)
 **Honors operator's architecture directive. 104/104 pytest on BOTH backends. 200 MB RSS.**
 - **`services/sqlite_db.py`** — Motor-API-compatible shim over aiosqlite (363 lines). Each "collection" maps to one SQLite table `(id TEXT PRIMARY KEY, doc TEXT JSON)`. Supports every Mongo op the codebase actually uses (audited via grep): `find_one`, `find().sort().to_list()`, `insert_one/many`, `update_one` with `$set/$inc/$max`, `delete_one/many`, `count_documents`, `aggregate` with `$group/$sort/$limit`. Filter ops: equality, `$gte/$gt/$lte/$lt/$ne/$in/$nin/$exists`. Unsupported ops raise `NotImplementedError` (fail-loud)

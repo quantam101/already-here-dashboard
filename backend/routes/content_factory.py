@@ -57,7 +57,7 @@ async def generate_script(idea_id: str, db=Depends(get_db)):
         raise HTTPException(status_code=404, detail="Idea not found")
     
     from services.content_generation_service import generate_script_from_idea
-    script = await generate_script_from_idea(idea)
+    script = await generate_script_from_idea(idea, db=db)
     
     doc = script.model_dump()
     doc['created_at'] = doc['created_at'].isoformat()
