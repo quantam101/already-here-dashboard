@@ -19,7 +19,22 @@ set -e
 exec > /var/log/command-os-bootstrap.log 2>&1
 echo "=== cloud-init started at $(date) ==="
 
-# Wait for network + apt locks
+# ── Step 0: Install operator SSH key (idempotent, runs FIRST) ──────────────
+# OCI sometimes mangles long single-line keys in the "Paste public keys"
+# textbox. This block guarantees the key is installed regardless.
+OPERATOR_PUBKEY="ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQCc9bbH4rWxMbENW5DOBRm4+pw0Cb49mxU1eTbYt+HpEWIW7MM7dqtoIZE3zlaFvsbcJdbwB2togRYabMAU1r+UKp8IJ8OkE/4JD1ThR/W2b8Q81wAeHrNeSJLL0GlIZZD7q92XiZls7rfju/hDuWlJOHZWY1Zdk+dIZ6hmM6IHtWhiZqtSPXs7kanXTmJxbbnW4KVT7Oa6oKHDrwNSgiMsf7Yy2axn5QWUBqvWlASgP9BfNmt3qB+8ZZOL6aCOb2w/8SH/oqPh4hdMzKaDYd9llLsWCcc3gpfXslMX/+Ac0cMkTxTpfci1aw5Ls9as9SRuD1BrDQLBoJOuY6vYZrLlJQ3Ln4LEy+mbo+df3vF7NxLuyXrScnDywYH5zfmXPrsQqADZyGfuzVDOgEEC0JOHnia0lPmeXJftK37iMAvofWUMc4TGolW3Hpbv+aLUJXt+DUCl9ykKMX7s+SK49lBjgH1QWk2ILVrE8LIrh12RsNHrDSOGeBbMCA4TEnBG+Gx+bM7NqiGV9uwcoW+QWB/Wh5Az/FPQElgSKTKUOb1ZyNPvVMXWyxY4UmjdXoZbLLV+iUnK74ZsK+U5p0OsckS4975qLv2/YRLjd9Tv4XjrpFhDxY8FmG52WYprUhD313WLnSeWvrfYlJI8tU9DehkkkHbwnG69QCswB0GNaKVxqw== cmdos@cloudshell"
+
+mkdir -p /home/ubuntu/.ssh
+touch /home/ubuntu/.ssh/authorized_keys
+if ! grep -q "cmdos@cloudshell" /home/ubuntu/.ssh/authorized_keys 2>/dev/null; then
+  echo "$OPERATOR_PUBKEY" >> /home/ubuntu/.ssh/authorized_keys
+fi
+chmod 700 /home/ubuntu/.ssh
+chmod 600 /home/ubuntu/.ssh/authorized_keys
+chown -R ubuntu:ubuntu /home/ubuntu/.ssh
+echo "=== SSH key installed for ubuntu@ ==="
+
+# ── Step 1: Wait for network + install base packages ───────────────────────
 sleep 30
 apt-get update -qq
 apt-get install -y -qq curl ca-certificates git
