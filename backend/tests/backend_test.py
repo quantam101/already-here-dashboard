@@ -767,3 +767,172 @@ class TestAdvisor:
         assert r.status_code == 200
         rows = r.json()
         assert isinstance(rows, list)
+
+
+
+# ---------------- Books & Audiobooks ----------------
+class TestBooks:
+    def test_books_list_empty_ok(self, api):
+        r = api.get(f"{BASE_URL}/api/books/")
+        assert r.status_code == 200
+        assert isinstance(r.json(), list)
+
+    def test_books_stats_empty(self, api):
+        r = api.get(f"{BASE_URL}/api/books/stats/overview")
+        assert r.status_code == 200
+        d = r.json()
+        for k in ("total_books", "total_word_count", "by_type", "by_status"):
+            assert k in d
+
+    def test_invalid_book_type_rejected(self, api):
+        r = api.post(f"{BASE_URL}/api/books/", json={
+            "title": "x", "book_type": "BOGUS", "chapter_count": 1,
+        })
+        assert r.status_code == 400
+
+    def test_invalid_chapter_count_rejected(self, api):
+        r = api.post(f"{BASE_URL}/api/books/", json={
+            "title": "x", "chapter_count": 999,
+        })
+        assert r.status_code == 400
+
+    def test_get_nonexistent_book(self, api):
+        r = api.get(f"{BASE_URL}/api/books/book-does-not-exist")
+        assert r.status_code == 404
+
+    def test_invalid_chapter_count_zero_rejected(self, api):
+        r = api.post(f"{BASE_URL}/api/books/", json={
+            "title": "x", "chapter_count": 0,
+        })
+        assert r.status_code == 400
+
+
+# ---------------- Books E2E (LLM-backed) ----------------
+@pytest.fixture(scope="class")
+def created_book(api_session):
+    """Create a real 2-chapter book via Emergent LLM. Used by multiple tests."""
+    payload = {
+        "title": "Test Manual",
+        "book_type": "manual",
+        "chapter_count": 2,
+        "word_target_per_chapter": 150,
+        "audience": "developers",
+        "tone": "professional",
+    }
+    r = api_session.post(f"{BASE_URL}/api/books/", json=payload, timeout=180)
+    assert r.status_code == 201, f"create_book failed: {r.status_code} {r.text[:300]}"
+    return r.json()
+
+
+@pytest.fixture(scope="class")
+def api_session():
+    s = requests.Session()
+    s.headers.update({"Content-Type": "application/json"})
+    return s
+
+
+class TestBooksE2E:
+    def test_create_book_returns_complete(self, created_book):
+        b = created_book
+        assert b["id"].startswith("book-")
+        assert b["status"] == "complete"
+        assert len(b["chapters"]) == 2
+        assert b["total_word_count"] > 0
+        assert b["book_type"] == "manual"
+
+    def test_rev_books_stream_auto_created(self, created_book, api_session):
+        r = api_session.get(f"{BASE_URL}/api/revenue/")
+        assert r.status_code == 200
+        ids = {s["id"] for s in r.json()}
+        assert "rev-books" in ids
+
+    def test_list_includes_created_book(self, created_book, api_session):
+        r = api_session.get(f"{BASE_URL}/api/books/")
+        assert r.status_code == 200
+        ids = {b["id"] for b in r.json()}
+        assert created_book["id"] in ids
+
+    def test_get_created_book(self, created_book, api_session):
+        r = api_session.get(f"{BASE_URL}/api/books/{created_book['id']}")
+        assert r.status_code == 200
+        assert r.json()["id"] == created_book["id"]
+
+    def test_download_md(self, created_book, api_session):
+        r = api_session.get(f"{BASE_URL}/api/books/{created_book['id']}/download.md")
+        assert r.status_code == 200
+        assert "text/markdown" in r.headers.get("content-type", "")
+        assert "attachment" in r.headers.get("content-disposition", "").lower()
+        assert created_book["title"] in r.text
+
+    def test_download_txt(self, created_book, api_session):
+        r = api_session.get(f"{BASE_URL}/api/books/{created_book['id']}/download.txt")
+        assert r.status_code == 200
+        assert "text/plain" in r.headers.get("content-type", "")
+        # Plain renderer prepends title with period
+        assert created_book["title"] in r.text
+
+    def test_download_increments_count(self, created_book, api_session):
+        # Already downloaded twice above; expect >= 2
+        r = api_session.get(f"{BASE_URL}/api/books/{created_book['id']}")
+        assert r.status_code == 200
+        assert r.json()["download_count"] >= 2
+
+    def test_stats_overview_reflects_book(self, created_book, api_session):
+        r = api_session.get(f"{BASE_URL}/api/books/stats/overview")
+        assert r.status_code == 200
+        d = r.json()
+        assert d["total_books"] >= 1
+        assert d["total_word_count"] >= created_book["total_word_count"]
+        assert "manual" in d["by_type"]
+        assert d["by_status"].get("complete", 0) >= 1
+
+    def test_rev_books_stream_idempotent(self, created_book, api_session):
+        """Second book should NOT duplicate rev-books stream."""
+        payload = {
+            "title": "Second Tiny Book",
+            "book_type": "guide",
+            "chapter_count": 1,
+            "word_target_per_chapter": 80,
+        }
+        r = api_session.post(f"{BASE_URL}/api/books/", json=payload, timeout=180)
+        assert r.status_code == 201
+        # rev-books still appears exactly once
+        rev = api_session.get(f"{BASE_URL}/api/revenue/").json()
+        rev_books_count = sum(1 for s in rev if s["id"] == "rev-books")
+        assert rev_books_count == 1
+        # cleanup the second book
+        api_session.delete(f"{BASE_URL}/api/books/{r.json()['id']}")
+
+    def test_delete_book(self, created_book, api_session):
+        r = api_session.delete(f"{BASE_URL}/api/books/{created_book['id']}")
+        assert r.status_code == 200
+        # verify gone
+        r2 = api_session.get(f"{BASE_URL}/api/books/{created_book['id']}")
+        assert r2.status_code == 404
+
+
+# ---------------- Auth (operator gate) ----------------
+class TestAuth:
+    def test_config_no_operator_set(self, api):
+        # When OPERATOR_EMAIL is not set, auth is not required (legacy mode).
+        r = api.get(f"{BASE_URL}/api/auth/config")
+        assert r.status_code == 200
+        d = r.json()
+        assert "required" in d
+        assert d["required"] is False
+
+    def test_me_without_session_returns_401(self, api):
+        r = api.get(f"{BASE_URL}/api/auth/me")
+        assert r.status_code == 401
+
+    def test_session_with_invalid_id_returns_401(self, api):
+        r = api.post(f"{BASE_URL}/api/auth/session", json={"session_id": "bogus_session_id_xyz_123"})
+        assert r.status_code == 401, f"expected 401, got {r.status_code}: {r.text[:200]}"
+
+    def test_logout_idempotent(self, api):
+        r = api.post(f"{BASE_URL}/api/auth/logout")
+        assert r.status_code == 200
+        assert r.json().get("logged_out") is True
+        # Call again - still 200
+        r2 = api.post(f"{BASE_URL}/api/auth/logout")
+        assert r2.status_code == 200

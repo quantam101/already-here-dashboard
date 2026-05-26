@@ -16,32 +16,37 @@ import Proposals from "./pages/Proposals";
 import Analytics from "./pages/Analytics";
 import Pricing from "./pages/Pricing";
 import PaymentSuccess from "./pages/PaymentSuccess";
+import Books from "./pages/Books";
+import AuthGate from "./components/AuthGate";
 import { Toaster } from "sonner";
 
 function App() {
   return (
     <div className="App">
       <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<DashboardLayout />}>
-            <Route index element={<Navigate to="/overview" replace />} />
-            <Route path="overview" element={<Overview />} />
-            <Route path="revenue" element={<Revenue />} />
-            <Route path="content" element={<Content />} />
-            <Route path="studio" element={<ContentStudio />} />
-            <Route path="agents" element={<Agents />} />
-            <Route path="builds" element={<Builds />} />
-            <Route path="deployments" element={<Deployments />} />
-            <Route path="approvals" element={<Approvals />} />
-            <Route path="audit" element={<Audit />} />
-            <Route path="proof-of-work" element={<ProofOfWork />} />
-            <Route path="scout" element={<Scout />} />
-            <Route path="proposals" element={<Proposals />} />
-            <Route path="analytics" element={<Analytics />} />
-            <Route path="pricing" element={<Pricing />} />
-          </Route>
-          <Route path="/payment-success" element={<PaymentSuccess />} />
-        </Routes>
+        <AuthGate>
+          <Routes>
+            <Route path="/" element={<DashboardLayout />}>
+              <Route index element={<Navigate to="/overview" replace />} />
+              <Route path="overview" element={<Overview />} />
+              <Route path="revenue" element={<Revenue />} />
+              <Route path="content" element={<Content />} />
+              <Route path="studio" element={<ContentStudio />} />
+              <Route path="agents" element={<Agents />} />
+              <Route path="builds" element={<Builds />} />
+              <Route path="deployments" element={<Deployments />} />
+              <Route path="approvals" element={<Approvals />} />
+              <Route path="audit" element={<Audit />} />
+              <Route path="proof-of-work" element={<ProofOfWork />} />
+              <Route path="scout" element={<Scout />} />
+              <Route path="proposals" element={<Proposals />} />
+              <Route path="analytics" element={<Analytics />} />
+              <Route path="pricing" element={<Pricing />} />
+              <Route path="books" element={<Books />} />
+            </Route>
+            <Route path="/payment-success" element={<PaymentSuccess />} />
+          </Routes>
+        </AuthGate>
       </BrowserRouter>
       <Toaster position="top-right" richColors />
     </div>

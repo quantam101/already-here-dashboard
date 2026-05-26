@@ -5,6 +5,7 @@ export const API = `${BACKEND_URL}/api`;
 
 export const api = axios.create({
   baseURL: API,
+  withCredentials: true,
   headers: {
     "Content-Type": "application/json",
   },
@@ -145,4 +146,23 @@ export const analyticsAPI = {
 export const advisorAPI = {
   recommend: () => api.post("/advisor/recommend"),
   recent: () => api.get("/advisor/recent"),
+};
+
+// Books
+export const booksAPI = {
+  getAll: (params) => api.get("/books/", { params }),
+  getById: (id) => api.get(`/books/${id}`),
+  create: (data) => api.post("/books/", data),
+  delete: (id) => api.delete(`/books/${id}`),
+  stats: () => api.get("/books/stats/overview"),
+  downloadMd: (id) => `${API}/books/${id}/download.md`,
+  downloadTxt: (id) => `${API}/books/${id}/download.txt`,
+};
+
+// Auth (optional - only used if backend has OPERATOR_EMAIL set)
+export const authAPI = {
+  config: () => api.get("/auth/config"),
+  me: () => api.get("/auth/me"),
+  session: (sessionId) => api.post("/auth/session", { session_id: sessionId }),
+  logout: () => api.post("/auth/logout"),
 };
