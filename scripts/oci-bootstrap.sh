@@ -65,10 +65,22 @@ apt-get install -y -qq curl ca-certificates git ufw
 
 log "2/6  installing Docker + Compose v2..."
 if ! command -v docker >/dev/null 2>&1; then
-  curl -fsSL https://get.docker.com | sh
-fi
-if ! docker compose version >/dev/null 2>&1; then
-  apt-get install -y -qq docker-compose-plugin
+  # Install Docker manually — the official get.docker.com script tries to
+  # install docker-model-plugin which doesn't exist for Ubuntu 20.04 (focal).
+  # We install only the packages that actually exist.
+  apt-get install -y -qq ca-certificates curl gnupg
+  install -m 0755 -d /etc/apt/keyrings
+  if [ ! -f /etc/apt/keyrings/docker.asc ]; then
+    curl -fsSL "https://download.docker.com/linux/ubuntu/gpg" -o /etc/apt/keyrings/docker.asc
+    chmod a+r /etc/apt/keyrings/docker.asc
+  fi
+  CODENAME=$(. /etc/os-release && echo "$VERSION_CODENAME")
+  echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu ${CODENAME} stable" \
+    > /etc/apt/sources.list.d/docker.list
+  apt-get update -qq
+  # Install only required packages — skip docker-model-plugin (missing on focal)
+  DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
+    docker-ce docker-ce-cli containerd.io docker-compose-plugin docker-buildx-plugin
 fi
 systemctl enable docker --now
 
