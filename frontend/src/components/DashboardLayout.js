@@ -12,6 +12,8 @@ import {
   Link as LinkIcon,
   Sparkles,
   Trophy,
+  Radar,
+  ScrollText,
   Menu,
   X,
 } from "lucide-react";
@@ -21,7 +23,9 @@ const NAVIGATION = [
   { name: "Income Streams", path: "/revenue", icon: DollarSign, section: "operations" },
   { name: "AI Agents", path: "/agents", icon: Bot, section: "operations" },
   { name: "Content Factory", path: "/studio", icon: Sparkles, section: "operations" },
+  { name: "Scout", path: "/scout", icon: Radar, section: "operations" },
   { name: "Proof of Work", path: "/proof-of-work", icon: Trophy, section: "revenue" },
+  { name: "Proposals", path: "/proposals", icon: ScrollText, section: "revenue" },
   { name: "Content Library", path: "/content", icon: FileText, section: "revenue" },
   { name: "Build Registry", path: "/builds", icon: TrendingUp, section: "revenue" },
   { name: "Deployments", path: "/deployments", icon: Package, section: "revenue" },

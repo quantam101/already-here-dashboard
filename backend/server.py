@@ -12,7 +12,7 @@ ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
 # Import routers
-from routes import revenue, content, agents, builds, deployments, audit, approvals, health, content_factory, ledger, publishing
+from routes import revenue, content, agents, builds, deployments, audit, approvals, health, content_factory, ledger, publishing, scout, proposals, cycle
 
 # MongoDB connection
 mongo_url = os.environ['MONGO_URL']
@@ -53,6 +53,9 @@ api_router.include_router(approvals.router, prefix="/approvals", tags=["approval
 api_router.include_router(health.router, prefix="/health", tags=["health"])
 api_router.include_router(ledger.router, prefix="/ledger", tags=["ledger"])
 api_router.include_router(publishing.router, prefix="/publishing", tags=["publishing"])
+api_router.include_router(scout.router, prefix="/scout", tags=["scout"])
+api_router.include_router(proposals.router, prefix="/proposals", tags=["proposals"])
+api_router.include_router(cycle.router, prefix="/cycle", tags=["cycle"])
 
 # Include router in main app
 app.include_router(api_router)

@@ -7,11 +7,13 @@ This is the single source of truth for revenue actuals (vs. seeded targets).
 
 Goal: $25,000 net profit -> commercialization unlock.
 """
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, UploadFile, File, Form
 from pydantic import BaseModel, Field
 from typing import Optional
 from datetime import datetime, timezone, timedelta
 import uuid
+import csv
+import io
 
 from services.audit_service import log_audit_event
 
@@ -142,3 +144,90 @@ async def stats_by_stream(db=Depends(get_db)):
         }
         for r in rows
     ]
+
+
+
+@router.post("/import-csv")
+async def import_ledger_csv(
+    stream_id: str = Form(...),
+    file: UploadFile = File(...),
+    date_column: str = Form("date"),
+    gross_column: str = Form("gross"),
+    net_column: str = Form("net"),
+    source_label: str = Form("csv"),
+    db=Depends(get_db),
+):
+    """Bulk-import earnings from a CSV file.
+
+    Expected CSV: header row with at least `date`, `gross`, `net` columns
+    (case-insensitive, customisable via form fields). Each row becomes one
+    ledger entry. Creates an audit event with import filename + row count.
+    """
+    stream = await db.revenue_streams.find_one({"id": stream_id}, {"_id": 0})
+    if not stream:
+        raise HTTPException(status_code=404, detail=f"Revenue stream '{stream_id}' not found")
+
+    raw = await file.read()
+    if not raw:
+        raise HTTPException(status_code=400, detail="Empty CSV")
+    try:
+        text = raw.decode("utf-8", errors="replace")
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Cannot decode CSV: {e}") from e
+
+    reader = csv.DictReader(io.StringIO(text))
+    if not reader.fieldnames:
+        raise HTTPException(status_code=400, detail="CSV has no header row")
+
+    # Normalise column lookup (case-insensitive)
+    norm = {h.lower().strip(): h for h in reader.fieldnames}
+    date_key = norm.get(date_column.lower())
+    gross_key = norm.get(gross_column.lower())
+    net_key = norm.get(net_column.lower())
+    if not (date_key and gross_key and net_key):
+        raise HTTPException(
+            status_code=400,
+            detail=f"CSV must include columns '{date_column}', '{gross_column}', '{net_column}' (case-insensitive). Found: {reader.fieldnames}",
+        )
+
+    entries: list[dict] = []
+    errors: list[str] = []
+    for i, row in enumerate(reader, start=2):  # data starts on line 2
+        try:
+            occurred = (row.get(date_key) or "").strip()[:10]
+            if not occurred:
+                continue
+            gross = float(str(row.get(gross_key, "0")).replace("$", "").replace(",", "").strip() or 0)
+            net = float(str(row.get(net_key, "0")).replace("$", "").replace(",", "").strip() or 0)
+            if net > gross:
+                errors.append(f"row {i}: net>{gross} > gross={gross}")
+                continue
+            entries.append({
+                "id": f"led-{uuid.uuid4().hex[:10]}",
+                "stream_id": stream_id,
+                "occurred_on": occurred,
+                "gross_amount": gross,
+                "net_amount": net,
+                "currency": "USD",
+                "source": source_label,
+                "proof_url": f"csv://{file.filename}",
+                "notes": f"row {i} of {file.filename}",
+                "created_at": datetime.now(timezone.utc).isoformat(),
+            })
+        except Exception as exc:
+            errors.append(f"row {i}: {exc}")
+
+    if entries:
+        await db.revenue_ledger.insert_many(entries)
+    await log_audit_event(
+        db, "ledger.csv.imported", "operator", "import",
+        "ledger_csv", file.filename or "upload.csv",
+        metadata={"stream_id": stream_id, "rows_imported": len(entries), "errors": len(errors)},
+    )
+
+    return {
+        "imported": len(entries),
+        "errors": errors,
+        "filename": file.filename,
+        "stream_id": stream_id,
+    }

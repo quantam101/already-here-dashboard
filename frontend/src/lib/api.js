@@ -91,3 +91,32 @@ export const publishingAPI = {
   update: (id, data) => api.patch(`/publishing/${id}`, data),
   stats: () => api.get("/publishing/stats/overview"),
 };
+
+// Scout API - free opportunity scraper
+export const scoutAPI = {
+  viral: (params) => api.get("/scout/viral", { params }),
+  grants: (params) => api.get("/scout/grants", { params }),
+  contracts: (params) => api.get("/scout/contracts", { params }),
+  news: (params) => api.get("/scout/news", { params }),
+  sources: () => api.get("/scout/sources"),
+};
+
+// Proposals API - grant/contract/invoice writer
+export const proposalsAPI = {
+  getAll: (params) => api.get("/proposals/", { params }),
+  getById: (id) => api.get(`/proposals/${id}`),
+  draft: (data) => api.post("/proposals/draft", data),
+  invoice: (data) => api.post("/proposals/invoice", data),
+  update: (id, data) => api.patch(`/proposals/${id}`, data),
+  stats: () => api.get("/proposals/stats/overview"),
+};
+
+// CSV import for ledger (multipart)
+export const ledgerImportCSV = async (streamId, file) => {
+  const form = new FormData();
+  form.append("stream_id", streamId);
+  form.append("file", file);
+  const res = await fetch(`${API}/ledger/import-csv`, { method: "POST", body: form });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+};

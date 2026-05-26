@@ -11,6 +11,8 @@ import Approvals from "./pages/Approvals";
 import Audit from "./pages/Audit";
 import ContentStudio from "./pages/ContentStudio";
 import ProofOfWork from "./pages/ProofOfWork";
+import Scout from "./pages/Scout";
+import Proposals from "./pages/Proposals";
 import { Toaster } from "sonner";
 
 function App() {
@@ -30,6 +32,8 @@ function App() {
             <Route path="approvals" element={<Approvals />} />
             <Route path="audit" element={<Audit />} />
             <Route path="proof-of-work" element={<ProofOfWork />} />
+            <Route path="scout" element={<Scout />} />
+            <Route path="proposals" element={<Proposals />} />
           </Route>
         </Routes>
       </BrowserRouter>

@@ -1,0 +1,47 @@
+{
+  "summary": "Iteration 5 - Scout scrapers, Proposals/Procurement writer (Gemini 3 Flash), CSV ledger import, Facebook+Reddit connectors, Procurement Scout Agent, Run Cycle pipeline, PWA. Backend: 50/50 pytest tests PASS including 13 new tests for Scout (sources/viral/grants/contracts/news), Proposals (invoice math, AI capability statement via Emergent LLM, list/get/patch with invalid-status guard, stats), Ledger CSV import (success + unknown-stream 404), Run Cycle (cycle_id 'cyc-', ideas+drafts), Connectors (facebook+reddit present). Frontend verified live on https://gmaos-control.preview.emergentagent.com: Sidebar Scout (Operations) + Proposals (Revenue) entries present, Command Center Run Cycle button green and functional (POST /api/cycle/run returns 3 opportunities scanned, 3 ideas, 12 publishing drafts), /scout renders 4 tabs (Viral 16 found, Grants 25 found, Contracts, News) with Refresh button and live data, Draft button on a Grants row created a real proposal (prop-394b80b020, doc_type=grant_proposal), /proposals page shows 4 stat tiles (Total/Grants/Contracts/Invoices $) and both New Invoice and New Draft dialogs open. PWA manifest served at /manifest.json with theme_color #22c55e (green), name 'Already Here Command OS', SVG icons 192/512. 9 connectors total, 11 agents total.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST /api/proposals/draft", "issue": "Returns 201 (Created) - test originally asserted 200; both are semantically acceptable but team should pick one convention. Other proposal POSTs (e.g., /invoice) also return 201. Document the convention (201 for all proposal creation) in OpenAPI."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "/scout - Grants/Contracts tab", "issues": ["Each row dumps a long raw HTML <a href=...> snippet from the RSS description below the title (truncated with ellipsis). Strip HTML and show clean summary text for readability; or hide the description entirely and rely on title + 'open' link."]},
+      {"screen": "Dialogs (Create Invoice, New Draft, Record Earnings, Log Post)", "issues": ["Console accessibility warning persists: 'Missing Description or aria-describedby={undefined} for {DialogContent}'. Non-blocking. Add <DialogDescription> to each Radix DialogContent."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/backend_test.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "(Optional, low-priority) Strip HTML from RSS description on Scout Grants/Contracts rows for cleaner UI.",
+    "(Optional, low-priority) Add DialogDescription/aria-describedby to all Radix DialogContent components.",
+    "(Optional) Standardize proposal-creation status code (201 vs 200) and update OpenAPI/docs."
+  ],
+  "critical_code_review_comments": [
+    "Scout sources endpoint correctly enforces Cost Guard contract: every source has cost=$0, no paid sources. Verified.",
+    "Proposals router uses Emergent LLM (Gemini 3 Flash) for capability_statement/grant_proposal/contract_bid/rfp_response and deterministic markdown for invoices - good separation that keeps invoice math testable without LLM flakiness.",
+    "Run Cycle endpoint composes Scout -> Studio idea creation -> Publishing drafts atomically and returns CycleResult; handled empty external responses gracefully (ideas_created=0 path also valid).",
+    "Ledger CSV import correctly validates stream_id (404 on unknown), parses date/gross/net headers, and returns {imported, errors} structured response.",
+    "Frontend Scout page tabs and Draft button wire through /api/proposals/draft - verified end-to-end: clicking Draft on a Grants row created prop-394b80b020.",
+    "PWA manifest is well-formed (start_url=/overview, standalone display, green theme #22c55e, embedded SVG icons keep file count low for offline)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/backend_test.py (added 9 new tests: AI capability statement draft, list+get proposals, patch status, scout grants/contracts/news, plus invoice math + invalid doc_type + run cycle + facebook/reddit verification — 50 tests total, all passing)"
+  ],
+  "success_rate": {
+    "backend": "100% (50/50)",
+    "frontend": "100% (all target flows verified)"
+  },
+  "test_credentials": "None required - dashboard is openly accessible. /app/memory/test_credentials.md not needed for this app.",
+  "seed_data_creation": "Re-seeded via `python /app/backend/seed_data.py` before the pytest run and again before frontend tests (10 streams, 11 agents, 5 builds, 4 deployments, 9 connectors, 3 audit events, 2 content pieces). After pytest, cleared revenue_ledger, publishing_log, and proposals collections so the frontend test started from a clean baseline. After the frontend test, the DB has 1 cycle_id, 3 content ideas, 12 publishing drafts, and 1 proposal — leave these or clear via the standard motor delete_many.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Backend test file `/app/backend/tests/backend_test.py` has 50 tests across Health/Revenue/Agents/Builds/Deployments/Content/Audit/Approvals/Studio/Ledger/Publishing/Scout/ScoutMore/Proposals/LedgerCSVImport/Cycle/ConnectorsExtra/LedgerExtra. Run with: `python -m pytest /app/backend/tests/backend_test.py -v --tb=short --junitxml=/app/test_reports/pytest/pytest_results.xml`. Always re-seed before running. The Run Cycle test will create content_ideas + publishing_log entries that persist; the CSV-import test creates ledger entries on rev-001. Clear collections between runs if you need a zero baseline: revenue_ledger, publishing_log, proposals, content_ideas (and the parent content_pieces if you want zero drafts). External scout APIs (Reddit/HN/Grants.gov/Google News) were reachable during this run (16 viral items, 25 grants); tests assert structure not specific titles so they remain resilient to upstream changes. AI proposal draft test uses ~10-15s of Emergent LLM time — keep timeout >=120s.",
+  "rca_of_the_issue": "N/A - no functional bugs. The 1 test failure encountered initially was an over-strict status code assertion (200 vs 201) in the newly added test; corrected the assertion to accept 200/201 since 201 is the more correct semantic for resource creation."
+}

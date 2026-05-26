@@ -1,6 +1,7 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useMemo } from "react";
-import { revenueAPI, contentAPI, agentsAPI, ledgerAPI } from "../lib/api";
+import { revenueAPI, contentAPI, agentsAPI, ledgerAPI, api } from "../lib/api";
+import { toast } from "sonner";
 import {
   REVENUE_CHART_DAYS,
   REVENUE_CHART_MIN,
@@ -52,6 +53,19 @@ export default function Overview() {
   const { data: progress } = useQuery({
     queryKey: ["ledgerProgress"],
     queryFn: () => ledgerAPI.progress().then((res) => res.data),
+  });
+
+  const queryClient = useQueryClient();
+  const runCycle = useMutation({
+    mutationFn: () => api.post("/cycle/run"),
+    onSuccess: (res) => {
+      const r = res.data;
+      toast.success(`Cycle complete - ${r.ideas_created} ideas, ${r.publishing_drafts} drafts`);
+      queryClient.invalidateQueries({ queryKey: ["publishing"] });
+      queryClient.invalidateQueries({ queryKey: ["publishingStats"] });
+      queryClient.invalidateQueries({ queryKey: ["content"] });
+    },
+    onError: (err) => toast.error(`Cycle failed: ${err?.response?.data?.detail || err.message}`),
   });
 
   // Memoize computed values
@@ -106,8 +120,13 @@ export default function Overview() {
         <div className="flex flex-wrap gap-3">
           <LogPostDialog />
           <RecordEarningsDialog />
-          <button data-testid="run-cycle-btn" className="px-4 py-2 bg-transparent border border-gray-600 text-gray-300 rounded-lg hover:bg-gray-800 transition-colors text-sm">
-            Run Cycle
+          <button
+            data-testid="run-cycle-btn"
+            onClick={() => runCycle.mutate()}
+            disabled={runCycle.isPending}
+            className="px-4 py-2 bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white rounded-lg transition-colors text-sm font-medium"
+          >
+            {runCycle.isPending ? "Running..." : "Run Cycle"}
           </button>
           <button data-testid="self-improve-btn" className="px-4 py-2 bg-transparent border border-green-500/30 text-green-400 rounded-lg hover:bg-green-500/10 transition-colors text-sm">
             Self-Improve

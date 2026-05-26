@@ -65,15 +65,17 @@ NEW_AGENT_NAMES = {"SEO Scout Agent", "Faceless Video Agent", "POD Designer Agen
 
 
 class TestAgents:
-    def test_list_agents_has_10(self, api):
+    def test_list_agents_has_at_least_10(self, api):
         r = api.get(f"{BASE_URL}/api/agents/")
         assert r.status_code == 200
         agents = r.json()
         assert isinstance(agents, list)
-        assert len(agents) == 10, f"Expected 10 agents, got {len(agents)}"
+        assert len(agents) >= 10, f"Expected >= 10 agents, got {len(agents)}"
         names = {a["name"] for a in agents}
         missing = NEW_AGENT_NAMES - names
         assert not missing, f"Missing new agents: {missing}"
+        # New procurement scout must exist too
+        assert "Procurement Scout Agent" in names
 
 
 # ---------------- Builds ----------------
@@ -325,6 +327,170 @@ class TestPublishing:
         d = r.json()
         assert "by_status" in d and "by_platform" in d
         assert set(d["by_status"].keys()) == {"drafted", "exported", "posted", "verified"}
+
+
+# ---------------- Scout (free scrapers) ----------------
+class TestScout:
+    def test_sources_list(self, api):
+        r = api.get(f"{BASE_URL}/api/scout/sources")
+        assert r.status_code == 200
+        d = r.json()
+        assert "sources" in d
+        source_ids = {s["id"] for s in d["sources"]}
+        assert {"reddit", "hackernews", "grants_gov", "sam_gov", "google_news"}.issubset(source_ids)
+        # Cost Guard: every source must be free
+        for s in d["sources"]:
+            assert s["cost"] == "$0", f"non-free source detected: {s}"
+
+    def test_viral_returns_list(self, api):
+        r = api.get(f"{BASE_URL}/api/scout/viral", params={"limit": 5})
+        assert r.status_code == 200
+        items = r.json()
+        assert isinstance(items, list)
+        # External services may be flaky - just ensure shape is correct
+        for item in items:
+            assert "id" in item and "title" in item and "source" in item and "kind" in item
+
+
+# ---------------- Proposals & Procurement ----------------
+class TestProposals:
+    def test_create_invoice(self, api):
+        r = api.post(f"{BASE_URL}/api/proposals/invoice", json={
+            "client_name": "pytest client",
+            "line_items": [
+                {"description": "Service A", "quantity": 2, "unit_price": 100},
+                {"description": "Service B", "quantity": 1, "unit_price": 50},
+            ],
+            "tax_pct": 8.5,
+        })
+        assert r.status_code == 201, r.text
+        d = r.json()
+        assert d["doc_type"] == "invoice"
+        # 200 + 50 = 250 subtotal; tax 21.25; grand 271.25
+        assert abs(d["metadata"]["subtotal"] - 250.0) < 0.01
+        assert abs(d["metadata"]["total"] - 271.25) < 0.01
+        assert "INVOICE" in d["content"]
+        assert "$271.25" in d["content"]
+
+    def test_invalid_doc_type_rejected(self, api):
+        r = api.post(f"{BASE_URL}/api/proposals/draft", json={
+            "doc_type": "BOGUS", "title": "x",
+        })
+        assert r.status_code == 400
+
+    def test_proposal_stats_overview(self, api):
+        r = api.get(f"{BASE_URL}/api/proposals/stats/overview")
+        assert r.status_code == 200
+        d = r.json()
+        assert "by_type" in d and "by_status" in d and "invoke_total_usd" in d or "invoice_total_usd" in d
+
+    @pytest.mark.timeout(120)
+    def test_ai_draft_capability_statement(self, api):
+        """AI-powered draft via Emergent LLM (Gemini 3 Flash)."""
+        r = api.post(f"{BASE_URL}/api/proposals/draft", json={
+            "doc_type": "capability_statement",
+            "title": "TEST AI Capability Statement",
+            "context": "Already Here Command OS - autonomous business OS",
+        }, timeout=120)
+        assert r.status_code in (200, 201), f"AI draft failed: {r.status_code} {r.text[:400]}"
+        d = r.json()
+        assert d["id"].startswith("prop-")
+        assert d["status"] == "draft"
+        assert len(d.get("content", "")) > 500, f"Content too short: {len(d.get('content', ''))}"
+
+    def test_list_and_get_proposals(self, api):
+        # list
+        r = api.get(f"{BASE_URL}/api/proposals/")
+        assert r.status_code == 200
+        items = r.json()
+        assert isinstance(items, list)
+        if items:
+            # get the first one
+            pid = items[0]["id"]
+            rg = api.get(f"{BASE_URL}/api/proposals/{pid}")
+            assert rg.status_code == 200
+            assert rg.json()["id"] == pid
+
+    def test_patch_proposal_status(self, api):
+        # Create an invoice first to have a real id
+        rc = api.post(f"{BASE_URL}/api/proposals/invoice", json={
+            "client_name": "TEST status patch",
+            "line_items": [{"description": "x", "quantity": 1, "unit_price": 10}],
+        })
+        assert rc.status_code == 201
+        pid = rc.json()["id"]
+        # finalize it
+        rp = api.patch(f"{BASE_URL}/api/proposals/{pid}", json={"status": "finalized"})
+        assert rp.status_code == 200
+        assert rp.json()["status"] == "finalized"
+        # invalid status
+        rb = api.patch(f"{BASE_URL}/api/proposals/{pid}", json={"status": "BOGUS"})
+        assert rb.status_code == 400
+
+
+# ---------------- Scout additional ----------------
+class TestScoutMore:
+    def test_grants_endpoint(self, api):
+        r = api.get(f"{BASE_URL}/api/scout/grants")
+        assert r.status_code == 200
+        assert isinstance(r.json(), list)
+
+    def test_contracts_endpoint(self, api):
+        r = api.get(f"{BASE_URL}/api/scout/contracts")
+        assert r.status_code == 200
+        assert isinstance(r.json(), list)
+
+    def test_news_endpoint(self, api):
+        r = api.get(f"{BASE_URL}/api/scout/news", params={"query": "AI"})
+        assert r.status_code == 200
+        assert isinstance(r.json(), list)
+
+
+# ---------------- CSV import for ledger ----------------
+class TestLedgerCSVImport:
+    def test_csv_import(self, api):
+        import io as _io
+        csv_text = "date,gross,net\n2026-05-15,100.00,80.00\n2026-05-20,50.00,40.00\n"
+        files = {"file": ("test_earnings.csv", _io.BytesIO(csv_text.encode()), "text/csv")}
+        data = {"stream_id": "rev-001"}
+        r = requests.post(f"{BASE_URL}/api/ledger/import-csv", files=files, data=data)
+        assert r.status_code == 200, r.text
+        d = r.json()
+        assert d["imported"] == 2
+        assert d["stream_id"] == "rev-001"
+
+    def test_csv_import_unknown_stream(self, api):
+        import io as _io
+        files = {"file": ("test.csv", _io.BytesIO(b"date,gross,net\n2026-05-15,1,1"), "text/csv")}
+        data = {"stream_id": "rev-does-not-exist"}
+        r = requests.post(f"{BASE_URL}/api/ledger/import-csv", files=files, data=data)
+        assert r.status_code == 404
+
+
+# ---------------- Run Cycle ----------------
+class TestCycle:
+    def test_run_cycle(self, api):
+        r = api.post(f"{BASE_URL}/api/cycle/run")
+        assert r.status_code == 200, r.text
+        d = r.json()
+        assert d["cycle_id"].startswith("cyc-")
+        # ideas_created >= 0 because external scout can be empty
+        assert d["ideas_created"] >= 0
+        # publishing_drafts = ideas * platforms; if ideas were created, drafts must also be > 0
+        if d["ideas_created"] > 0:
+            assert d["publishing_drafts"] > 0
+        assert "next_action" in d
+
+
+# ---------------- Connectors: Facebook + Reddit ----------------
+class TestConnectorsExtra:
+    def test_facebook_and_reddit_present(self, api):
+        r = api.get(f"{BASE_URL}/api/studio/connectors/")
+        assert r.status_code == 200
+        platforms = {c["platform"] for c in r.json()}
+        assert "facebook" in platforms, f"facebook connector missing - got {platforms}"
+        assert "reddit" in platforms, f"reddit connector missing - got {platforms}"
+
 
     def test_publishing_unknown_stream_404(self, api):
         r = api.post(f"{BASE_URL}/api/publishing/", json={
