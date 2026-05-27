@@ -1,0 +1,258 @@
+"""
+SovereignAgent — The governing AI at the top of the hierarchy.
+
+Architecture (declarative, not imperative):
+  ┌─────────────────────────────────────────────────┐
+  │              SOVEREIGN (this module)             │
+  │  • Reads system snapshot from DB collections    │
+  │  • Calls Gemini 2.0 Flash with YAML context     │
+  │  • Receives SovereignDecision JSON              │
+  │  • Dispatches agent tasks to AgentExecutor      │
+  │  • Logs every decision to audit trail           │
+  └────────────────────┬────────────────────────────┘
+                       │ dispatches
+         ┌─────────────┼──────────────┬──────────────┐
+         ▼             ▼              ▼              ▼
+    GuardAgent   ScoutAgent   ContentAgent  RevenueAgent
+    (15 min)     (hourly)     (6 hours)     (30 min)
+
+Decision schema the LLM must return:
+  {
+    "priority_action": "string",          # human-readable
+    "agents_to_run": ["agent-id", ...],   # subset of registered agents
+    "reasoning": "string",               # 1-2 sentences
+    "risk_level": "low|medium|high",
+    "estimated_tokens": 0,
+    "skip_reason": null                  # non-null if sovereign decides to skip
+  }
+
+The Sovereign's decision is cached for 55 minutes (decision_ttl_seconds from manifest).
+Only one active sovereign cycle runs at a time (asyncio.Lock).
+"""
+from __future__ import annotations
+
+import asyncio
+import json
+import logging
+import os
+import uuid
+from datetime import datetime, timezone
+from typing import Any
+
+from services.llm_runner import run_cached
+from services.distillation_service import to_yaml_payload
+from services.audit_service import log_audit_event
+
+logger = logging.getLogger("sovereign_agent")
+
+SOVEREIGN_COLLECTION = "sovereign_decisions"
+AGENT_RUNS_COLLECTION = "agent_runs"
+SYSTEM_HEALTH_COLLECTION = "system_health"
+SNAPSHOTS_COLLECTION = "revenue_snapshots"
+
+_SOVEREIGN_LOCK = asyncio.Lock()
+
+SOVEREIGN_SYSTEM = """You are the Sovereign AI governing the Already Here Command OS.
+Mission: maximize net revenue toward $25,000 while running at $0/month fixed cost.
+You receive a YAML system snapshot. Return ONLY a valid JSON SovereignDecision.
+Think step by step. Prefer high-leverage, low-cost, reversible actions.
+Never exceed safety limits. Protect the operator's interests above all."""
+
+DECISION_PROMPT = """System snapshot:
+{snapshot_yaml}
+
+Available agents: {agent_ids}
+
+Return ONLY valid JSON:
+{{
+  "priority_action": "one sentence describing the most important thing to do now",
+  "agents_to_run": ["list", "of", "agent-ids", "to", "dispatch"],
+  "reasoning": "1-2 sentences explaining why",
+  "risk_level": "low",
+  "estimated_tokens": 0,
+  "skip_reason": null
+}}
+
+Rules:
+- always include guard-agent in agents_to_run (safety first)
+- skip_reason should be null unless system is in a degraded/overbudget state
+- risk_level is low/medium/high based on tokens being spent
+- estimated_tokens is your rough estimate of total tokens all chosen agents will use"""
+
+
+class SovereignDecision:
+    __slots__ = (
+        "decision_id", "priority_action", "agents_to_run", "reasoning",
+        "risk_level", "estimated_tokens", "skip_reason",
+        "made_at", "session_id",
+    )
+
+    def __init__(self, raw: dict, session_id: str):
+        self.decision_id = f"sov-{uuid.uuid4().hex[:10]}"
+        self.priority_action = raw.get("priority_action", "")
+        self.agents_to_run: list[str] = raw.get("agents_to_run", [])
+        self.reasoning = raw.get("reasoning", "")
+        self.risk_level = raw.get("risk_level", "low")
+        self.estimated_tokens = int(raw.get("estimated_tokens", 0))
+        self.skip_reason = raw.get("skip_reason")
+        self.made_at = datetime.now(timezone.utc).isoformat()
+        self.session_id = session_id
+
+    def to_dict(self) -> dict:
+        return {k: getattr(self, k) for k in self.__slots__}
+
+
+async def _build_snapshot(db) -> dict:
+    """Collect a lightweight system state snapshot for the Sovereign's context."""
+    now = datetime.now(timezone.utc).isoformat()
+
+    # Recent agent run summary
+    try:
+        recent_runs = await db[AGENT_RUNS_COLLECTION].find(
+            {}, {"_id": 0, "agent_id": 1, "success": 1, "started_at": 1}
+        ).sort("started_at", -1).to_list(20)
+    except Exception:
+        recent_runs = []
+
+    # Revenue snapshot
+    try:
+        rev = await db[SNAPSHOTS_COLLECTION].find_one(
+            {}, {"_id": 0}, sort=[("timestamp", -1)]
+        )
+    except Exception:
+        rev = {}
+
+    # System health
+    try:
+        health = await db[SYSTEM_HEALTH_COLLECTION].find_one(
+            {}, {"_id": 0}, sort=[("timestamp", -1)]
+        )
+    except Exception:
+        health = {}
+
+    # Content queue depth
+    try:
+        queue_depth = await db["content_queue"].count_documents({"status": "ready"})
+    except Exception:
+        queue_depth = 0
+
+    # Opportunities unprocessed
+    try:
+        opp_count = await db["scout_opportunities"].count_documents(
+            {"processed": {"$ne": True}}
+        )
+    except Exception:
+        opp_count = 0
+
+    return {
+        "timestamp": now,
+        "revenue": {
+            "net_usd": (rev or {}).get("net_usd", 0.0),
+            "unlock_pct": (rev or {}).get("unlock_pct", 0.0),
+            "last_7d_usd": (rev or {}).get("revenue_last_7d_usd", 0.0),
+        },
+        "system": {
+            "overall": (health or {}).get("overall", "unknown"),
+            "memory_pct": (health or {}).get("memory_pct", 0.0),
+            "backend_alive": (health or {}).get("backend_alive", True),
+        },
+        "pipeline": {
+            "content_queue_ready": queue_depth,
+            "opportunities_unprocessed": opp_count,
+            "recent_agent_runs": [
+                {"agent_id": r.get("agent_id"), "success": r.get("success")}
+                for r in recent_runs[:10]
+            ],
+        },
+    }
+
+
+async def make_decision(db, registered_agent_ids: list[str]) -> SovereignDecision:
+    """One sovereign decision cycle. Safe to call from scheduler."""
+    async with _SOVEREIGN_LOCK:
+        session_id = f"sov-sess-{uuid.uuid4().hex[:8]}"
+        snapshot = await _build_snapshot(db)
+        snapshot_yaml = to_yaml_payload(snapshot)
+        agent_ids_str = ", ".join(registered_agent_ids)
+
+        # Safety guard: if system is degraded, skip non-essential agents
+        if snapshot.get("system", {}).get("overall") == "degraded":
+            logger.warning("Sovereign: system degraded — forcing guard-only run")
+            decision = SovereignDecision(
+                {
+                    "priority_action": "System degraded — run guard-agent only",
+                    "agents_to_run": ["guard-agent"],
+                    "reasoning": "Backend health check failed. No content or revenue work until system recovers.",
+                    "risk_level": "high",
+                    "estimated_tokens": 0,
+                    "skip_reason": None,
+                },
+                session_id,
+            )
+        else:
+            try:
+                raw_response = await run_cached(
+                    db,
+                    provider="gemini",
+                    model="gemini/gemini-2.0-flash",
+                    system_msg=SOVEREIGN_SYSTEM,
+                    prompt=DECISION_PROMPT.format(
+                        snapshot_yaml=snapshot_yaml,
+                        agent_ids=agent_ids_str,
+                    ),
+                    session_id=session_id,
+                    tier=3,
+                )
+                raw_json = raw_response.strip()
+                raw_json = __import__("re").sub(r"^```(?:json)?\s*", "", raw_json)
+                raw_json = __import__("re").sub(r"\s*```$", "", raw_json)
+                parsed = json.loads(raw_json)
+                # Validate agents_to_run are all registered
+                parsed["agents_to_run"] = [
+                    a for a in parsed.get("agents_to_run", [])
+                    if a in registered_agent_ids
+                ]
+                if "guard-agent" in registered_agent_ids:
+                    if "guard-agent" not in parsed["agents_to_run"]:
+                        parsed["agents_to_run"].insert(0, "guard-agent")
+                decision = SovereignDecision(parsed, session_id)
+            except Exception as e:
+                logger.exception("Sovereign LLM call failed: %s — falling back to default", e)
+                decision = SovereignDecision(
+                    {
+                        "priority_action": "LLM unavailable — run guard and scout agents",
+                        "agents_to_run": [a for a in ["guard-agent", "scout-agent"] if a in registered_agent_ids],
+                        "reasoning": f"Sovereign LLM failed ({e}). Conservative fallback.",
+                        "risk_level": "low",
+                        "estimated_tokens": 0,
+                        "skip_reason": None,
+                    },
+                    session_id,
+                )
+
+        # Persist decision
+        try:
+            await db[SOVEREIGN_COLLECTION].insert_one(decision.to_dict())
+        except Exception:
+            pass
+
+        # Audit
+        try:
+            await log_audit_event(
+                db, "sovereign.decision", "sovereign-v1", "decide",
+                "system", decision.decision_id,
+                metadata={
+                    "priority_action": decision.priority_action,
+                    "agents_to_run": decision.agents_to_run,
+                    "risk_level": decision.risk_level,
+                },
+            )
+        except Exception:
+            pass
+
+        logger.info(
+            "Sovereign decision %s: action='%s' agents=%s risk=%s",
+            decision.decision_id, decision.priority_action,
+            decision.agents_to_run, decision.risk_level,
+        )
+        return decision
