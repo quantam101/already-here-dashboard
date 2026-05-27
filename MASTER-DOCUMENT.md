@@ -1,431 +1,404 @@
 # Already Here Command OS — Master Document
 
-> Single source of truth. Everything you need to deploy, operate, and extend the
-> Already Here Command OS lives here or links from here.
-
-**Last updated:** 2026-05-26
-**Maintainer:** alreadyherellc@gmail.com
-**Repo:** https://github.com/Quantam101/already-here-dashboard
-**Domain:** https://alreadyherellc.com (target)
-**Cost target:** $0/month (Oracle Cloud Always Free)
+**One source of truth.** What this is, what's built, where it lives, how to deploy it, and how to operate it. Updated 2026-05-27.
 
 ---
 
-## 1. What this is
+## 1. Mission
 
-A two-node, $0/month, free-only-enforced AI ecosystem with:
+A single-operator, governed AI **revenue automation OS** that runs at **$0/month** on Oracle Cloud Always Free, generates content + grants + books via cached LLM calls, collects real money via Stripe, and tracks net profit toward a $25k commercialization unlock.
 
-- **Multi-agent fleet** (Scout, Proposal Writer, Books, AI Advisor, Cycle Scheduler)
-- **CapCut-style Content Factory** (ideas → AI-scripted hooks/body/CTA/shot-list → one-click copy-to-platform)
-- **Real Stripe Checkout** with UTM share-link attribution
-- **eBook + Audiobook generator** (browser SpeechSynthesis = $0 TTS)
-- **Bitwarden Secrets Vault** (read-only browser, fail-closed on missing creds)
-- **Free-Only Cost Guard** — blocks paid integrations, manual export fallback when APIs cost money
-- **Lifelong Catch and Correct** anomaly side-panel
-- **Two-node health** — Dashboard on `129.x.x.x` micro, ProfitEngine worker on a bigger node
+Domain: **`alreadyherellc.com`**
 
 ---
 
-## 2. Architecture
+## 2. Current State (snapshot)
 
-### 2.1 Topology
-
-```
-                    ┌─────────────────────┐
-GoDaddy DNS         │  alreadyherellc.com │
-─────────────────►  │  (A → OCI public IP)│
-                    └─────────────────────┘
-                              │ 443 HTTPS (Let's Encrypt via Caddy)
-                              ▼
-┌──────────────────────────────────────────────────┐
-│  OCI E2.1.Micro (1 OCPU, 1 GB RAM)               │
-│  Hostname: cmdos / DashboardAlways Free          │
-│                                                  │
-│  ┌──────────┐   ┌──────────┐                    │
-│  │  Caddy   │──►│  FastAPI │                    │
-│  │  static  │   │  + SQLite│                    │
-│  │  React   │   │  (~200MB)│                    │
-│  └──────────┘   └──────────┘                    │
-│       ▲                                          │
-│       │  Volume mount: SQLite DB                 │
-└──────────────────────────────────────────────────┘
-                              │ Optional: WORKER_BASE_URL
-                              ▼
-┌──────────────────────────────────────────────────┐
-│  profitengine-server (heavier shape)             │
-│  Hostname: profitengine-server                   │
-│  Role: rendering, distillation, FFmpeg, local AI │
-└──────────────────────────────────────────────────┘
-```
-
-### 2.2 Storage backend selector
-
-The same codebase runs against EITHER MongoDB or SQLite. Selected by env var:
-
-| Mode | When used | Trigger |
-|---|---|---|
-| **SQLite** | 1 GB RAM hosts (the Always Free micro) | `STORAGE_BACKEND=sqlite` |
-| **MongoDB** | Dev/preview, larger production nodes | (default) |
-
-The `oci-bootstrap.sh` script auto-detects RAM and picks the right one.
-
-### 2.3 Memory budget (SQLite mode, verified)
-
-| Component | RSS |
+| Surface | Status |
 |---|---|
-| FastAPI backend (uvicorn) | ~200 MB |
-| Caddy (static + proxy) | ~30 MB |
-| OS + Docker overhead | ~200 MB |
-| **Total** | **~430 MB / 1024 MB** |
-
-Headroom for daily auto-cycle spikes: ~590 MB.
-
----
-
-## 3. Repo layout
-
-```
-/
-├── backend/                          # FastAPI service
-│   ├── server.py                     # Entry point, backend selector lives here
-│   ├── seed_data.py                  # Idempotent demo seed (backend-agnostic)
-│   ├── requirements.txt              # Pinned deps (motor + aiosqlite both included)
-│   ├── routes/                       # 22 API modules — one file per domain
-│   │   ├── health.py                 # /api/health/, /api/health/nodes (two-node)
-│   │   ├── cost.py                   # /api/cost/status, /api/cost/policy
-│   │   ├── lcac.py                   # /api/lifelong-catch-correct/
-│   │   ├── system.py                 # /api/system/status (powers Quickstart Wizard)
-│   │   ├── secrets.py                # /api/secrets/status, /api/secrets/items
-│   │   ├── payments.py               # Stripe checkout + webhooks + UTM share-links
-│   │   ├── analytics.py              # Funnel, ROI, momentum, UTM attribution
-│   │   ├── advisor.py                # AI advisor (Emergent LLM)
-│   │   ├── scout.py                  # Reddit + HackerNews + Grants.gov scraping
-│   │   ├── proposals.py              # AI-drafted client proposals + grant apps
-│   │   ├── books.py                  # eBook generator + audiobook chapters
-│   │   ├── cycle.py                  # Daily auto-cycle scheduler
-│   │   ├── ledger.py                 # Real-earnings tracking + CSV import
-│   │   ├── publishing.py             # Manual ready-to-post export packs
-│   │   ├── content_factory.py        # Studio: ideas → scripts → schedule
-│   │   ├── audit.py, approvals.py, agents.py, builds.py, deployments.py
-│   │   └── ...
-│   ├── services/
-│   │   ├── sqlite_db.py              # Motor-API-compatible shim over aiosqlite
-│   │   ├── bitwarden_service.py      # bw CLI wrapper (read-only metadata)
-│   │   ├── scheduler_service.py      # Daily cycle scheduler
-│   │   └── content_generation_service.py
-│   └── tests/
-│       └── backend_test.py           # 104 pytest cases, pass on Mongo OR SQLite
-│
-├── frontend/                         # React (CRA)
-│   ├── src/
-│   │   ├── pages/                    # 14 pages: Overview, Scout, Proposals,
-│   │   │                             # Pricing, PaymentSuccess, Analytics,
-│   │   │                             # Books, Secrets, ContentStudio, Content,
-│   │   │                             # ProofOfWork, Agents, Builds, Deployments
-│   │   ├── components/               # Reusable: QuickstartWizard, IdeaDetailDialog
-│   │   │                             # ContentDetailDialog, AuthGate, ProfitMeter,
-│   │   │                             # RecordEarningsDialog, LogPostDialog, etc.
-│   │   ├── lib/
-│   │   │   ├── api.js                # Centralized axios client
-│   │   │   └── platformShare.js      # Reddit/LinkedIn/X share-URL builders
-│   │   └── App.js                    # Router
-│   └── package.json
-│
-├── docker-compose.yml                # Mongo stack (preview/dev/larger nodes)
-├── docker-compose.sqlite.yml         # SQLite stack (1 GB micro, prod target)
-├── Caddyfile                         # Mongo-stack Caddy (proxy /api → backend, / → frontend)
-├── Caddyfile.sqlite                  # SQLite-stack Caddy (static + reverse-proxy)
-│
-├── scripts/
-│   ├── oci-bootstrap.sh              # Main installer, RAM auto-detect
-│   ├── preflight.sh                  # 27-check pre-deploy validator
-│   ├── deploy-local.sh
-│   ├── backup.sh
-│   └── healthcheck.sh
-│
-├── cloud-init.sh                     # Top-level wrapper for OCI cloud-init paste
-│
-├── docs/
-│   └── COMMAND_OS_FREE_ONLY_FINAL_BUILD_DIRECTIVE.md
-│
-├── DEPLOY-TO-OCI.md                  # Original GoDaddy + OCI guide
-├── DEPLOY-TO-OCI-CLEAN.md            # Paste-resistant 2-line cloud-init flow ★ START HERE
-├── MASTER-DOCUMENT.md                # This file
-│
-├── memory/                           # Agent memory
-│   ├── PRD.md                        # 12 iterations of feature history
-│   └── test_credentials.md
-│
-└── test_reports/
-    └── iteration_*.json              # Testing-agent-generated reports
-```
+| Backend (FastAPI + dual-DB MongoDB/SQLite) | ✅ 116/116 pytest, ruff clean |
+| Frontend (React + Recharts + shadcn) | ✅ ESLint clean, smoke-screenshot verified |
+| Stripe integration | ✅ Test-mode wired, live-mode safety gate, auto-refunding smoke test |
+| LLM Cost Guard | ✅ Distillation cache + daily token cap + on-dashboard chart |
+| OCI deploy artifacts | ✅ Cloud-init + bootstrap + backup-cron all syntactically clean |
+| GitHub repo | ✅ Public at `Quantam101/already-here-dashboard` (cloud-init on `main` matches local) |
+| Production live URL | 🟡 In progress — Phase 1 deploy in flight |
 
 ---
 
-## 4. Deployment — the 4-step flow
-
-> ⚠️ **`DEPLOY-TO-OCI-CLEAN.md` is the canonical deploy guide.** Follow that, not anything older.
-
-### High-level
-
-| Step | What | Time | Output |
-|---|---|---|---|
-| 1 | Create OCI Always Free instance with the 2-line cloud-init paste | 5 min | New instance, port 22 open in ~60 sec |
-| 2 | Wait for cloud-init to finish (Docker + Node + React build + stack up) | ~10 min | Port 80 + 443 open, SQLite seeded |
-| 3 | SSH in once, edit `.env` to add `EMERGENT_LLM_KEY`, `OPERATOR_EMAIL`, `STRIPE_API_KEY` | 2 min | Backend restart picks up secrets |
-| 4 | GoDaddy DNS `@` → new IP | 5 min DNS propagation | https://alreadyherellc.com live with Let's Encrypt |
-
-### The 2-line cloud-init paste
+## 3. Architecture in 60 seconds
 
 ```
-#!/bin/bash
-curl -fsSL https://raw.githubusercontent.com/Quantam101/already-here-dashboard/main/cloud-init.sh | bash
+                                ┌────────────────────────────────────┐
+                                │   alreadyherellc.com  (browser)    │
+                                └────────────────┬───────────────────┘
+                                                 │ HTTPS (Let's Encrypt)
+                                                 ▼
+                              ┌──────────────────────────────────────┐
+                              │     Caddy reverse proxy (~30 MB)     │
+                              └──────────┬───────────────────────────┘
+                                         │
+                              ┌──────────┴──────────┐
+                              ▼                     ▼
+                  ┌───────────────────┐  ┌───────────────────────────┐
+                  │ React static SPA  │  │ FastAPI backend (~200 MB) │
+                  │ (built on host)   │  │  • routes/* (24 modules)  │
+                  └───────────────────┘  │  • services/* (incl. LLM  │
+                                         │    runner + distillation) │
+                                         │  • SQLite on host disk    │
+                                         └─────────────┬─────────────┘
+                                                       │
+                                          ┌────────────┴────────────┐
+                                          ▼                         ▼
+                                ┌──────────────────┐    ┌──────────────────┐
+                                │ Stripe (live)    │    │ Emergent LLM Key │
+                                │ + webhook        │    │ (Gemini, Claude) │
+                                └──────────────────┘    └──────────────────┘
 ```
 
-That's the entire OCI user-data field. `cloud-init.sh` on GitHub handles everything else:
+**Memory budget on 1 GB OCI Always Free host:**
+- Backend container: 200 MB (400 MB cap)
+- Caddy container: 30 MB (100 MB cap)
+- SQLite DB file: 200 KB after seed
+- **Total ≈ 230 MB. Plenty of headroom.**
 
-1. **Installs the operator SSH public key** (hardcoded — bypasses OCI textbox mangling)
-2. Installs base packages (curl, git, ca-certificates)
-3. Fetches and runs `scripts/oci-bootstrap.sh`
-4. Bootstrap auto-detects RAM: `<1500MB` → SQLite mode
-5. Installs Docker, Node, builds React static bundle, starts `docker-compose.sqlite.yml`
-6. Logs to `/var/log/command-os-bootstrap.log`
+---
 
-### Post-deploy secrets (Step 3)
+## 4. Features (what the operator can actually do)
 
-Once SSH works:
+| Feature | Route / API | Notes |
+|---|---|---|
+| Command Center dashboard | `/overview` | Revenue meter, stream health, cycle controls |
+| Content Factory (CapCut-style) | `/studio` + `/api/studio/*` | AI script generation, copy + open platform |
+| Books & Audiobooks generator | `/books` + `/api/books/*` | Chapter-by-chapter, MD/TXT downloads, browser TTS |
+| Proposal Engine | `/proposals` + `/api/proposals/*` | Grants/contracts/RFPs via Gemini |
+| Scout (viral + procurement) | `/scout` + `/api/scout/*` | Reddit, HN, Grants.gov, SAM.gov, Google News |
+| Auto-cycle scheduler | `/api/cycle/run` + scheduler_service | Daily 7 UTC by default |
+| Proof of Work ledger | `/proof-of-work` + `/api/ledger/*` | Immutable net-revenue tracking → $25k unlock |
+| Analytics dashboard | `/analytics` | Funnel, ROI, momentum, UTM attribution, AI Advisor |
+| AI Operations Advisor | `/api/advisor/recommend` | Claude Sonnet, cached, YAML-distilled context |
+| Stripe payments + smoke runner | `/pricing` + `/api/payments/*` | Live-mode gate, auto-refund $0.50 verifier |
+| Secrets vault (Bitwarden-compatible) | `/secrets` + `/api/secrets/*` | Read-only browser, no value leak |
+| Cost Guard + Distillation Card | `/analytics` top of page + `/api/distillation/*` | Tokens saved, $ saved, daily cap, hit-rate chart |
+| Quickstart Wizard | Auto-opens on first visit | 5-step onboarding |
+| Audit log | `/audit` + `/api/audit/*` | Every action immutably logged |
 
+---
+
+## 5. Cost Guard (the distillation pipeline)
+
+Every LLM call goes through one chokepoint: **`services/llm_runner.py::run_cached()`**
+
+```
+prompt → distill_text (semantic compression)
+       → cache_lookup (sha256 fingerprint of model+system+prompt)
+       → HIT?  →  serve cached response (0 tokens billed)
+       → MISS? →  check daily budget (LLM_DAILY_TOKEN_CAP env)
+                →  call LLM (Gemini or Claude)
+                →  cache_store (30-day TTL)
+                →  bump tokens-in/out counter in `llm_budget` collection
+```
+
+**Visible in the UI**: top of `/analytics` shows live tokens saved, $ saved (est), cache hit rate (last 14 days, line chart), today's usage vs cap.
+
+**Hard ceiling**: set `LLM_DAILY_TOKEN_CAP=50000` in `.env` and every LLM-calling route returns HTTP 429 when exceeded.
+
+---
+
+## 6. Deploy from zero — the 3 phases
+
+This is the canonical playbook. Each phase ends with a verification curl that must succeed before moving on.
+
+### Phase 1 — OCI deploy (~15 min)
+
+Full detail in `DEPLOY-FINAL.md`. Skeleton:
+
+1. OCI Console → Compute → Instances → **Create instance**
+   - Name: `cmdos`
+   - Image: **Canonical Ubuntu 22.04** ⚠️ NOT 20.04 (EOL, breaks Docker installer)
+   - Shape: `VM.Standard.E2.1.Micro` (Always Free)
+   - SSH keys: **Paste public keys** → your `~/.ssh/oci_cmdos.pub`
+   - Networking: assign public IPv4
+   - Advanced → Management → Initialization script:
+     ```bash
+     #!/bin/bash
+     curl -fsSL https://raw.githubusercontent.com/Quantam101/already-here-dashboard/main/cloud-init.sh | bash
+     ```
+2. **Security List** ingress (the VCN default usually has SSH but always verify):
+
+   | Source | Protocol | Port | Purpose |
+   |---|---|---|---|
+   | `0.0.0.0/0` | TCP | 22 | SSH |
+   | `0.0.0.0/0` | TCP | 80 | HTTP / Let's Encrypt challenge |
+   | `0.0.0.0/0` | TCP | 443 | HTTPS |
+
+3. GoDaddy DNS → `alreadyherellc.com` A-records `@` and `www` → instance public IP, TTL 600.
+
+4. SSH from your laptop:
+   ```powershell
+   ssh -i $HOME\.ssh\oci_cmdos ubuntu@<actual-ip-digits>
+   sudo tail -f /var/log/command-os-bootstrap.log
+   ```
+5. Wait for `BOOTSTRAP COMPLETE` (~10 min). Then drop in secrets:
+   ```bash
+   sudo nano /opt/command-os/backend/.env
+   ```
+   ```env
+   EMERGENT_LLM_KEY="sk-emergent-..."
+   STRIPE_API_KEY="sk_test_emergent"
+   OPERATOR_EMAIL="alreadyherellc@gmail.com"
+   ```
+   Save → restart:
+   ```bash
+   cd /opt/command-os && sudo docker compose -f docker-compose.sqlite.yml restart backend
+   ```
+
+**Phase 1 verification (must pass before Phase 2):**
 ```bash
-ssh -i ~/.ssh/cmdos -o StrictHostKeyChecking=no ubuntu@<NEW_IP>
-
-sudo nano /opt/command-os/backend/.env
-# Set these three lines:
-#   EMERGENT_LLM_KEY="sk-emergent-..."
-#   STRIPE_API_KEY="sk_test_emergent"  (or sk_live_... when ready)
-#   OPERATOR_EMAIL="your@gmail.com"
-
-cd /opt/command-os
-sudo docker compose -f docker-compose.sqlite.yml restart backend
-```
-
----
-
-## 5. API surface
-
-Every endpoint is prefixed `/api`.
-
-### 5.1 Core
-
-| Method | Path | Purpose |
-|---|---|---|
-| GET | `/health/` | Basic liveness |
-| GET | `/health/nodes` | Two-node health (dashboard + worker) |
-| GET | `/system/status` | Operator dashboard snapshot (Stripe mode, secrets, counts) |
-| GET | `/cost/status` | Free-only enforcement: blocked paid, blocked unknown, missing secrets |
-| GET | `/cost/policy` | Static policy doc + 9 approved free integrations |
-| GET | `/lifelong-catch-correct/` | Anomaly side-panel findings |
-| GET | `/secrets/status` | Bitwarden vault status (no values) |
-| GET | `/secrets/items` | Vault metadata browser (no values) |
-
-### 5.2 Money
-
-| Method | Path | Purpose |
-|---|---|---|
-| POST | `/payments/checkout` | Create Stripe Checkout session |
-| GET | `/payments/status/{session_id}` | Poll session result |
-| POST | `/payments/webhook` | Stripe → server (signature verified when secret set) |
-| POST | `/payments/share-link` | Generate UTM-tagged share URL |
-| GET | `/payments/stats` | Revenue + `by_utm_source` attribution |
-
-### 5.3 Engine
-
-| Method | Path | Purpose |
-|---|---|---|
-| GET | `/scout/sources` | Reddit + HackerNews + Grants opportunities |
-| POST | `/proposals/draft` | AI-write client proposal / grant application |
-| POST | `/cycle/run` | One-off run of the daily cycle |
-| POST | `/studio/ideas/` | Create content idea |
-| POST | `/studio/ideas/{id}/script` | Gemini-3-Flash drafts hook/body/CTA/shot list |
-| GET | `/studio/scripts/` | All generated scripts (operator browse) |
-| GET | `/ledger/` | Real-money entries |
-| POST | `/ledger/` | Record an earning |
-| POST | `/books/` | Generate eBook chapters |
-| GET | `/audit/` | Audit log |
-
-### 5.4 Registry
-
-| Method | Path | Purpose |
-|---|---|---|
-| GET | `/agents/` | All agents + run counts + success rate |
-| POST | `/agents/{id}/execute` | Manually invoke an agent |
-| GET | `/builds/` | Build registry |
-| GET | `/deployments/` | Deployment registry |
-| GET | `/content/` | Content library |
-| GET | `/publishing/` | Published posts with status |
-
----
-
-## 6. Free-Only Build Directive
-
-Hard rules baked into the cost guard (`routes/cost.py`):
-
-1. **Block paid** — any connector with `cost_class=paid_blocked` is rejected
-2. **Block unknown-cost** — `cost_class=unknown` is also blocked (fail-closed)
-3. **Manual export pack** for any platform where the publish API costs money (TikTok, IG, YouTube Shorts)
-4. **Fail-closed on missing secret** — endpoints requiring `EMERGENT_LLM_KEY` return 503 with `requires_secret` if not set
-5. **Approved free integrations only** (9 total):
-   - Emergent LLM (Universal Key) — Gemini/Claude/GPT text + Nano Banana images
-   - Stripe Checkout (test mode default)
-   - Reddit JSON API (no auth)
-   - HackerNews API (no auth)
-   - Grants.gov API (no auth)
-   - Browser SpeechSynthesis (audiobooks, $0 TTS)
-   - Vaultwarden self-hosted (or Bitwarden free tier)
-   - Caddy + Let's Encrypt (free HTTPS)
-   - Oracle Cloud Always Free (compute + bandwidth)
-
-Full directive: `docs/COMMAND_OS_FREE_ONLY_FINAL_BUILD_DIRECTIVE.md`
-
----
-
-## 7. Operations runbook
-
-### Daily
-
-```bash
-# Check stack health
 curl -fsS https://alreadyherellc.com/api/health/
-curl -fsS https://alreadyherellc.com/api/lifelong-catch-correct/
+# → {"status":"healthy","timestamp":"..."}
 ```
 
-### Weekly
+### Phase 2 — Stripe live mode (~10 min)
+
+Full detail in `LIVE_MODE_CHECKLIST.md`. Skeleton:
+
+1. Stripe dashboard → Developers → API keys → reveal `sk_live_...`
+2. Stripe → Developers → Webhooks → Add endpoint:
+   - URL: `https://alreadyherellc.com/api/payments/webhook`
+   - Events: `checkout.session.completed`
+   - Reveal signing secret `whsec_...`
+3. SSH in, edit `.env`:
+   ```env
+   STRIPE_API_KEY="sk_live_..."
+   STRIPE_WEBHOOK_SECRET="whsec_..."
+   ```
+   Restart backend.
+4. Verify readiness:
+   ```bash
+   curl -fsS https://alreadyherellc.com/api/payments/readiness | python3 -m json.tool
+   # → "go_live_ready": true, "issues": []
+   ```
+5. **Auto-refunding smoke test** (charges $0.50 with a real card, refunds within 10s):
+   ```bash
+   SMOKE=$(curl -fsS -X POST https://alreadyherellc.com/api/payments/smoke-test/create)
+   echo "$SMOKE" | python3 -m json.tool
+   ```
+   Open the returned `url` in a browser → pay $0.50 → then:
+   ```bash
+   SID=$(echo "$SMOKE" | python3 -c 'import sys,json;print(json.load(sys.stdin)["session_id"])')
+   curl -fsS https://alreadyherellc.com/api/payments/smoke-test/status/$SID | python3 -m json.tool
+   # → "verified_live_pipeline": true
+   ```
+
+If `verified_live_pipeline: true` → live Stripe integration is wired correctly end-to-end.
+
+### Phase 3 — Operational hardening (~5 min)
+
+1. **Nightly backups** (idempotent):
+   ```bash
+   sudo bash /opt/command-os/scripts/install-backup-cron.sh
+   ```
+   Verify: `systemctl list-timers cmdos-backup.timer` shows next 03:00 UTC fire.
+
+2. **(Optional) Daily LLM token cap** — gives the Cost Guard real teeth:
+   ```bash
+   echo 'LLM_DAILY_TOKEN_CAP=50000' | sudo tee -a /opt/command-os/backend/.env
+   cd /opt/command-os && sudo docker compose -f docker-compose.sqlite.yml restart backend
+   ```
+   Verify in browser: `/analytics` → Distillation card now shows `50,000 cap`.
+
+---
+
+## 7. Daily ops cheat sheet
 
 ```bash
-ssh ubuntu@<your-ip>
+# Health probe
+curl -fsS https://alreadyherellc.com/api/health/
 
-# Container health
-sudo docker compose -f /opt/command-os/docker-compose.sqlite.yml ps
+# Today's LLM token usage + savings
+curl -fsS https://alreadyherellc.com/api/distillation/budget | python3 -m json.tool
 
-# Disk usage (SQLite + Caddy data + logs)
-df -h
-sudo du -sh /opt/command-os /var/lib/docker
+# Progress toward $25k unlock
+curl -fsS https://alreadyherellc.com/api/ledger/stats/profit-progress | python3 -m json.tool
 
-# Auto-cycle ran on schedule?
-curl -fsS http://localhost:8001/api/audit/ | jq '.[] | select(.event_type=="cycle.run.success")' | head
-```
+# Manual backup
+ssh ubuntu@<ip>; sudo bash /opt/command-os/scripts/backup-sqlite.sh
 
-### Backup (do this monthly minimum)
+# Restart all containers
+ssh ubuntu@<ip>; sudo docker compose -f /opt/command-os/docker-compose.sqlite.yml restart
 
-```bash
-sudo docker compose -f /opt/command-os/docker-compose.sqlite.yml exec backend \
-  sqlite3 /app/data/command_os.db ".backup '/app/data/backup-$(date +%F).db'"
+# Tail logs
+ssh ubuntu@<ip>; sudo docker compose -f /opt/command-os/docker-compose.sqlite.yml logs -f --tail 100
 
-# Then scp it off-box:
-scp ubuntu@<ip>:/var/lib/docker/volumes/*/sqlite_data/_data/backup-*.db ~/backups/
-```
-
-### Code update
-
-```bash
-cd /opt/command-os
-sudo git pull
-sudo docker compose -f docker-compose.sqlite.yml up -d --build
-```
-
-### Switch Stripe to LIVE mode
-
-```bash
-# 1. Stripe Dashboard → API Keys → reveal live key (sk_live_...)
-# 2. Stripe Dashboard → Webhooks → Add endpoint:
-#    URL:    https://alreadyherellc.com/api/payments/webhook
-#    Events: checkout.session.completed, checkout.session.expired
-#    Copy the signing secret (whsec_...)
-
-sudo nano /opt/command-os/backend/.env
-# Update:
-#   STRIPE_API_KEY="sk_live_..."
-#   STRIPE_WEBHOOK_SECRET="whsec_..."
-
-cd /opt/command-os
-sudo docker compose -f docker-compose.sqlite.yml restart backend
+# Update to latest code from GitHub
+ssh ubuntu@<ip>; cd /opt/command-os && sudo git pull && sudo docker compose -f docker-compose.sqlite.yml up -d --build
 ```
 
 ---
 
-## 8. Test coverage
+## 8. Files of record
 
-**104 backend tests in `backend/tests/backend_test.py`. Both backends pass 104/104.**
-
-Run locally:
-
-```bash
-cd /app
-python -m pytest backend/tests/backend_test.py -v
 ```
-
-CI guarantees:
-
-- Every route module has at least 1 test
-- Free-only directive endpoints (`/cost/*`, `/health/nodes`, `/lifelong-catch-correct/`) have shape + no-secret-leak tests
-- Stripe payment flow has happy-path + UTM-attribution test
-- Books AI generation tests gated behind LLM key presence
+/app/
+├── cloud-init.sh                          # 2-line OCI user-data target (on GitHub)
+├── scripts/
+│   ├── oci-bootstrap.sh                   # RAM-aware (SQLite for <1500 MB)
+│   ├── install-backup-cron.sh             # systemd timer installer (nightly 03:00 UTC)
+│   ├── backup-sqlite.sh                   # atomic sqlite3 .backup + tar + 14-day retention
+│   ├── backup.sh                          # legacy MongoDB backup (kept for non-SQLite hosts)
+│   ├── deploy-local.sh                    # laptop fallback (Docker or native)
+│   ├── healthcheck.sh
+│   ├── preflight.sh
+│   ├── restore.sh
+│   └── validate-oci.sh
+├── docker-compose.sqlite.yml              # 2-container stack for 1 GB RAM
+├── docker-compose.yml                     # MongoDB stack (preview/dev)
+├── Caddyfile.sqlite                       # production reverse proxy
+├── Caddyfile                              # preview proxy
+├── GO-LIVE.md                             # ⭐ 3-phase final runbook
+├── DEPLOY-FINAL.md                        # Phase 1 detail
+├── LIVE_MODE_CHECKLIST.md                 # Phase 2 detail
+├── HANDOFF.md                             # For a DevOps freelancer if needed
+├── MASTER-DOCUMENT.md                     # ⭐ THIS FILE
+├── memory/PRD.md                          # Product spec + iteration log
+├── backend/
+│   ├── server.py                          # dual-DB switching logic
+│   ├── seed_data.py                       # backend-agnostic seed
+│   ├── routes/                            # 24 route modules
+│   ├── services/
+│   │   ├── llm_runner.py                  # ⭐ single chokepoint for LLM calls
+│   │   ├── distillation_service.py        # cache + compression + YAML payloads
+│   │   ├── sqlite_db.py                   # Motor-API-compatible SQLite wrapper
+│   │   ├── bitwarden_service.py
+│   │   ├── content_generation_service.py
+│   │   ├── scheduler_service.py
+│   │   ├── audit_service.py
+│   │   └── export_service.py
+│   ├── tests/backend_test.py              # 116 tests, dual-DB safe
+│   └── requirements.txt
+└── frontend/
+    ├── public/manifest.json               # PWA installable
+    └── src/
+        ├── App.js
+        ├── lib/
+        │   ├── api.js                     # all axios endpoints
+        │   ├── clipboard.js                # ⭐ iframe-safe copy + open helpers
+        │   └── platformShare.js           # share-link builders per platform
+        ├── pages/                          # Overview, Analytics, ContentStudio, ...
+        └── components/                     # AuthGate, DashboardLayout, ...
+```
 
 ---
 
-## 9. Known gaps and roadmap
+## 9. Environment variables (every one explained)
 
-| Item | Status | Priority |
+| Var | Required? | Default | Purpose |
+|---|---|---|---|
+| `MONGO_URL` | Only if `STORAGE_BACKEND=mongodb` | (preview only) | MongoDB connection |
+| `DB_NAME` | Always | `command_os` | Mongo db name or SQLite logical name |
+| `STORAGE_BACKEND` | Production | `mongodb` (preview) / `sqlite` (OCI) | Switches engine |
+| `SQLITE_PATH` | SQLite mode only | `/app/backend/data/command_os.db` | DB file location |
+| `EMERGENT_LLM_KEY` | For any LLM feature | — | Universal key (Gemini + Claude) |
+| `STRIPE_API_KEY` | For payments | `sk_test_emergent` placeholder | `sk_test_...` or `sk_live_...` |
+| `STRIPE_WEBHOOK_SECRET` | **Required in live mode** | — | Without it, live-mode checkout returns 503 |
+| `OPERATOR_EMAIL` | Auth gate | (open if unset) | Locks dashboard to one Google account |
+| `SYSTEM_MODE` | Tests | `production` | `test` disables scheduler |
+| `DAILY_CYCLE_HOUR_UTC` | — | `7` | Auto-cycle daily fire hour |
+| `LLM_DAILY_TOKEN_CAP` | Optional | `0` (unlimited) | Hard ceiling; 429 when hit |
+| `LLM_CACHE_TTL_SECONDS` | — | `2592000` (30d) | Distillation cache TTL |
+| `TOKEN_COST_PER_1K` | Telemetry | `0.0001` | Used for $ saved estimate |
+| `WORKER_BASE_URL` | Optional | — | Two-node health link to `profitengine-server` |
+| `BW_SESSION` | Only if Bitwarden CLI installed | — | Vault unlock token |
+| `CORS_ORIGINS` | — | `*` | Comma-separated allowlist |
+| `AUTO_CYCLE_ENABLED` | — | `true` | Disable to silence the scheduler |
+
+**Reading rule:** every backend env read uses `os.environ.get(...)` with no string default fallback for required values — missing config fails fast.
+
+---
+
+## 10. Where to find what's broken
+
+| Symptom | First check | Then |
 |---|---|---|
-| Worker bridge (dashboard → profitengine-server task queue) | Pending | P1 |
-| Self-hosted Vaultwarden Docker service | Optional | P2 |
-| Auto-publish via free platform APIs (Reddit, LinkedIn UGC) | Currently manual | P2 |
-| Email digest of daily ledger + LCAC findings | Pending | P3 |
-| Crash/error tracking (Sentry free tier) | Pending | P3 |
-| Backup automation via cron | Manual | P2 |
-| Stripe live-mode swap helper script | Manual | P3 |
+| `/api/health/` returns 5xx | `sudo docker compose -f /opt/command-os/docker-compose.sqlite.yml logs backend --tail 100` | If module import error, missing dep in `requirements.txt` |
+| 404 on every API call | Frontend hitting wrong host | Verify `REACT_APP_BACKEND_URL` baked into the bundle (rebuild required if changed) |
+| Stripe checkout silently fails | `/api/payments/readiness` | Issues list tells you exactly what's missing |
+| LLM calls return 429 | `/api/distillation/budget` | `over_cap: true` → bump `LLM_DAILY_TOKEN_CAP` or wait for UTC midnight |
+| Dashboard shows "Loading…" forever | Auth gate stuck | Check `OPERATOR_EMAIL` matches the Google account you logged in with |
+| Caddy HTTPS cert won't issue | DNS not propagated | `dig +short alreadyherellc.com @1.1.1.1` should match instance IP |
+| Bootstrap log shows `docker-model-plugin` error | Ubuntu 20.04 image | Terminate, recreate with **Ubuntu 22.04** |
+| `Permission denied (publickey)` from SSH | Wrong key | Verify the public key pasted into OCI matches the private key on your laptop |
+| `Connection timed out` on port 22 | Security List | Add ingress TCP 22 from `0.0.0.0/0` |
 
 ---
 
-## 10. Emergency contacts / when things break
+## 11. The 25k unlock loop
 
-| Symptom | First check | Fix |
-|---|---|---|
-| `https://...` won't load | DNS via `dig +short alreadyherellc.com @1.1.1.1` | Wait propagation or fix GoDaddy A-record |
-| Site loads but Caddy shows 502 | `docker compose -f docker-compose.sqlite.yml logs backend --tail 50` | Restart backend |
-| Backend boots but APIs return 500 | Inside backend container: `cat /app/.env` | Check `EMERGENT_LLM_KEY` is set |
-| Google login rejects your email | Operator email mismatch | Update `OPERATOR_EMAIL` in `.env`, restart backend |
-| Out of disk | `df -h` | Trim Docker: `sudo docker system prune -af` |
-| Out of RAM | `free -h` then `sudo docker stats` | Restart whichever container is hot |
+This is the operator's daily flow:
 
-Full deployment-recovery procedures in `DEPLOY-TO-OCI-CLEAN.md` Section "If something still breaks".
+1. **Generate** content via `/studio` (or wait for the daily auto-cycle at 07:00 UTC)
+2. **Post** to platforms with the Copy + Open buttons (or use exported pack for TikTok/IG/YT)
+3. **Log post** in dashboard → `publishing_log` updates
+4. **Collect revenue** when platforms pay out
+5. **Record earnings** in dashboard → `revenue_ledger` updates
+6. **Watch the meter** at `/overview` → cumulative net climbs toward $25k
+7. **At $25k cumulative net** → meter shows `UNLOCKED` → commercialization green light
 
----
-
-## 11. Cost ledger (verify monthly)
-
-| Resource | Expected $/mo | Actual |
-|---|---|---|
-| Oracle Cloud E2.1.Micro | $0 (Always Free) | $0 |
-| Outbound bandwidth (10 TB/mo cap) | $0 | $0 |
-| GoDaddy domain renewal (annual) | ~$1/mo amortized | — |
-| Let's Encrypt cert | $0 | $0 |
-| Stripe fees | 2.9% + $0.30 per txn | (only on real sales) |
-| Emergent LLM (Universal Key) | included in plan | — |
-| **TOTAL infrastructure** | **$0/month** | — |
+The AI Advisor on `/analytics` reads the live snapshot every 60s and recommends the single highest-leverage next action.
 
 ---
 
-## 12. Quick-reference URLs
+## 12. Cost ledger
 
-- **Live site:** https://alreadyherellc.com
-- **Health:** https://alreadyherellc.com/api/health/
-- **Cost status:** https://alreadyherellc.com/api/cost/status
-- **Repo:** https://github.com/Quantam101/already-here-dashboard
-- **Emergent Universal Key:** https://app.emergent.sh → Profile → Universal Key
-- **Stripe Dashboard:** https://dashboard.stripe.com
-- **OCI Console:** https://cloud.oracle.com
-- **GoDaddy DNS:** https://dcc.godaddy.com → My Products → DNS for alreadyherellc.com
+| Item | Monthly |
+|---|---|
+| OCI VM.Standard.E2.1.Micro (Always Free) | $0 |
+| Let's Encrypt (HTTPS via Caddy) | $0 |
+| SQLite on host disk | $0 |
+| GoDaddy domain (annually $18 / 12) | $1.50 |
+| Stripe transaction fees | 2.9% + $0.30 per sale (no base) |
+| Emergent LLM Key | Cost-Guarded (cap-enforced) |
+| **Fixed monthly cost** | **~$1.50** |
 
 ---
 
-*End of master document. Iterations recorded in `memory/PRD.md`.*
+## 13. Roadmap (post-go-live)
+
+P0 (next sprint):
+- [ ] Land Phase 1-3 of `GO-LIVE.md` (in progress)
+- [ ] First share-link campaign with UTM tracking on one channel
+
+P1:
+- [ ] Per-route LLM cost breakdown in `/distillation/stats` (books vs proposals vs advisor)
+- [ ] Sidebar "Cost Guard fired N times today" badge
+- [ ] Buffer/Hootsuite share fallback chips
+
+P2:
+- [ ] Switch unbounded `find().to_list()` queries to MongoDB `aggregate()` pipelines (deployment-agent finding)
+- [ ] Stripe Connect / Tax when expanding beyond solo use
+- [ ] Public-facing pricing page rebuild with testimonials
+
+---
+
+## 14. Quick links
+
+- Repo: https://github.com/Quantam101/already-here-dashboard
+- Preview (dev): https://gmaos-control.preview.emergentagent.com
+- Production (target): https://alreadyherellc.com
+- Stripe dashboard: https://dashboard.stripe.com
+- Emergent Universal Key: app.emergent.sh → Profile → Universal Key
+- GoDaddy DNS: goto.godaddy.com → My Products → DNS
+- OCI console: https://cloud.oracle.com
+
+---
+
+## 15. If you only read one section
+
+**You are mid-Phase-1 deploy.** Three things will get you live:
+
+1. SSH in to the OCI box. If you're seeing `Connection timed out`, open port 22 in the VCN Security List (see § 6 Phase 1 step 2).
+2. Run `sudo tail -f /var/log/command-os-bootstrap.log` and wait for `BOOTSTRAP COMPLETE`.
+3. Edit `/opt/command-os/backend/.env` to add `EMERGENT_LLM_KEY`, `STRIPE_API_KEY`, `OPERATOR_EMAIL` → restart backend.
+
+Then run the Phase-1 verification curl. Paste me the output and we move to Phase 2.
