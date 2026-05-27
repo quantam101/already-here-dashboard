@@ -6,12 +6,9 @@ export const API = `${BACKEND_URL}/api`;
 export const api = axios.create({
   baseURL: API,
   withCredentials: true,
-  headers: {
-    "Content-Type": "application/json",
-  },
+  headers: { "Content-Type": "application/json" },
 });
 
-// Revenue API
 export const revenueAPI = {
   getAll: () => api.get("/revenue/"),
   getStats: () => api.get("/revenue/stats/overview"),
@@ -21,7 +18,6 @@ export const revenueAPI = {
   delete: (id) => api.delete(`/revenue/${id}`),
 };
 
-// Content API
 export const contentAPI = {
   getAll: (params) => api.get("/content/", { params }),
   getById: (id) => api.get(`/content/${id}`),
@@ -30,7 +26,6 @@ export const contentAPI = {
   delete: (id) => api.delete(`/content/${id}`),
 };
 
-// Content Studio (ideas + scripts)
 export const studioAPI = {
   getIdeas: () => api.get("/studio/ideas/"),
   createIdea: (data) => api.post("/studio/ideas/", data),
@@ -41,7 +36,6 @@ export const studioAPI = {
   getScheduled: () => api.get("/studio/schedule/"),
 };
 
-// Agents API
 export const agentsAPI = {
   getAll: (params) => api.get("/agents/", { params }),
   getById: (id) => api.get(`/agents/${id}`),
@@ -50,7 +44,6 @@ export const agentsAPI = {
   execute: (id) => api.post(`/agents/${id}/execute`),
 };
 
-// Builds API
 export const buildsAPI = {
   getAll: (params) => api.get("/builds/", { params }),
   getById: (id) => api.get(`/builds/${id}`),
@@ -58,7 +51,6 @@ export const buildsAPI = {
   update: (id, data) => api.patch(`/builds/${id}`, data),
 };
 
-// Deployments API
 export const deploymentsAPI = {
   getAll: (params) => api.get("/deployments/", { params }),
   getById: (id) => api.get(`/deployments/${id}`),
@@ -66,7 +58,6 @@ export const deploymentsAPI = {
   update: (id, data) => api.patch(`/deployments/${id}`, data),
 };
 
-// Approvals API
 export const approvalsAPI = {
   getAll: (params) => api.get("/approvals/", { params }),
   getById: (id) => api.get(`/approvals/${id}`),
@@ -74,21 +65,17 @@ export const approvalsAPI = {
   decide: (id, data) => api.post(`/approvals/${id}/decide`, data),
 };
 
-// Audit API
 export const auditAPI = {
   getAll: (params) => api.get("/audit/", { params }),
   getStats: () => api.get("/audit/stats"),
 };
 
-// Health API
 export const healthAPI = {
   check: () => api.get("/health"),
-  checkService: (service, url) =>
-    api.get(`/health/check/${service}`, { params: { url } }),
+  checkService: (service, url) => api.get(`/health/check/${service}`, { params: { url } }),
   getHistory: (params) => api.get("/health/history", { params }),
 };
 
-// Ledger API - proof-of-work revenue entries
 export const ledgerAPI = {
   getAll: (params) => api.get("/ledger/", { params }),
   create: (data) => api.post("/ledger/", data),
@@ -96,7 +83,6 @@ export const ledgerAPI = {
   byStream: () => api.get("/ledger/stats/by-stream"),
 };
 
-// Publishing API - proof-of-work content distribution log
 export const publishingAPI = {
   getAll: (params) => api.get("/publishing/", { params }),
   create: (data) => api.post("/publishing/", data),
@@ -104,7 +90,6 @@ export const publishingAPI = {
   stats: () => api.get("/publishing/stats/overview"),
 };
 
-// Scout API - free opportunity scraper
 export const scoutAPI = {
   viral: (params) => api.get("/scout/viral", { params }),
   grants: (params) => api.get("/scout/grants", { params }),
@@ -113,7 +98,6 @@ export const scoutAPI = {
   sources: () => api.get("/scout/sources"),
 };
 
-// Proposals API - grant/contract/invoice writer
 export const proposalsAPI = {
   getAll: (params) => api.get("/proposals/", { params }),
   getById: (id) => api.get(`/proposals/${id}`),
@@ -123,7 +107,6 @@ export const proposalsAPI = {
   stats: () => api.get("/proposals/stats/overview"),
 };
 
-// CSV import for ledger (multipart)
 export const ledgerImportCSV = async (streamId, file) => {
   const form = new FormData();
   form.append("stream_id", streamId);
@@ -133,7 +116,6 @@ export const ledgerImportCSV = async (streamId, file) => {
   return res.json();
 };
 
-// Payments
 export const paymentsAPI = {
   packages: () => api.get("/payments/packages"),
   checkout: (data) => api.post("/payments/checkout", data),
@@ -142,7 +124,6 @@ export const paymentsAPI = {
   stats: () => api.get("/payments/stats"),
 };
 
-// Analytics
 export const analyticsAPI = {
   dashboard: () => api.get("/analytics/dashboard"),
   funnel: () => api.get("/analytics/funnel"),
@@ -153,13 +134,11 @@ export const analyticsAPI = {
   momentum: () => api.get("/analytics/momentum"),
 };
 
-// AI Advisor
 export const advisorAPI = {
   recommend: () => api.post("/advisor/recommend"),
   recent: () => api.get("/advisor/recent"),
 };
 
-// Books
 export const booksAPI = {
   getAll: (params) => api.get("/books/", { params }),
   getById: (id) => api.get(`/books/${id}`),
@@ -170,7 +149,6 @@ export const booksAPI = {
   downloadTxt: (id) => `${API}/books/${id}/download.txt`,
 };
 
-// Auth (optional - only used if backend has OPERATOR_EMAIL set)
 export const authAPI = {
   config: () => api.get("/auth/config"),
   me: () => api.get("/auth/me"),
@@ -178,22 +156,28 @@ export const authAPI = {
   logout: () => api.post("/auth/logout"),
 };
 
-// System status (drives Quickstart Wizard)
 export const systemAPI = {
   status: () => api.get("/system/status"),
 };
 
-// Secrets (Bitwarden/Vaultwarden read-only browser)
 export const secretsAPI = {
   status: () => api.get("/secrets/status"),
   items: () => api.get("/secrets/items"),
 };
 
-// Data Distillation telemetry
 export const distillationAPI = {
   stats: () => api.get("/distillation/stats"),
   config: () => api.get("/distillation/config"),
   budget: () => api.get("/distillation/budget"),
   budgetHistory: (days = 14) => api.get(`/distillation/budget/history?days=${days}`),
   clear: () => api.post("/distillation/clear"),
+};
+
+// ── Sovereign Governance API (new in v2.0) ────────────────────
+export const sovereignAPI = {
+  status: () => api.get("/sovereign/status"),
+  history: (limit = 20) => api.get(`/sovereign/history?limit=${limit}`),
+  trigger: () => api.post("/sovereign/trigger"),
+  agents: () => api.get("/sovereign/agents"),
+  clearCache: () => api.delete("/sovereign/cache"),
 };
