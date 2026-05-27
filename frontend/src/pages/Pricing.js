@@ -3,6 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import { useState } from "react";
 import { CheckCircle2, Zap, Rocket, Share2, Copy } from "lucide-react";
 import { paymentsAPI, api } from "../lib/api";
+import { copyToClipboard } from "../lib/clipboard";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -149,9 +150,10 @@ function ShareLinkDialog() {
     }
   };
 
-  const copy = () => {
-    navigator.clipboard.writeText(generated);
-    toast.success("Share link copied");
+  const copy = async () => {
+    const ok = await copyToClipboard(generated);
+    if (ok) toast.success("Share link copied");
+    else toast.error("Couldn't auto-copy — select the link and copy manually");
   };
 
   return (

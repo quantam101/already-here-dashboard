@@ -6,12 +6,18 @@ import {
 import { Button } from "@/components/ui/button";
 import { studioAPI } from "../lib/api";
 import { platformShareUrl, platformLabel } from "../lib/platformShare";
+import { copyToClipboard, openInNewTab } from "../lib/clipboard";
 import { toast } from "sonner";
 
-function copyText(text, label = "Script") {
+async function copyText(text, label = "Script") {
   if (!text) return;
-  navigator.clipboard.writeText(text);
-  toast.success(`${label} copied to clipboard`);
+  const ok = await copyToClipboard(text);
+  if (ok) {
+    toast.success(`${label} copied to clipboard`);
+  } else {
+    // Last-resort fallback: surface the text so the operator can select-all manually
+    toast.error(`Couldn't auto-copy ${label} — open in production app or copy from the panel below`);
+  }
 }
 
 function fullScript(s) {
@@ -27,19 +33,31 @@ function ScriptCard({ script, idea }) {
   const platforms = idea?.target_platforms || [];
   const fullText = fullScript(script);
 
-  const copyAndOpen = (platform) => {
+  const copyAndOpen = async (platform) => {
     const shareUrl = platformShareUrl(platform, {
       title: idea?.title || "",
       body: fullText,
       url: idea?.inspiration_source || "",
     });
     // Always copy the full script — sites that don't accept prefill at least let you paste
-    navigator.clipboard.writeText(fullText);
+    const copied = await copyToClipboard(fullText);
+    const label = platformLabel(platform);
+
     if (shareUrl) {
-      window.open(shareUrl, "_blank", "noopener,noreferrer");
-      toast.success(`Script copied · opening ${platformLabel(platform)}…`);
+      const opened = openInNewTab(shareUrl);
+      if (opened) {
+        toast.success(`${copied ? "Script copied · " : ""}Opening ${label}…`);
+      } else {
+        // window.open blocked (iframe / popup blocker) — surface the URL
+        toast.message(`${copied ? "Script copied. " : ""}Open ${label} manually:`, {
+          description: shareUrl,
+          duration: 15000,
+        });
+      }
+    } else if (copied) {
+      toast.success(`Script copied · open ${label} manually and paste`);
     } else {
-      toast.success(`Script copied · open ${platformLabel(platform)} manually and paste`);
+      toast.error(`Couldn't auto-copy — select text below and copy manually`);
     }
   };
 

@@ -4,12 +4,14 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { copyToClipboard } from "../lib/clipboard";
 import { toast } from "sonner";
 
-function copy(text, label = "Content") {
+async function copy(text, label = "Content") {
   if (!text) return;
-  navigator.clipboard.writeText(text);
-  toast.success(`${label} copied to clipboard`);
+  const ok = await copyToClipboard(text);
+  if (ok) toast.success(`${label} copied to clipboard`);
+  else toast.error(`Couldn't auto-copy — select the text and copy manually`);
 }
 
 export default function ContentDetailDialog({ item, open, onOpenChange }) {
