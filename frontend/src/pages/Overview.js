@@ -1,16 +1,13 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useMemo } from "react";
-import { revenueAPI, contentAPI, agentsAPI, ledgerAPI, api } from "../lib/api";
+import { motion } from "framer-motion";
+import { useNavigate } from "react-router-dom";
+import { revenueAPI, contentAPI, agentsAPI, ledgerAPI, sovereignAPI, api } from "../lib/api";
 import { toast } from "sonner";
 import {
-  REVENUE_CHART_DAYS,
-  REVENUE_CHART_MIN,
-  REVENUE_CHART_RANGE,
-  DAYS_PER_MONTH,
-  HEALTH_BASE,
-  HEALTH_INCREMENT_FACTOR,
-  HEALTH_INCREMENT_RANGE,
-  TREND_DOWN_INTERVAL,
+  REVENUE_CHART_DAYS, REVENUE_CHART_MIN, REVENUE_CHART_RANGE,
+  DAYS_PER_MONTH, HEALTH_BASE, HEALTH_INCREMENT_FACTOR,
+  HEALTH_INCREMENT_RANGE, TREND_DOWN_INTERVAL,
 } from "../lib/chartConfig";
 import MetricsCards from "../components/MetricsCards";
 import RevenueChart from "../components/RevenueChart";
@@ -19,105 +16,150 @@ import StreamHealthTable from "../components/StreamHealthTable";
 import ProfitMeter from "../components/ProfitMeter";
 import RecordEarningsDialog from "../components/RecordEarningsDialog";
 import LogPostDialog from "../components/LogPostDialog";
+import { Brain, Zap, RefreshCw, Shield, CheckCircle, AlertTriangle } from "lucide-react";
 
-// Static activity data - extracted from render to prevent re-creation
 const ACTIVITIES = [
-  { id: "act-1", text: "Health oracle score live from AppleFoundation", time: "health - 3m ago", type: "success" },
-  { id: "act-2", text: "LGAC VHLL: 0 resolution - 24 ops validated", time: "vhll - 15 min ago", type: "info" },
-  { id: "act-3", text: "A/B title test: variant 3 selected", time: "seo - 19 min ago", type: "info" },
-  { id: "act-4", text: "Trend scan: 12 new niches found", time: "trends - 40m ago", type: "success" },
-  { id: "act-5", text: "Reddit scheduled: ubuntu_thread", time: "reddit - 60m ago", type: "pending" },
+  { id: "act-1", text: "Sovereign AI decision cycle complete", time: "sovereign · just now", type: "sovereign" },
+  { id: "act-2", text: "LGAC VHLL: 0 resolution — 24 ops validated", time: "vhll · 15 min ago", type: "info" },
+  { id: "act-3", text: "A/B title test: variant 3 selected", time: "seo · 19 min ago", type: "info" },
+  { id: "act-4", text: "Trend scan: 12 new niches found", time: "trends · 40 min ago", type: "success" },
+  { id: "act-5", text: "ContentAgent: article queued for review", time: "content · 1h ago", type: "pending" },
 ];
 
+function SovereignStatusPanel({ status, onTrigger, isPending, onNav }) {
+  const sovereign = status?.sovereign;
+  const agents = status?.agents || {};
+  const allOk = Object.values(agents).every((a) => a.last_success !== false);
+
+  return (
+    <motion.div
+      className="sovereign-card cursor-pointer"
+      onClick={onNav}
+      whileHover={{ scale: 1.005 }}
+      transition={{ duration: 0.15 }}
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      style={{ border: `1px solid ${allOk ? "rgba(99,102,241,0.25)" : "rgba(239,68,68,0.25)"}` }}
+    >
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-2">
+          <span className="live-dot-indigo" />
+          <span className="text-xs font-semibold text-indigo-400 uppercase tracking-widest">Sovereign AI</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className={`content-badge ${allOk ? "status-badge-active" : "status-badge-failed"}`}>
+            {allOk ? <><CheckCircle className="w-3 h-3 inline mr-1" />All Agents OK</>
+                   : <><AlertTriangle className="w-3 h-3 inline mr-1" />Degraded</>}
+          </span>
+          <button
+            onClick={(e) => { e.stopPropagation(); onTrigger(); }}
+            disabled={isPending}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-indigo-300 rounded-lg transition-all"
+            style={{ background: "rgba(99,102,241,0.15)", border: "1px solid rgba(99,102,241,0.25)" }}
+          >
+            {isPending ? <RefreshCw className="w-3 h-3 animate-spin" /> : <Zap className="w-3 h-3" />}
+            {isPending ? "Running..." : "Trigger"}
+          </button>
+        </div>
+      </div>
+      {sovereign?.priority_action ? (
+        <p className="text-sm text-gray-300 leading-snug">
+          <Brain className="w-3.5 h-3.5 inline mr-1 text-indigo-400" />
+          {sovereign.priority_action}
+        </p>
+      ) : (
+        <p className="text-sm text-gray-500">No decision yet — click Trigger to activate governance</p>
+      )}
+      <div className="flex gap-4 mt-3">
+        {Object.entries(agents).map(([id, a]) => (
+          <div key={id} className="flex items-center gap-1">
+            <span className={`w-1.5 h-1.5 rounded-full inline-block ${a.last_success === false ? "bg-red-500" : a.last_success === true ? "bg-green-500" : "bg-gray-600"}`} />
+            <span className="text-xs text-gray-500">{id.replace("-agent", "")}</span>
+          </div>
+        ))}
+      </div>
+    </motion.div>
+  );
+}
+
 export default function Overview() {
-  const { data: revenueStats } = useQuery({
-    queryKey: ["revenueStats"],
-    queryFn: () => revenueAPI.getStats().then((res) => res.data),
+  const navigate = useNavigate();
+  const qc = useQueryClient();
+
+  const { data: revenueStats } = useQuery({ queryKey: ["revenueStats"], queryFn: () => revenueAPI.getStats().then((r) => r.data) });
+  const { data: streams = [] } = useQuery({ queryKey: ["revenueStreams"], queryFn: () => revenueAPI.getAll().then((r) => r.data) });
+  const { data: contentData = [] } = useQuery({ queryKey: ["content"], queryFn: () => contentAPI.getAll().then((r) => r.data) });
+  const { data: agents = [] } = useQuery({ queryKey: ["agents"], queryFn: () => agentsAPI.getAll().then((r) => r.data) });
+  const { data: progress } = useQuery({ queryKey: ["ledgerProgress"], queryFn: () => ledgerAPI.progress().then((r) => r.data) });
+  const { data: sovereignStatus } = useQuery({
+    queryKey: ["sovereignStatus"],
+    queryFn: () => sovereignAPI.status().then((r) => r.data),
+    refetchInterval: 30_000,
+    retry: false,
   });
 
-  const { data: streams = [] } = useQuery({
-    queryKey: ["revenueStreams"],
-    queryFn: () => revenueAPI.getAll().then((res) => res.data),
-  });
-
-  const { data: contentData = [] } = useQuery({
-    queryKey: ["content"],
-    queryFn: () => contentAPI.getAll().then((res) => res.data),
-  });
-
-  const { data: agents = [] } = useQuery({
-    queryKey: ["agents"],
-    queryFn: () => agentsAPI.getAll().then((res) => res.data),
-  });
-
-  const { data: progress } = useQuery({
-    queryKey: ["ledgerProgress"],
-    queryFn: () => ledgerAPI.progress().then((res) => res.data),
-  });
-
-  const queryClient = useQueryClient();
   const runCycle = useMutation({
     mutationFn: () => api.post("/cycle/run"),
     onSuccess: (res) => {
       const r = res.data;
-      toast.success(`Cycle complete - ${r.ideas_created} ideas, ${r.publishing_drafts} drafts`);
-      queryClient.invalidateQueries({ queryKey: ["publishing"] });
-      queryClient.invalidateQueries({ queryKey: ["publishingStats"] });
-      queryClient.invalidateQueries({ queryKey: ["content"] });
+      toast.success(`Cycle complete — ${r.ideas_created} ideas, ${r.publishing_drafts} drafts`);
+      qc.invalidateQueries({ queryKey: ["publishing"] });
+      qc.invalidateQueries({ queryKey: ["content"] });
     },
     onError: (err) => toast.error(`Cycle failed: ${err?.response?.data?.detail || err.message}`),
   });
 
-  // Memoize computed values
-  const revenueChartData = useMemo(
-    () => Array.from({ length: REVENUE_CHART_DAYS }, (_, i) => ({
+  const triggerSovereign = useMutation({
+    mutationFn: () => sovereignAPI.trigger(),
+    onSuccess: (res) => {
+      const d = res.data;
+      if (d.status === "skipped") toast.info(`Sovereign skipped: ${d.skip_reason}`);
+      else toast.success(`Sovereign dispatched ${d.agents_dispatched?.length || 0} agents`);
+      qc.invalidateQueries({ queryKey: ["sovereignStatus"] });
+    },
+    onError: (e) => toast.error(`Sovereign failed: ${e?.response?.data?.detail || e.message}`),
+  });
+
+  const revenueChartData = useMemo(() =>
+    Array.from({ length: REVENUE_CHART_DAYS }, (_, i) => ({
       day: `Day ${i + 1}`,
       revenue: Math.floor(Math.random() * REVENUE_CHART_RANGE) + REVENUE_CHART_MIN,
-    })),
-    []
-  );
+    })), []);
 
   const metrics = useMemo(() => {
     const mrr = revenueStats?.total_monthly_actual || 0;
     const mrrGrowth = revenueStats?.achievement_percentage || 0;
     const activeStreams = streams.filter((s) => s.status === "active").length;
     const totalStreams = streams.length;
-    const contentToday = contentData.filter((c) => {
-      const created = new Date(c.created_at);
-      const today = new Date();
-      return created.toDateString() === today.toDateString();
-    }).length;
+    const contentToday = contentData.filter((c) => new Date(c.created_at).toDateString() === new Date().toDateString()).length;
     const totalAgentRuns = agents.reduce((sum, a) => sum + (a.run_count || 0), 0);
     return { mrr, mrrGrowth, activeStreams, totalStreams, contentToday, totalAgentRuns };
   }, [revenueStats, streams, contentData, agents]);
 
-  const enrichedStreams = useMemo(
-    () => streams.map((s, i) => ({
-      ...s,
-      health: HEALTH_BASE + ((i * HEALTH_INCREMENT_FACTOR) % HEALTH_INCREMENT_RANGE),
-      trend: i % TREND_DOWN_INTERVAL !== 0,
-    })),
-    [streams]
-  );
+  const enrichedStreams = useMemo(() => streams.map((s, i) => ({
+    ...s,
+    health: HEALTH_BASE + ((i * HEALTH_INCREMENT_FACTOR) % HEALTH_INCREMENT_RANGE),
+    trend: i % TREND_DOWN_INTERVAL !== 0,
+  })), [streams]);
 
-  const todayProfit = useMemo(
-    () => streams.reduce((sum, s) => sum + (s.monthly_actual || 0) / DAYS_PER_MONTH, 0),
-    [streams]
-  );
+  const todayProfit = useMemo(() => streams.reduce((sum, s) => sum + (s.monthly_actual || 0) / DAYS_PER_MONTH, 0), [streams]);
 
   return (
     <div data-testid="overview-page" className="p-6 space-y-6">
       {/* Header */}
-      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+      <motion.div
+        className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4"
+        initial={{ opacity: 0, y: -6 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.35 }}
+      >
         <div>
-          <h1 className="text-3xl font-bold text-white mb-1" style={{ fontFamily: 'Space Grotesk' }}>
+          <h1 className="text-3xl font-bold text-white mb-0.5" style={{ fontFamily: "Space Grotesk" }}>
             Command Center
           </h1>
-          <p className="text-gray-400 text-sm">
-            engine running • offer pending • LGAC VHLL
-          </p>
+          <p className="text-gray-400 text-sm">engine running · LGAC VHLL · sovereign governed · 24/7</p>
         </div>
-        <div className="flex flex-wrap gap-3">
+        <div className="flex flex-wrap gap-2.5">
           <LogPostDialog />
           <RecordEarningsDialog />
           <button
@@ -128,25 +170,34 @@ export default function Overview() {
           >
             {runCycle.isPending ? "Running..." : "Run Cycle"}
           </button>
-          <button data-testid="self-improve-btn" className="px-4 py-2 bg-transparent border border-green-500/30 text-green-400 rounded-lg hover:bg-green-500/10 transition-colors text-sm">
-            Self-Improve
+          <button
+            onClick={() => navigate("/sovereign")}
+            className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-indigo-300 rounded-lg transition-colors"
+            style={{ background: "rgba(99,102,241,0.12)", border: "1px solid rgba(99,102,241,0.22)" }}
+          >
+            <Brain className="w-4 h-4" /> Sovereign
           </button>
-          <button data-testid="pause-all-btn" className="px-4 py-2 bg-transparent border border-gray-600 text-gray-300 rounded-lg hover:bg-gray-800 transition-colors text-sm">
+          <button data-testid="pause-all-btn" className="px-4 py-2 bg-transparent border border-gray-700 text-gray-300 rounded-lg hover:bg-gray-800 transition-colors text-sm">
             Pause All
           </button>
-          <button data-testid="resume-all-btn" className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors text-sm font-medium">
-            Resume All
-          </button>
         </div>
-      </div>
+      </motion.div>
 
-      {/* Profit-to-25K Proof of Work meter */}
+      {/* Sovereign AI status panel */}
+      <SovereignStatusPanel
+        status={sovereignStatus}
+        onTrigger={() => triggerSovereign.mutate()}
+        isPending={triggerSovereign.isPending}
+        onNav={() => navigate("/sovereign")}
+      />
+
+      {/* Profit meter */}
       <ProfitMeter progress={progress} />
 
-      {/* Top Metrics */}
+      {/* Top metrics */}
       <MetricsCards {...metrics} />
 
-      {/* Revenue Chart & Activity Feed */}
+      {/* Revenue chart + activity */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2">
           <RevenueChart data={revenueChartData} />
@@ -154,29 +205,14 @@ export default function Overview() {
         <ActivityFeed activities={ACTIVITIES} />
       </div>
 
-      {/* Stream Health Table */}
+      {/* Stream health */}
       <StreamHealthTable streams={enrichedStreams} />
-
-      {/* Agent Fleet */}
-      <div className="enterprise-card">
-        <div className="flex items-center justify-between mb-6">
-          <h3 className="text-lg font-semibold text-white">Agent Fleet</h3>
-          <span className="px-3 py-1 bg-green-500/20 text-green-400 rounded-full text-xs font-medium">
-            {agents.length} AGENTS
-          </span>
-        </div>
-        <div className="text-gray-400 text-sm">
-          LGAC monitoring: circuit-breakers OK
-        </div>
-      </div>
 
       {/* Today's Profit Badge */}
       <div className="profit-badge" data-testid="profit-badge">
-        <div className="text-white/80 text-xs font-medium mb-1">TODAY'S PROFIT</div>
-        <div className="text-3xl font-bold text-white">
-          ${todayProfit.toFixed(2)}
-        </div>
-        <div className="text-white/60 text-xs mt-1">+12.3% vs avg • {metrics.activeStreams} streams active</div>
+        <div className="text-white/70 text-xs font-semibold mb-1 uppercase tracking-wider">Today&apos;s Profit</div>
+        <div className="text-3xl font-bold text-white">${todayProfit.toFixed(2)}</div>
+        <div className="text-white/55 text-xs mt-0.5">+12.3% vs avg · {metrics.activeStreams} streams</div>
       </div>
     </div>
   );
