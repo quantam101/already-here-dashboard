@@ -1,0 +1,51 @@
+name: Sovereign 24/7 Cycle
+
+on:
+  schedule:
+    # Hourly sovereign decision cycle (GitHub Actions as external heartbeat)
+    - cron: "5 * * * *"
+  workflow_dispatch:
+    inputs:
+      force_agent:
+        description: "Optional: force a specific agent (e.g. content-agent)"
+        required: false
+        default: ""
+
+concurrency:
+  group: sovereign-cycle
+  cancel-in-progress: false   # never cancel mid-run — let it finish
+
+jobs:
+  sovereign-trigger:
+    name: Trigger Sovereign Cycle
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Ping sovereign /trigger endpoint
+        run: |
+          BASE_URL="${{ secrets.CMDOS_BASE_URL }}"
+          if [ -z "$BASE_URL" ]; then
+            echo "CMDOS_BASE_URL not set — trying default alreadyherellc.com"
+            BASE_URL="https://alreadyherellc.com"
+          fi
+          echo "Triggering sovereign at $BASE_URL/api/sovereign/trigger"
+          HTTP_STATUS=$(curl -s -o /tmp/sov_response.json -w "%{http_code}" \
+            -X POST \
+            -H "Content-Type: application/json" \
+            --max-time 120 \
+            "$BASE_URL/api/sovereign/trigger")
+          echo "HTTP status: $HTTP_STATUS"
+          cat /tmp/sov_response.json | python3 -m json.tool || cat /tmp/sov_response.json
+          if [ "$HTTP_STATUS" -ge 500 ]; then
+            echo "Sovereign trigger returned 5xx — marking as failed"
+            exit 1
+          fi
+          echo "Sovereign cycle complete."
+
+      - name: Health gate (must be 200 after cycle)
+        if: always()
+        run: |
+          BASE_URL="${{ secrets.CMDOS_BASE_URL || 'https://alreadyherellc.com' }}"
+          HTTP=$(curl -s -o /dev/null -w "%{http_code}" --max-time 15 "$BASE_URL/api/health/")
+          echo "Post-cycle health: $HTTP"
+          [ "$HTTP" = "200" ] || echo "::warning::Health check returned $HTTP after sovereign cycle"
