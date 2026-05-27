@@ -155,9 +155,9 @@ export default function Sovereign() {
     onSuccess: (res) => {
       const d = res.data;
       if (d.status === "skipped") {
-        toast.info(`Sovereign skipped: ${d.skip_reason}`);
+        toast.info(`Cash skipped: ${d.skip_reason}`);
       } else {
-        toast.success(`Sovereign cycle complete — ${d.agents_dispatched?.length || 0} agents dispatched`);
+        toast.success(`Cash cycle complete — ${d.agents_dispatched?.length || 0} agents dispatched`);
       }
       qc.invalidateQueries({ queryKey: ["sovereignStatus"] });
       qc.invalidateQueries({ queryKey: ["sovereignHistory"] });
@@ -167,7 +167,7 @@ export default function Sovereign() {
 
   const clearCache = useMutation({
     mutationFn: () => sovereignAPI.clearCache(),
-    onSuccess: () => toast.success("Sovereign cache cleared — next cycle will call AI fresh"),
+    onSuccess: () => toast.success("Cash AI cache cleared — next cycle will call AI fresh"),
     onError: () => toast.error("Cache clear failed"),
   });
 
@@ -195,7 +195,7 @@ export default function Sovereign() {
             </div>
             <div>
               <h1 className="text-3xl font-bold text-white" style={{ fontFamily: "Space Grotesk" }}>
-                Sovereign AI
+                Cash AI
               </h1>
               <p className="text-gray-400 text-sm">Governing intelligence · dispatch authority · immutable audit</p>
             </div>
@@ -238,7 +238,7 @@ export default function Sovereign() {
           <div className="flex-1">
             <div className="flex items-center gap-2 mb-3">
               <span className="live-dot-indigo" />
-              <span className="text-xs font-semibold text-indigo-400 uppercase tracking-widest">Last Sovereign Decision</span>
+              <span className="text-xs font-semibold text-indigo-400 uppercase tracking-widest">Last Cash Decision</span>
               {sovereign?.made_at && (
                 <span className="text-xs text-gray-600">
                   · {new Date(sovereign.made_at).toLocaleString()}
@@ -266,7 +266,7 @@ export default function Sovereign() {
                 </div>
               </>
             ) : (
-              <p className="text-gray-500 text-sm">No decisions recorded yet — trigger a cycle to begin.</p>
+              <p className="text-gray-500 text-sm">No decisions recorded yet — trigger a Cash cycle to begin.</p>
             )}
           </div>
           <div className="flex-shrink-0 flex flex-col items-end gap-2">
@@ -303,7 +303,7 @@ export default function Sovereign() {
         </div>
         {decisions.length === 0 ? (
           <div className="enterprise-card text-center py-10 text-gray-500 text-sm">
-            No decisions yet. Trigger a sovereign cycle to begin governance.
+            No decisions yet. Trigger a Cash cycle to begin governance.
           </div>
         ) : (
           <div className="max-h-[500px] overflow-y-auto pr-1 space-y-2">

@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import { TrendingUp, TrendingDown } from "lucide-react";
+import { TrendingUp } from "lucide-react";
 
 function MetricCard({ label, value, change, changeIcon, valueColor, changeColor, testId, delay = 0 }) {
   return (
@@ -57,7 +57,7 @@ export default function MetricsCards({ mrr, mrrGrowth, activeStreams, totalStrea
       <MetricCard
         label="Agent Cycles"
         value={totalAgentRuns.toLocaleString()}
-        change="sovereign governed · self-improving"
+        change="Cash governed · self-improving"
         valueColor="text-indigo-400"
         changeColor="text-gray-400"
         testId="metric-ai-agents"

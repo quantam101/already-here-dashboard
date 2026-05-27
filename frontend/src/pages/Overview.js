@@ -19,7 +19,7 @@ import LogPostDialog from "../components/LogPostDialog";
 import { Brain, Zap, RefreshCw, Shield, CheckCircle, AlertTriangle } from "lucide-react";
 
 const ACTIVITIES = [
-  { id: "act-1", text: "Sovereign AI decision cycle complete", time: "sovereign · just now", type: "sovereign" },
+  { id: "act-1", text: "Cash AI decision cycle complete", time: "cash · just now", type: "sovereign" },
   { id: "act-2", text: "LGAC VHLL: 0 resolution — 24 ops validated", time: "vhll · 15 min ago", type: "info" },
   { id: "act-3", text: "A/B title test: variant 3 selected", time: "seo · 19 min ago", type: "info" },
   { id: "act-4", text: "Trend scan: 12 new niches found", time: "trends · 40 min ago", type: "success" },
@@ -44,7 +44,7 @@ function SovereignStatusPanel({ status, onTrigger, isPending, onNav }) {
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
           <span className="live-dot-indigo" />
-          <span className="text-xs font-semibold text-indigo-400 uppercase tracking-widest">Sovereign AI</span>
+          <span className="text-xs font-semibold text-indigo-400 uppercase tracking-widest">Cash AI</span>
         </div>
         <div className="flex items-center gap-2">
           <span className={`content-badge ${allOk ? "status-badge-active" : "status-badge-failed"}`}>
@@ -113,11 +113,11 @@ export default function Overview() {
     mutationFn: () => sovereignAPI.trigger(),
     onSuccess: (res) => {
       const d = res.data;
-      if (d.status === "skipped") toast.info(`Sovereign skipped: ${d.skip_reason}`);
-      else toast.success(`Sovereign dispatched ${d.agents_dispatched?.length || 0} agents`);
+      if (d.status === "skipped") toast.info(`Cash skipped: ${d.skip_reason}`);
+      else toast.success(`Cash dispatched ${d.agents_dispatched?.length || 0} agents`);
       qc.invalidateQueries({ queryKey: ["sovereignStatus"] });
     },
-    onError: (e) => toast.error(`Sovereign failed: ${e?.response?.data?.detail || e.message}`),
+    onError: (e) => toast.error(`Cash failed: ${e?.response?.data?.detail || e.message}`),
   });
 
   const revenueChartData = useMemo(() =>
@@ -157,7 +157,7 @@ export default function Overview() {
           <h1 className="text-3xl font-bold text-white mb-0.5" style={{ fontFamily: "Space Grotesk" }}>
             Command Center
           </h1>
-          <p className="text-gray-400 text-sm">engine running · LGAC VHLL · sovereign governed · 24/7</p>
+          <p className="text-gray-400 text-sm">engine running · LGAC VHLL · Cash governed · 24/7</p>
         </div>
         <div className="flex flex-wrap gap-2.5">
           <LogPostDialog />
@@ -175,7 +175,7 @@ export default function Overview() {
             className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-indigo-300 rounded-lg transition-colors"
             style={{ background: "rgba(99,102,241,0.12)", border: "1px solid rgba(99,102,241,0.22)" }}
           >
-            <Brain className="w-4 h-4" /> Sovereign
+            <Brain className="w-4 h-4" /> Cash AI
           </button>
           <button data-testid="pause-all-btn" className="px-4 py-2 bg-transparent border border-gray-700 text-gray-300 rounded-lg hover:bg-gray-800 transition-colors text-sm">
             Pause All

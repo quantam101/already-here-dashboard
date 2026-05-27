@@ -4,7 +4,7 @@ import {
 } from "recharts";
 import { useState } from "react";
 import {
-  CHART_TICK_STYLE, CHART_TOOLTIP_STYLE, CHART_BAR_RADIUS,
+  CHART_TICK_STYLE, CHART_BAR_RADIUS,
 } from "../lib/chartConfig";
 
 const TOOLTIP_STYLE = {

@@ -101,4 +101,4 @@ async def clear_sovereign_cache(db=Depends(get_db)):
     from services.sovereign_agent import SOVEREIGN_SYSTEM
     # Only clear entries matching sovereign system prompt fingerprint
     n = await cache_clear(db)
-    return {"cleared": n, "note": "Next sovereign cycle will call LLM fresh."}
+    return {"cleared": n, "note": "Next Cash cycle will call LLM fresh."}

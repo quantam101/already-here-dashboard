@@ -18,7 +18,7 @@ const NAVIGATION = [
   { name: "AI Agents",       path: "/agents",        icon: Bot,             section: "operations" },
   { name: "Content Factory", path: "/studio",        icon: Sparkles,        section: "operations" },
   { name: "Scout",           path: "/scout",         icon: Radar,           section: "operations" },
-  { name: "Sovereign AI",    path: "/sovereign",     icon: Brain,           section: "operations", highlight: true },
+  { name: "Cash AI",         path: "/sovereign",     icon: Brain,           section: "operations", highlight: true },
   { name: "Proof of Work",   path: "/proof-of-work", icon: Trophy,          section: "revenue" },
   { name: "Pricing & Pay In",path: "/pricing",       icon: CreditCard,      section: "revenue" },
   { name: "Proposals",       path: "/proposals",     icon: ScrollText,      section: "revenue" },
