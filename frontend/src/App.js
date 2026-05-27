@@ -18,6 +18,7 @@ import Pricing from "./pages/Pricing";
 import PaymentSuccess from "./pages/PaymentSuccess";
 import Books from "./pages/Books";
 import Secrets from "./pages/Secrets";
+import Sovereign from "./pages/Sovereign";
 import AuthGate from "./components/AuthGate";
 import { Toaster } from "sonner";
 
@@ -29,28 +30,29 @@ function App() {
           <Routes>
             <Route path="/" element={<DashboardLayout />}>
               <Route index element={<Navigate to="/overview" replace />} />
-              <Route path="overview" element={<Overview />} />
-              <Route path="revenue" element={<Revenue />} />
-              <Route path="content" element={<Content />} />
-              <Route path="studio" element={<ContentStudio />} />
-              <Route path="agents" element={<Agents />} />
-              <Route path="builds" element={<Builds />} />
-              <Route path="deployments" element={<Deployments />} />
-              <Route path="approvals" element={<Approvals />} />
-              <Route path="audit" element={<Audit />} />
+              <Route path="overview"      element={<Overview />} />
+              <Route path="revenue"       element={<Revenue />} />
+              <Route path="content"       element={<Content />} />
+              <Route path="studio"        element={<ContentStudio />} />
+              <Route path="agents"        element={<Agents />} />
+              <Route path="builds"        element={<Builds />} />
+              <Route path="deployments"   element={<Deployments />} />
+              <Route path="approvals"     element={<Approvals />} />
+              <Route path="audit"         element={<Audit />} />
               <Route path="proof-of-work" element={<ProofOfWork />} />
-              <Route path="scout" element={<Scout />} />
-              <Route path="proposals" element={<Proposals />} />
-              <Route path="analytics" element={<Analytics />} />
-              <Route path="pricing" element={<Pricing />} />
-              <Route path="books" element={<Books />} />
-              <Route path="secrets" element={<Secrets />} />
+              <Route path="scout"         element={<Scout />} />
+              <Route path="proposals"     element={<Proposals />} />
+              <Route path="analytics"     element={<Analytics />} />
+              <Route path="pricing"       element={<Pricing />} />
+              <Route path="books"         element={<Books />} />
+              <Route path="secrets"       element={<Secrets />} />
+              <Route path="sovereign"     element={<Sovereign />} />
             </Route>
             <Route path="/payment-success" element={<PaymentSuccess />} />
           </Routes>
         </AuthGate>
       </BrowserRouter>
-      <Toaster position="top-right" richColors />
+      <Toaster position="top-right" richColors closeButton />
     </div>
   );
 }
