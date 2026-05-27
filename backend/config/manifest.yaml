@@ -1,0 +1,131 @@
+# Already Here Command OS — Agent Manifest
+# Declarative configuration for the sovereign governance layer.
+# All behavior is driven from this file — change it, restart backend, done.
+# Updated: 2026-05-27
+
+sovereign:
+  id: sovereign-v1
+  model_provider: gemini
+  model: gemini/gemini-2.0-flash
+  system_prompt: |
+    You are the Sovereign AI governing the Already Here Command OS.
+    Your mission: maximize net revenue toward the $25,000 commercialization
+    unlock while operating at $0/month fixed cost.
+    Analyze the system snapshot and return a JSON SovereignDecision.
+    Always prefer high-leverage, low-cost actions. Protect the operator.
+    Never exceed safety limits. Think step by step before deciding.
+  cycle_interval_minutes: 60
+  max_parallel_agents: 4
+  decision_ttl_seconds: 3300   # cache sovereign decision ~55 min
+  safety:
+    max_daily_llm_tokens: 80000
+    max_daily_usd: 0.10
+    circuit_breaker_failures: 3
+    circuit_breaker_reset_seconds: 900
+    require_human_approval_above_usd: 0.50
+
+agents:
+  - id: scout-agent
+    name: Trend Scout
+    class: agents.scout_agent.ScoutAgent
+    enabled: true
+    schedule_cron: "0 * * * *"        # every hour
+    priority: 10
+    budget_tokens: 0                   # no LLM — free sources only
+    timeout_seconds: 45
+    capabilities:
+      - viral_trend_detection
+      - grant_opportunity_scan
+      - news_aggregation
+    outputs:
+      - opportunities
+
+  - id: content-agent
+    name: Content Generator
+    class: agents.content_agent.ContentAgent
+    enabled: true
+    schedule_cron: "0 */6 * * *"      # every 6 hours
+    priority: 20
+    budget_tokens: 8000
+    timeout_seconds: 120
+    capabilities:
+      - script_generation
+      - article_generation
+      - multi_platform_packaging
+    inputs:
+      - opportunities
+    outputs:
+      - content_queue
+
+  - id: revenue-agent
+    name: Revenue Tracker
+    class: agents.revenue_agent.RevenueAgent
+    enabled: true
+    schedule_cron: "*/30 * * * *"     # every 30 minutes
+    priority: 30
+    budget_tokens: 200
+    timeout_seconds: 30
+    capabilities:
+      - stripe_revenue_sync
+      - ledger_reconciliation
+      - milestone_alerting
+      - advisor_recommendation
+    outputs:
+      - revenue_snapshot
+
+  - id: guard-agent
+    name: Infrastructure Guardian
+    class: agents.guard_agent.GuardAgent
+    enabled: true
+    schedule_cron: "*/15 * * * *"     # every 15 minutes
+    priority: 5                        # highest — runs first always
+    budget_tokens: 0                   # pure logic, no LLM
+    timeout_seconds: 20
+    capabilities:
+      - health_check
+      - memory_monitor
+      - circuit_breaker_management
+      - dead_letter_queue_drain
+    outputs:
+      - system_health
+
+revenue:
+  unlock_target_usd: 25000
+  milestone_alerts_usd: [100, 500, 1000, 5000, 10000, 25000]
+  currency: USD
+  tracking_collection: revenue_ledger
+
+content:
+  platforms:
+    - devto
+    - blog
+    - linkedin
+    - reddit
+    - medium
+  ideas_per_cycle: 5
+  auto_publish: false          # operator approves before publish
+  script_model: gemini/gemini-2.0-flash
+  article_model: gemini/gemini-2.0-flash
+  max_article_words: 1200
+
+publishing:
+  github_pages:
+    enabled: true
+    owner_env: GITHUB_CONTENT_OWNER
+    repo_env: GITHUB_CONTENT_REPO
+    token_env: CONTENT_REPO_TOKEN
+    branch: main
+    dir: posts
+  devto:
+    enabled: true
+    token_env: DEVTO_API_KEY
+  medium:
+    enabled: false             # pending API approval
+    token_env: MEDIUM_API_KEY
+
+observability:
+  audit_every_decision: true
+  metrics_retention_days: 30
+  alert_channels:
+    - email                    # GMAIL_APP_PASSWORD env
+  error_webhook_env: PROFITENGINE_WEBHOOK_TOKEN
