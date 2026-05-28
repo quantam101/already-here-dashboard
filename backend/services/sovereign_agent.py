@@ -190,11 +190,21 @@ async def make_decision(db, registered_agent_ids: list[str]) -> SovereignDecisio
                 session_id,
             )
         else:
+            # Select provider: Gemini if EMERGENT_LLM_KEY set, else Groq free tier
+            _lm_key = os.environ.get("EMERGENT_LLM_KEY", "").strip()
+            _gr_key = os.environ.get("GROQ_API_KEY", "").strip()
+            if not _lm_key and _gr_key:
+                # Swap env so run_cached picks up Groq
+                os.environ["EMERGENT_LLM_KEY"] = _gr_key
+                _cash_provider, _cash_model = "groq", "llama-3.3-70b-versatile"
+            else:
+                _cash_provider, _cash_model = "gemini", "gemini-2.0-flash"
+
             try:
                 raw_response = await run_cached(
                     db,
-                    provider="gemini",
-                    model="gemini/gemini-2.0-flash",
+                    provider=_cash_provider,
+                    model=_cash_model,
                     system_msg=SOVEREIGN_SYSTEM,
                     prompt=DECISION_PROMPT.format(
                         snapshot_yaml=snapshot_yaml,

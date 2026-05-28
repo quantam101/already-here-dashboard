@@ -160,9 +160,9 @@ async def run_cached(
     Returns the raw LLM response string. Caller is responsible for parsing it.
     On cache hit, no LLM call is made and the budget is not charged.
     """
-    api_key = os.environ.get("EMERGENT_LLM_KEY")
+    api_key = os.environ.get("EMERGENT_LLM_KEY") or os.environ.get("GROQ_API_KEY") or ""
     if not api_key:
-        raise HTTPException(status_code=503, detail="EMERGENT_LLM_KEY not configured")
+        raise HTTPException(status_code=503, detail="No LLM key configured (set EMERGENT_LLM_KEY or GROQ_API_KEY)")
 
     model_id = f"{provider}/{model}"
     distilled_prompt = distill_text(prompt)
