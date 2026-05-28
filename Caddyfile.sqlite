@@ -1,7 +1,8 @@
-# Caddy config for the SQLite/1GB-RAM build.
-# Serves the pre-built React static bundle from /srv/frontend and proxies /api → backend container.
+# Already Here Command OS — SQLite/1GB-RAM build
+# Dashboard URL: https://app.alreadyherellc.com
+# DNS: A record  app.alreadyherellc.com → 129.146.236.177
 
-{$DOMAIN:alreadyherellc.com} {
+app.alreadyherellc.com {
     encode gzip zstd
 
     # API endpoints reverse-proxy to the FastAPI backend
@@ -30,9 +31,4 @@
         format json
         level INFO
     }
-}
-
-# Redirect bare www → apex
-www.{$DOMAIN:alreadyherellc.com} {
-    redir https://{$DOMAIN:alreadyherellc.com}{uri} permanent
 }
