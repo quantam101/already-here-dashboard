@@ -423,5 +423,26 @@ async def seed_database() -> None:
     client.close()
 
 
+async def seed_if_empty() -> None:
+    """Only seed if the database has no revenue streams (safe for production restarts)."""
+    client, _ = _make_client()
+    db = client[db_name]
+    try:
+        existing = await db["revenue_streams"].count_documents({})
+        if existing > 0:
+            print(f"Database already has {existing} revenue streams — skipping seed.")
+            return
+    except Exception:
+        pass
+    finally:
+        pass
+    await seed_database()
+    client.close()
+
+
 if __name__ == "__main__":
-    asyncio.run(seed_database())
+    import sys
+    if "--force" in sys.argv:
+        asyncio.run(seed_database())
+    else:
+        asyncio.run(seed_if_empty())
