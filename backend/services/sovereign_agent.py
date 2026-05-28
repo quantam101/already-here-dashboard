@@ -194,23 +194,47 @@ async def make_decision(db, registered_agent_ids: list[str]) -> SovereignDecisio
             _lm_key = os.environ.get("EMERGENT_LLM_KEY", "").strip()
             _gr_key = os.environ.get("GROQ_API_KEY", "").strip()
 
-            # Build ordered list of (provider, model, api_key) to try
-            # Priority: Groq (fast/free) → Gemini 2.5 → DeepSeek → OpenRouter → Gemini 1.5
-            _ds_key = os.environ.get("DEEPSEEK_API_KEY", "").strip()
-            _or_key = os.environ.get("OPENROUTER_API_KEY", "").strip()
+            # ── Provider resolution — ordered by speed/cost/reliability ──────
+            # Keys from environment (set in .env or docker-compose)
+            _ds_key  = os.environ.get("DEEPSEEK_API_KEY", "").strip()
+            _or_key  = os.environ.get("OPENROUTER_API_KEY", "").strip()
+            _ms_key  = os.environ.get("MISTRAL_API_KEY", "").strip()
+            _qw_key  = os.environ.get("QWEN_API_KEY", "").strip()
+            _ol_url  = os.environ.get("OLLAMA_BASE_URL", "").strip()   # e.g. http://localhost:11434
+            _kb_url  = os.environ.get("KOBOLD_BASE_URL", "").strip()   # e.g. http://localhost:5001
+            _ol_model = os.environ.get("OLLAMA_MODEL", "llama3.2").strip()
+            _kb_model = os.environ.get("KOBOLD_MODEL", "koboldcpp").strip()
+
             _providers_to_try: list[tuple[str, str, str]] = []
+
+            # Tier 1 — fast free cloud APIs
             if _gr_key:
-                _providers_to_try.append(("groq", "llama-3.3-70b-versatile", _gr_key))
+                _providers_to_try.append(("groq",      "llama-3.3-70b-versatile", _gr_key))
             if _lm_key:
-                _providers_to_try.append(("gemini", "gemini-2.5-flash", _lm_key))
+                _providers_to_try.append(("gemini",    "gemini-2.5-flash",         _lm_key))
+            if _ms_key:
+                _providers_to_try.append(("mistral",   "mistral-small-latest",     _ms_key))
+            if _ms_key:
+                _providers_to_try.append(("codestral", "codestral-latest",         _ms_key))
+
+            # Tier 2 — local inference (zero cost, requires running instance)
+            if _ol_url:
+                _providers_to_try.append(("ollama",    _ol_model,                  "nokey"))
+            if _kb_url:
+                _providers_to_try.append(("koboldcpp", _kb_model,                  "nokey"))
+
+            # Tier 3 — paid/BYOK cloud fallbacks
+            if _qw_key:
+                _providers_to_try.append(("qwen",       "qwen-plus",               _qw_key))
             if _ds_key:
-                _providers_to_try.append(("deepseek", "deepseek-chat", _ds_key))
+                _providers_to_try.append(("deepseek",   "deepseek-chat",           _ds_key))
             if _or_key:
-                # OpenRouter with BYOK — reliable paid models, no shared rate limits
-                _providers_to_try.append(("openrouter", "openai/gpt-4o-mini", _or_key))
-                _providers_to_try.append(("openrouter", "openai/gpt-4o", _or_key))
+                _providers_to_try.append(("openrouter", "openai/gpt-4o-mini",      _or_key))
+                _providers_to_try.append(("openrouter", "openai/gpt-4o",           _or_key))
+
+            # Tier 4 — last-resort Gemini fallback
             if _lm_key:
-                _providers_to_try.append(("gemini", "gemini-1.5-flash", _lm_key))
+                _providers_to_try.append(("gemini",    "gemini-1.5-flash",         _lm_key))
 
             if not _providers_to_try:
                 raise RuntimeError("No LLM API key configured (set GROQ_API_KEY or EMERGENT_LLM_KEY)")

@@ -1,0 +1,81 @@
+{
+  "models": [
+    {
+      "title": "Codestral (Mistral — free code model)",
+      "provider": "mistral",
+      "model": "codestral-latest",
+      "apiKey": "$MISTRAL_API_KEY",
+      "apiBase": "https://codestral.mistral.ai/v1",
+      "contextLength": 32768
+    },
+    {
+      "title": "Gemini 2.5 Flash (free)",
+      "provider": "gemini",
+      "model": "gemini-2.5-flash",
+      "apiKey": "$GEMINI_API_KEY"
+    },
+    {
+      "title": "GPT-4o-mini via OpenRouter (BYOK)",
+      "provider": "openai",
+      "model": "openai/gpt-4o-mini",
+      "apiKey": "$OPENROUTER_API_KEY",
+      "apiBase": "https://openrouter.ai/api/v1"
+    },
+    {
+      "title": "Groq Llama 3.3 70B (free)",
+      "provider": "openai",
+      "model": "llama-3.3-70b-versatile",
+      "apiKey": "$GROQ_API_KEY",
+      "apiBase": "https://api.groq.com/openai/v1"
+    },
+    {
+      "title": "Qwen (Alibaba — free tier)",
+      "provider": "openai",
+      "model": "qwen-plus",
+      "apiKey": "$QWEN_API_KEY",
+      "apiBase": "https://dashscope.aliyuncs.com/compatible-mode/v1"
+    },
+    {
+      "title": "Ollama (local — zero cost)",
+      "provider": "ollama",
+      "model": "qwen2.5-coder:7b",
+      "apiBase": "http://localhost:11434"
+    },
+    {
+      "title": "KoboldCpp (local — zero cost)",
+      "provider": "openai",
+      "model": "koboldcpp",
+      "apiKey": "nokey",
+      "apiBase": "http://localhost:5001/v1"
+    }
+  ],
+  "tabAutocompleteModel": {
+    "title": "Codestral Autocomplete",
+    "provider": "mistral",
+    "model": "codestral-latest",
+    "apiKey": "$MISTRAL_API_KEY",
+    "apiBase": "https://codestral.mistral.ai/v1"
+  },
+  "embeddingsProvider": {
+    "provider": "openai",
+    "model": "text-embedding-3-small",
+    "apiKey": "$OPENROUTER_API_KEY",
+    "apiBase": "https://openrouter.ai/api/v1"
+  },
+  "contextProviders": [
+    { "name": "code" },
+    { "name": "docs" },
+    { "name": "diff" },
+    { "name": "terminal" },
+    { "name": "problems" },
+    { "name": "folder" },
+    { "name": "codebase" }
+  ],
+  "slashCommands": [
+    { "name": "edit", "description": "Edit highlighted code" },
+    { "name": "comment", "description": "Write comments for code" },
+    { "name": "share", "description": "Export conversation as markdown" },
+    { "name": "cmd", "description": "Generate a shell command" },
+    { "name": "commit", "description": "Generate a git commit message" }
+  ]
+}

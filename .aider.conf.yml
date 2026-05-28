@@ -1,0 +1,27 @@
+# Aider configuration for Already Here Command OS
+# Run: aider  (picks this up automatically)
+# Docs: https://aider.chat/docs/config/aider_conf.html
+
+# Primary model — Groq Llama (free, fast)
+model: groq/llama-3.3-70b-versatile
+
+# Fallback models (uncomment to use)
+# model: gemini/gemini-2.5-flash
+# model: openrouter/openai/gpt-4o-mini
+# model: ollama/llama3.2           # requires: ollama serve
+# model: ollama/qwen2.5-coder:7b   # best free code model for aider
+
+# Repo settings
+auto-commits: false
+dirty-commits: false
+gitignore: true
+read:
+  - ARCHITECTURE.md
+  - README.md
+
+# Editor
+editor-model: groq/llama-3.3-70b-versatile
+
+# Misc
+show-model-warnings: false
+stream: true
