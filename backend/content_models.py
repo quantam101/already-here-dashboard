@@ -41,6 +41,7 @@ class PlatformEnum(str, Enum):
     INSTAGRAM = "instagram"
     INSTAGRAM_REELS = "instagram_reels"
     FACEBOOK = "facebook"
+    FACEBOOK_GROUPS = "facebook_groups"
     LINKEDIN = "linkedin"
     TWITTER = "twitter"
     THREADS = "threads"
@@ -50,6 +51,9 @@ class PlatformEnum(str, Enum):
     DEVTO = "devto"
     HASHNODE = "hashnode"
     BLOG = "blog"
+    DISCOURSE = "discourse"
+    QUORA = "quora"
+    FORUM = "forum"
 
 # Content Idea
 class ContentIdea(BaseModel):
