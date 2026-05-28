@@ -4,7 +4,7 @@ import os  # noqa: F401 (kept for backward-compat with callers)
 import logging
 
 from services.distillation_service import distill_text, to_yaml_payload
-from services.llm_runner import run_cached
+from services.llm_runner import run_cached, llm_complete
 
 logger = logging.getLogger(__name__)
 
@@ -113,30 +113,17 @@ async def generate_script_from_idea(idea: dict, db=None) -> ContentScript:
         "and long-form content. Create engaging, high-converting scripts."
     )
 
-    # `db` is optional for legacy callers. If absent we fall back to the
-    # legacy direct-call path (no caching, no budget tracking).
-    if db is None:
-        api_key = os.getenv('EMERGENT_LLM_KEY')
-        chat = LlmChat(
-            api_key=api_key,
+    # Use the failover chain (Groq first) regardless of whether a db is available
+    try:
+        response = await llm_complete(
+            system=system_msg,
+            user=prompt,
+            max_tokens=1000,
             session_id=f"script_gen_{idea['id']}",
-            system_message=system_msg,
         )
-        chat.with_model("gemini", "gemini-3-flash-preview")
-        try:
-            response = await chat.send_message(UserMessage(text=prompt))
-        except Exception as e:
-            return create_fallback_script(idea, str(e))
-    else:
-        try:
-            response = await run_cached(
-                db, "gemini", "gemini-3-flash-preview",
-                system_msg, prompt,
-                session_id=f"script_gen_{idea['id']}",
-            )
-        except Exception as e:
-            logger.warning("script gen via runner failed: %s", e)
-            return create_fallback_script(idea, str(e))
+    except Exception as e:
+        logger.warning("script gen via llm_complete failed: %s", e)
+        return create_fallback_script(idea, str(e))
 
     parsed = parse_script_response(response)
     return ContentScript(

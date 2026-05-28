@@ -19,7 +19,7 @@ import uuid
 
 from emergentintegrations.llm.chat import LlmChat, UserMessage  # noqa: F401 (kept for downstream imports/tests)
 from services.audit_service import log_audit_event
-from services.llm_runner import run_cached
+from services.llm_runner import run_cached, llm_complete
 
 router = APIRouter()
 
@@ -172,23 +172,23 @@ async def create_book(req: BookCreateRequest, db=Depends(get_db)):
 
     session = f"book_{book.id}"
     try:
-        # 1) outline — cached on (title, type, audience, tone, chapter_count, hints)
-        outline_raw = await run_cached(
-            db, "gemini", "gemini-3-flash-preview",
-            BOOK_SYSTEM_MSG, _build_outline_prompt(req),
+        # 1) outline — uses failover chain (Groq first, falls back to Gemini etc.)
+        outline_raw = await llm_complete(
+            system=BOOK_SYSTEM_MSG,
+            user=_build_outline_prompt(req),
+            max_tokens=600,
             session_id=f"{session}_outline",
         )
         outline = _parse_outline(outline_raw, req.chapter_count)[:req.chapter_count]
 
-        # 2) chapters — each chapter cached independently (so regenerating one
-        #    book with a tweaked outline only re-bills the changed chapters)
+        # 2) chapters — each chapter generated via failover chain
         chapters: list[BookChapter] = []
         prev_titles: list[str] = []
         for entry in outline:
-            body = await run_cached(
-                db, "gemini", "gemini-3-flash-preview",
-                BOOK_SYSTEM_MSG,
-                _build_chapter_prompt(req, entry, prev_titles),
+            body = await llm_complete(
+                system=BOOK_SYSTEM_MSG,
+                user=_build_chapter_prompt(req, entry, prev_titles),
+                max_tokens=1200,
                 session_id=f"{session}_c{entry['number']}",
             )
             word_count = len(body.split())

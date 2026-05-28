@@ -12,9 +12,15 @@ Responsibilities:
 
 Public API:
 
+    await llm_complete(system, user, *, max_tokens, temperature) -> str
+        Smart failover: Groq → Gemini → Mistral → DeepSeek → OpenRouter → …
+        Use this in all routes instead of run_cached(provider="gemini", …).
+        Does NOT cache or track budget (stateless helper for agents/routes).
+
     await run_cached(
         db, provider, model, system_msg, prompt, *, session_id, tier=3
     ) -> str
+        Low-level: specific provider + model. Use when you want caching/budget.
 
     await get_today_usage(db) -> dict
     await check_daily_budget(db, *, expected_tokens=0) -> None  (raises 429)
@@ -208,3 +214,93 @@ async def daily_usage_history(db, days: int = 14) -> list[dict]:
     """Last N days of LLM budget rows, newest first."""
     rows = await db[BUDGET_COLLECTION].find({}, {"_id": 0}).sort("date", -1).to_list(days)
     return rows
+
+
+# ── llm_complete — stateless failover helper ──────────────────────────────────
+
+def _failover_providers() -> list[tuple[str, str, str]]:
+    """
+    Build the ordered provider list from available env vars.
+    Returns list of (provider_name, model_id, api_key).
+    Priority: Groq (fastest, free) → Gemini Flash → Mistral → DeepSeek → OpenRouter
+    """
+    providers: list[tuple[str, str, str]] = []
+    gr = os.environ.get("GROQ_API_KEY", "").strip()
+    lm = os.environ.get("EMERGENT_LLM_KEY", "").strip()
+    ms = os.environ.get("MISTRAL_API_KEY", "").strip()
+    ds = os.environ.get("DEEPSEEK_API_KEY", "").strip()
+    qw = os.environ.get("QWEN_API_KEY", "").strip()
+    or_ = os.environ.get("OPENROUTER_API_KEY", "").strip()
+
+    if gr:
+        providers.append(("groq",      "llama-3.3-70b-versatile", gr))
+        providers.append(("groq",      "llama-3.1-8b-instant",    gr))
+    if lm:
+        providers.append(("gemini",    "gemini-2.5-flash",        lm))
+    if ms:
+        providers.append(("mistral",   "mistral-small-latest",    ms))
+        providers.append(("codestral", "codestral-latest",        ms))
+    if ds:
+        providers.append(("deepseek",  "deepseek-chat",           ds))
+    if qw:
+        providers.append(("qwen",      "qwen-plus",               qw))
+    if or_:
+        providers.append(("openrouter", "openai/gpt-4o-mini",     or_))
+    if lm:
+        # Gemini 1.5 as last resort
+        providers.append(("gemini",    "gemini-1.5-flash",        lm))
+    return providers
+
+
+async def llm_complete(
+    system: str,
+    user: str,
+    *,
+    max_tokens: int = 1500,
+    temperature: float = 0.7,
+    session_id: str = "llm-complete",
+) -> str:
+    """
+    Smart multi-provider LLM call with automatic failover.
+
+    Tries providers in priority order (Groq first — fastest & free).
+    Falls through to the next provider on any error (expired key, rate limit, 4xx/5xx).
+
+    Use this in routes / agents instead of hardcoding run_cached(provider="gemini", …).
+    Does NOT use the distillation cache or budget tracker — it is stateless.
+    If you need caching, call run_cached() directly after this.
+
+    Raises HTTPException(502) only when ALL configured providers fail.
+    Raises HTTPException(503) when no providers are configured.
+    """
+    providers = _failover_providers()
+    if not providers:
+        raise HTTPException(
+            status_code=503,
+            detail="No LLM keys configured. Set GROQ_API_KEY or EMERGENT_LLM_KEY in .env.",
+        )
+
+    last_error: Exception | None = None
+    for provider, model, api_key in providers:
+        try:
+            logger.debug("llm_complete: trying provider=%s model=%s", provider, model)
+            import uuid as _uuid
+            sid = f"{session_id}-{_uuid.uuid4().hex[:8]}"
+            chat = LlmChat(api_key=api_key, session_id=sid, system_message=system)
+            chat.with_model(provider, model)
+            response = await chat.send_message(UserMessage(text=user))
+            if response:
+                logger.info("llm_complete: success provider=%s model=%s", provider, model)
+                return response
+        except Exception as exc:
+            last_error = exc
+            logger.warning(
+                "llm_complete: provider=%s model=%s failed: %s — trying next",
+                provider, model, str(exc)[:120],
+            )
+            continue
+
+    raise HTTPException(
+        status_code=502,
+        detail=f"All LLM providers failed. Last error: {last_error}",
+    )

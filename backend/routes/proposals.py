@@ -20,7 +20,7 @@ import uuid
 
 from emergentintegrations.llm.chat import LlmChat, UserMessage  # noqa: F401 (kept for downstream imports)
 from services.audit_service import log_audit_event
-from services.llm_runner import run_cached
+from services.llm_runner import run_cached, llm_complete
 
 router = APIRouter()
 
@@ -191,9 +191,10 @@ async def draft_proposal(req: ProposalDraftRequest, db=Depends(get_db)):
     """Generate a full draft using Emergent LLM (Gemini 3 Flash - FREE)."""
     _validate_doc_type(req.doc_type)
 
-    response = await run_cached(
-        db, "gemini", "gemini-3-flash-preview",
-        DEFAULT_SYSTEM_MESSAGE, _build_prompt(req),
+    response = await llm_complete(
+        system=DEFAULT_SYSTEM_MESSAGE,
+        user=_build_prompt(req),
+        max_tokens=2000,
         session_id=f"prop_{uuid.uuid4().hex[:8]}",
     )
 
@@ -206,7 +207,7 @@ async def draft_proposal(req: ProposalDraftRequest, db=Depends(get_db)):
             "opportunity_url": req.opportunity_url,
             "deadline": req.deadline,
             "budget_usd": req.budget_usd,
-            "model": "gemini-3-flash",
+            "model": "llm_complete_failover",
         },
     )
     await db.proposals.insert_one(doc.model_dump())

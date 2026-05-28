@@ -222,7 +222,20 @@ async def create_checkout(payload: CheckoutCreateRequest, http_request: Request,
             "referrer": payload.referrer or "",
         },
     )
-    session = await stripe_checkout.create_checkout_session(req)
+    try:
+        session = await stripe_checkout.create_checkout_session(req)
+    except Exception as e:
+        err_str = str(e).lower()
+        if "authentication" in err_str or "invalid api key" in err_str or "no api key" in err_str:
+            raise HTTPException(
+                status_code=503,
+                detail=(
+                    "Stripe API key is missing or invalid. "
+                    "Set a real STRIPE_API_KEY (sk_test_… or sk_live_…) in /opt/command-os/.env "
+                    "and run: sudo docker compose -f docker-compose.sqlite.yml up -d backend"
+                ),
+            ) from e
+        raise HTTPException(status_code=502, detail=f"Stripe error: {e}") from e
 
     # MANDATORY: record a pending transaction BEFORE redirect
     await db.payment_transactions.insert_one({
