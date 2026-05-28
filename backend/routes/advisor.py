@@ -15,7 +15,7 @@ from routes.analytics import (
     conversion_funnel, stream_roi, momentum, viral_themes, platform_mix,
 )
 from services.distillation_service import to_yaml_payload
-from services.llm_runner import run_cached
+from services.llm_runner import run_cached, llm_complete
 
 router = APIRouter()
 
@@ -68,9 +68,10 @@ async def get_recommendation(db=Depends(get_db)):
         "action as JSON.\n\n```yaml\n" + yaml_ctx[:5000] + "\n```"
     )
 
-    raw = await run_cached(
-        db, "anthropic", "claude-sonnet-4-5-20250929",
-        SYSTEM_MSG, prompt,
+    raw = await llm_complete(
+        system=SYSTEM_MSG,
+        user=prompt,
+        max_tokens=600,
         session_id=f"adv_{uuid.uuid4().hex[:8]}",
     )
 

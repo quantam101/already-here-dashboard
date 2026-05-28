@@ -26,7 +26,7 @@ from typing import Any
 import httpx
 
 from agents.base_agent import BaseAgent
-from services.llm_runner import run_cached
+from services.llm_runner import run_cached, llm_complete
 
 logger = logging.getLogger("content_agent")
 
@@ -123,14 +123,11 @@ class ContentAgent(BaseAgent):
     async def _generate_article(self, db, opp: dict) -> tuple[dict, int]:
         topic = opp.get("title", "AI tools for passive income")
         session_id = f"content-{uuid.uuid4().hex[:10]}"
-        raw = await run_cached(
-            db,
-            provider="gemini",
-            model="gemini-2.5-flash",
-            system_msg=ARTICLE_SYSTEM,
-            prompt=ARTICLE_PROMPT.format(topic=topic),
+        raw = await llm_complete(
+            system=ARTICLE_SYSTEM,
+            user=ARTICLE_PROMPT.format(topic=topic),
+            max_tokens=1500,
             session_id=session_id,
-            tier=2,
         )
         # Strip code fences if model wraps response
         raw = re.sub(r"^```(?:json)?\s*", "", raw.strip())
