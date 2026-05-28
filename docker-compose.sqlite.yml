@@ -20,7 +20,8 @@ services:
       SQLITE_PATH: /app/data/command_os.db
       DB_NAME: ${DB_NAME:-command_os}
       CORS_ORIGINS: ${CORS_ORIGINS:-*}
-      EMERGENT_LLM_KEY: ${EMERGENT_LLM_KEY}
+      EMERGENT_LLM_KEY: ${EMERGENT_LLM_KEY:-}
+      GROQ_API_KEY: ${GROQ_API_KEY:-}
       STRIPE_API_KEY: ${STRIPE_API_KEY:-sk_test_emergent}
       STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
       OPERATOR_EMAIL: ${OPERATOR_EMAIL:-}

@@ -190,29 +190,48 @@ async def make_decision(db, registered_agent_ids: list[str]) -> SovereignDecisio
                 session_id,
             )
         else:
-            # Select provider: Gemini if EMERGENT_LLM_KEY set, else Groq free tier
+            # Provider priority: Groq (always free) → Gemini (if key set) → fallback
             _lm_key = os.environ.get("EMERGENT_LLM_KEY", "").strip()
             _gr_key = os.environ.get("GROQ_API_KEY", "").strip()
-            if not _lm_key and _gr_key:
-                # Swap env so run_cached picks up Groq
-                os.environ["EMERGENT_LLM_KEY"] = _gr_key
-                _cash_provider, _cash_model = "groq", "llama-3.3-70b-versatile"
-            else:
-                _cash_provider, _cash_model = "gemini", "gemini-2.0-flash"
+
+            # Build ordered list of (provider, model, api_key) to try
+            _providers_to_try: list[tuple[str, str, str]] = []
+            if _gr_key:
+                _providers_to_try.append(("groq", "llama-3.3-70b-versatile", _gr_key))
+            if _lm_key:
+                _providers_to_try.append(("gemini", "gemini-2.0-flash", _lm_key))
+
+            if not _providers_to_try:
+                raise RuntimeError("No LLM API key configured (set GROQ_API_KEY or EMERGENT_LLM_KEY)")
+
+            last_error: Exception | None = None
+            raw_response: str | None = None
+            for _cash_provider, _cash_model, _api_key in _providers_to_try:
+                try:
+                    # Temporarily set EMERGENT_LLM_KEY so llm_runner picks up the right key
+                    os.environ["EMERGENT_LLM_KEY"] = _api_key
+                    logger.info("Cash AI trying provider=%s model=%s", _cash_provider, _cash_model)
+                    raw_response = await run_cached(
+                        db,
+                        provider=_cash_provider,
+                        model=_cash_model,
+                        system_msg=SOVEREIGN_SYSTEM,
+                        prompt=DECISION_PROMPT.format(
+                            snapshot_yaml=snapshot_yaml,
+                            agent_ids=agent_ids_str,
+                        ),
+                        session_id=session_id,
+                        tier=3,
+                    )
+                    logger.info("Cash AI succeeded with provider=%s", _cash_provider)
+                    break  # success — stop trying
+                except Exception as exc:
+                    last_error = exc
+                    logger.warning("Cash AI provider=%s failed: %s — trying next", _cash_provider, exc)
 
             try:
-                raw_response = await run_cached(
-                    db,
-                    provider=_cash_provider,
-                    model=_cash_model,
-                    system_msg=SOVEREIGN_SYSTEM,
-                    prompt=DECISION_PROMPT.format(
-                        snapshot_yaml=snapshot_yaml,
-                        agent_ids=agent_ids_str,
-                    ),
-                    session_id=session_id,
-                    tier=3,
-                )
+                if raw_response is None:
+                    raise last_error or RuntimeError("All LLM providers failed")
                 raw_json = raw_response.strip()
                 raw_json = __import__("re").sub(r"^```(?:json)?\s*", "", raw_json)
                 raw_json = __import__("re").sub(r"\s*```$", "", raw_json)
