@@ -205,14 +205,9 @@ async def make_decision(db, registered_agent_ids: list[str]) -> SovereignDecisio
                 _providers_to_try.append(("gemini", "gemini-2.5-flash", _lm_key))
             if _ds_key:
                 _providers_to_try.append(("deepseek", "deepseek-chat", _ds_key))
-            if _or_key:
-                # Try multiple free OpenRouter models — some may be rate-limited upstream
-                for _or_model in [
-                    "google/gemma-4-31b-it:free",
-                    "meta-llama/llama-3.3-70b-instruct:free",
-                    "moonshotai/kimi-k2.6:free",
-                ]:
-                    _providers_to_try.append(("openrouter", _or_model, _or_key))
+            # OpenRouter: paid/reliable models only (no :free tier rate limits)
+            # if _or_key:
+            #     _providers_to_try.append(("openrouter", "anthropic/claude-3.5-haiku", _or_key))
             if _lm_key:
                 _providers_to_try.append(("gemini", "gemini-1.5-flash", _lm_key))
 
