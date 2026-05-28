@@ -177,18 +177,17 @@ class TestStudioIntegration:
         assert r.status_code == 200
         assert isinstance(r.json(), list)
 
-    def test_connectors_include_facebook_and_reddit(self, client):
+    def test_connectors_include_facebook_and_reddit(self, seeded_client):
         """
-        After seeding (python seed_data.py), facebook and reddit connectors should exist.
-        In a fresh test DB without seed this test is skipped gracefully.
+        platform_connectors is populated by seed_data.seed_if_empty().
+        Uses seeded_client fixture which guarantees the seed ran before this test.
         """
-        skip_no_app(client)
-        connectors = client.get("/api/studio/connectors/").json()
-        if not connectors:
-            pytest.skip("No connectors in test DB — run seed_data.py first")
+        skip_no_app(seeded_client)
+        connectors = seeded_client.get("/api/studio/connectors/").json()
+        assert connectors, "Connectors list is empty even after seeding"
         platforms = {c.get("platform") for c in connectors}
-        assert "facebook" in platforms, f"facebook missing from {platforms}"
-        assert "reddit" in platforms, f"reddit missing from {platforms}"
+        assert "facebook" in platforms, f"facebook missing — got {platforms}"
+        assert "reddit" in platforms, f"reddit missing — got {platforms}"
 
 
 # ── Publishing Log ─────────────────────────────────────────────────────────────
