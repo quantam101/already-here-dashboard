@@ -195,12 +195,19 @@ async def make_decision(db, registered_agent_ids: list[str]) -> SovereignDecisio
             _gr_key = os.environ.get("GROQ_API_KEY", "").strip()
 
             # Build ordered list of (provider, model, api_key) to try
+            # Priority: Groq (fast/free) → Gemini 2.5 → DeepSeek → OpenRouter → Gemini 1.5
+            _ds_key = os.environ.get("DEEPSEEK_API_KEY", "").strip()
+            _or_key = os.environ.get("OPENROUTER_API_KEY", "").strip()
             _providers_to_try: list[tuple[str, str, str]] = []
             if _gr_key:
                 _providers_to_try.append(("groq", "llama-3.3-70b-versatile", _gr_key))
             if _lm_key:
-                # Try newer models first (2.5-flash available on free tier)
                 _providers_to_try.append(("gemini", "gemini-2.5-flash", _lm_key))
+            if _ds_key:
+                _providers_to_try.append(("deepseek", "deepseek-chat", _ds_key))
+            if _or_key:
+                _providers_to_try.append(("openrouter", "meta-llama/llama-3.3-70b-instruct:free", _or_key))
+            if _lm_key:
                 _providers_to_try.append(("gemini", "gemini-1.5-flash", _lm_key))
 
             if not _providers_to_try:

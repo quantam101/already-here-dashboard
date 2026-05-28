@@ -1,6 +1,13 @@
 """
 Compatibility shim for emergentintegrations.llm.chat.
-Replaces the private package with direct calls to google-generativeai, anthropic, and httpx.
+Replaces the private package with direct calls to google-generativeai, anthropic, httpx.
+
+Supported providers:
+  groq        — api.groq.com (free tier, fast)
+  gemini      — Google Gemini via google-generativeai (free tier)
+  deepseek    — api.deepseek.com (OpenAI-compatible, generous free tier)
+  openrouter  — openrouter.ai (many free models, set OPENROUTER_API_KEY)
+  anthropic   — Anthropic Claude (paid)
 
 Public API (matches original):
     LlmChat(api_key, session_id, system_message)
@@ -15,7 +22,6 @@ import asyncio
 import logging
 import os
 from dataclasses import dataclass
-from typing import Optional
 
 logger = logging.getLogger("emergentintegrations.llm.chat")
 
@@ -26,7 +32,7 @@ class UserMessage:
 
 
 class LlmChat:
-    """Unified LLM chat interface — Gemini primary, Anthropic and Groq fallbacks."""
+    """Unified LLM chat interface — Groq / Gemini / DeepSeek / OpenRouter / Anthropic."""
 
     def __init__(self, api_key: str, session_id: str = "", system_message: str = ""):
         self._api_key = api_key
@@ -46,12 +52,59 @@ class LlmChat:
             return await self._call_gemini(message.text)
         elif provider in ("anthropic", "claude"):
             return await self._call_anthropic(message.text)
-        elif provider in ("groq",):
-            return await self._call_groq(message.text)
+        elif provider == "groq":
+            return await self._call_openai_compat(
+                message.text,
+                base_url="https://api.groq.com/openai/v1",
+            )
+        elif provider == "deepseek":
+            return await self._call_openai_compat(
+                message.text,
+                base_url="https://api.deepseek.com/v1",
+            )
+        elif provider == "openrouter":
+            return await self._call_openai_compat(
+                message.text,
+                base_url="https://openrouter.ai/api/v1",
+                extra_headers={
+                    "HTTP-Referer": "https://app.alreadyherellc.com",
+                    "X-Title": "Already Here Command OS",
+                },
+            )
         else:
-            # Fallback: try Gemini with the key we have
             logger.warning("Unknown provider %r — falling back to Gemini", provider)
             return await self._call_gemini(message.text)
+
+    # ── OpenAI-compatible (Groq / DeepSeek / OpenRouter) ──────────────────────
+
+    async def _call_openai_compat(
+        self,
+        prompt: str,
+        base_url: str,
+        extra_headers: dict | None = None,
+    ) -> str:
+        import httpx
+
+        messages = []
+        if self._system_message:
+            messages.append({"role": "system", "content": self._system_message})
+        messages.append({"role": "user", "content": prompt})
+
+        headers = {
+            "Authorization": f"Bearer {self._api_key}",
+            "Content-Type": "application/json",
+        }
+        if extra_headers:
+            headers.update(extra_headers)
+
+        async with httpx.AsyncClient(timeout=90) as client:
+            resp = await client.post(
+                f"{base_url}/chat/completions",
+                headers=headers,
+                json={"model": self._model, "messages": messages, "max_tokens": 4096},
+            )
+            resp.raise_for_status()
+            return resp.json()["choices"][0]["message"]["content"].strip()
 
     # ── Gemini ────────────────────────────────────────────────────────────────
 
@@ -93,22 +146,3 @@ class LlmChat:
             messages=[{"role": "user", "content": prompt}],
         )
         return msg.content[0].text.strip()
-
-    # ── Groq ──────────────────────────────────────────────────────────────────
-
-    async def _call_groq(self, prompt: str) -> str:
-        import httpx
-
-        messages = []
-        if self._system_message:
-            messages.append({"role": "system", "content": self._system_message})
-        messages.append({"role": "user", "content": prompt})
-
-        async with httpx.AsyncClient(timeout=60) as client:
-            resp = await client.post(
-                "https://api.groq.com/openai/v1/chat/completions",
-                headers={"Authorization": f"Bearer {self._api_key}", "Content-Type": "application/json"},
-                json={"model": self._model, "messages": messages, "max_tokens": 4096},
-            )
-            resp.raise_for_status()
-            return resp.json()["choices"][0]["message"]["content"].strip()
