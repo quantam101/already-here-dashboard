@@ -199,7 +199,9 @@ async def make_decision(db, registered_agent_ids: list[str]) -> SovereignDecisio
             if _gr_key:
                 _providers_to_try.append(("groq", "llama-3.3-70b-versatile", _gr_key))
             if _lm_key:
-                _providers_to_try.append(("gemini", "gemini-2.0-flash", _lm_key))
+                # Try newer models first (2.5-flash available on free tier)
+                _providers_to_try.append(("gemini", "gemini-2.5-flash", _lm_key))
+                _providers_to_try.append(("gemini", "gemini-1.5-flash", _lm_key))
 
             if not _providers_to_try:
                 raise RuntimeError("No LLM API key configured (set GROQ_API_KEY or EMERGENT_LLM_KEY)")
