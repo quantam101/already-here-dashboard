@@ -151,8 +151,16 @@ class SqliteCollection:
         self._db = db
         self._name = name
 
-    async def find_one(self, filter_=None, projection=None):
-        rows = await self._db._find_list(self._name, filter_ or {}, projection, None, 1)
+    async def find_one(self, filter_=None, projection=None, sort=None):
+        """Find single document. sort= accepts MongoDB-style list[tuple] e.g. [('field', -1)]."""
+        sort_tuple = None
+        if sort:
+            # MongoDB: sort=[("field", -1)] → (field, -1)
+            if isinstance(sort, list) and sort:
+                sort_tuple = (sort[0][0], sort[0][1])
+            elif isinstance(sort, tuple):
+                sort_tuple = sort
+        rows = await self._db._find_list(self._name, filter_ or {}, projection, sort_tuple, 1)
         return rows[0] if rows else None
 
     def find(self, filter_=None, projection=None):
