@@ -33,7 +33,7 @@ class LlmChat:
         self._session_id = session_id
         self._system_message = system_message
         self._provider: str = "gemini"
-        self._model: str = "gemini-2.0-flash"
+        self._model: str = "gemini-2.5-flash"
 
     def with_model(self, provider: str, model: str) -> "LlmChat":
         self._provider = provider.lower()

@@ -126,7 +126,7 @@ class ContentAgent(BaseAgent):
         raw = await run_cached(
             db,
             provider="gemini",
-            model="gemini/gemini-2.0-flash",
+            model="gemini-2.5-flash",
             system_msg=ARTICLE_SYSTEM,
             prompt=ARTICLE_PROMPT.format(topic=topic),
             session_id=session_id,
