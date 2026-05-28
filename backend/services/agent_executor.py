@@ -31,6 +31,7 @@ AGENT_REGISTRY: dict[str, str] = {
     "scout-agent":   "agents.scout_agent.ScoutAgent",
     "content-agent": "agents.content_agent.ContentAgent",
     "revenue-agent": "agents.revenue_agent.RevenueAgent",
+    "social-agent":  "agents.social_agent.SocialAgent",
 }
 
 # Agents that must run BEFORE the parallel batch (ordered by priority ASC)

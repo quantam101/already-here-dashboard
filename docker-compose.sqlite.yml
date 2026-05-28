@@ -30,6 +30,44 @@ services:
       OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3.2}
       KOBOLD_BASE_URL: ${KOBOLD_BASE_URL:-}
       KOBOLD_MODEL: ${KOBOLD_MODEL:-koboldcpp}
+      # ── Social Media Credentials ─────────────────────────────────────────
+      # Medium (free): medium.com/me/settings/security → Integration token
+      MEDIUM_INTEGRATION_TOKEN: ${MEDIUM_INTEGRATION_TOKEN:-}
+      # Dev.to (free): dev.to/settings/extensions → API key
+      DEVTO_API_KEY: ${DEVTO_API_KEY:-}
+      # Reddit (free): reddit.com/prefs/apps → create "script" app
+      REDDIT_CLIENT_ID: ${REDDIT_CLIENT_ID:-}
+      REDDIT_CLIENT_SECRET: ${REDDIT_CLIENT_SECRET:-}
+      REDDIT_USERNAME: ${REDDIT_USERNAME:-}
+      REDDIT_PASSWORD: ${REDDIT_PASSWORD:-}
+      REDDIT_SUBREDDITS: ${REDDIT_SUBREDDITS:-entrepreneur,passive_income,sidehustle}
+      # Facebook Page (requires Meta Developer App + App Review)
+      FB_PAGE_ID: ${FB_PAGE_ID:-}
+      FB_PAGE_ACCESS_TOKEN: ${FB_PAGE_ACCESS_TOKEN:-}
+      # Instagram (same Meta app as Facebook, needs IG Business account)
+      IG_USER_ID: ${IG_USER_ID:-}
+      IG_ACCESS_TOKEN: ${IG_ACCESS_TOKEN:-}
+      # Threads (Meta Threads API — separate token from Instagram)
+      THREADS_USER_ID: ${THREADS_USER_ID:-}
+      THREADS_ACCESS_TOKEN: ${THREADS_ACCESS_TOKEN:-}
+      # LinkedIn (linkedin.com/developers → create app → w_member_social)
+      LINKEDIN_ACCESS_TOKEN: ${LINKEDIN_ACCESS_TOKEN:-}
+      LINKEDIN_PERSON_URN: ${LINKEDIN_PERSON_URN:-}
+      # YouTube (Google Cloud Console → YouTube Data API v3 → OAuth2)
+      YOUTUBE_CLIENT_ID: ${YOUTUBE_CLIENT_ID:-}
+      YOUTUBE_CLIENT_SECRET: ${YOUTUBE_CLIENT_SECRET:-}
+      YOUTUBE_REFRESH_TOKEN: ${YOUTUBE_REFRESH_TOKEN:-}
+      # TikTok (developers.tiktok.com → Content Posting API approval required)
+      TIKTOK_ACCESS_TOKEN: ${TIKTOK_ACCESS_TOKEN:-}
+      # Discourse / Niche Forums (any Discourse-based forum)
+      DISCOURSE_BASE_URL: ${DISCOURSE_BASE_URL:-}
+      DISCOURSE_API_KEY: ${DISCOURSE_API_KEY:-}
+      DISCOURSE_API_USERNAME: ${DISCOURSE_API_USERNAME:-}
+      DISCOURSE_CATEGORY_ID: ${DISCOURSE_CATEGORY_ID:-1}
+      # Content Repo (GitHub Pages auto-publish)
+      CONTENT_REPO_TOKEN: ${CONTENT_REPO_TOKEN:-}
+      GITHUB_CONTENT_OWNER: ${GITHUB_CONTENT_OWNER:-quantam101}
+      GITHUB_CONTENT_REPO: ${GITHUB_CONTENT_REPO:-content}
       STRIPE_API_KEY: ${STRIPE_API_KEY:-sk_test_emergent}
       STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
       OPERATOR_EMAIL: ${OPERATOR_EMAIL:-}
