@@ -65,12 +65,20 @@ export default function QuickstartWizard() {
       body: (
         <div className="space-y-3 text-sm text-gray-300">
           <p>
-            This 30-second wizard makes sure the engine is wired correctly so paid
-            checkouts, AI advisors, and the daily auto-cycle all fire on day one.
+            This wizard walks you through the 5-step setup so autonomous content posting,
+            AI advisors, and the daily auto-cycle all fire on day one — with{" "}
+            <span className="text-green-400 font-semibold">$0/month fixed cost</span>.
           </p>
+          <div className="bg-black/30 border border-white/5 rounded-lg p-3 space-y-1.5 text-xs">
+            <p className="text-green-400 font-semibold">What happens automatically once configured:</p>
+            <p>✦ Daily Scout scans Reddit, HN, Google News for viral topics</p>
+            <p>✦ AI writes article + video script for every trending idea</p>
+            <p>✦ Auto-posts to Medium, Dev.to, Reddit, LinkedIn, Facebook, Threads</p>
+            <p>✦ Generates CapCut-ready scripts for TikTok / YouTube Shorts / Reels</p>
+            <p>✦ Export packs for Facebook Groups, Quora, niche forums</p>
+          </div>
           <p className="text-xs text-gray-500">
-            You can re-open this anytime by clicking <span className="text-green-400">Quickstart</span> in
-            the sidebar status panel.
+            Re-open anytime via <span className="text-green-400">Re-open Quickstart</span> in the sidebar.
           </p>
         </div>
       ),
@@ -148,13 +156,92 @@ export default function QuickstartWizard() {
       ) : null,
     },
     {
-      title: "Step 4 — Test the auto-cycle",
+      title: "Step 4 — Connect social platforms",
+      body: (
+        <div className="space-y-3">
+          <p className="text-xs text-gray-400">
+            Add credentials to your server <code className="text-green-400 bg-black/30 px-1 rounded">/opt/command-os/.env</code> then restart the backend.
+            Each takes 5–15 minutes. Start with Tier 1 — they work today without app review.
+          </p>
+          <div className="space-y-2">
+            <div className="bg-black/30 border border-green-500/20 rounded-lg p-2.5">
+              <p className="text-xs font-semibold text-green-400 mb-1">✅ Tier 1 — Works Today (5–15 min each)</p>
+              <div className="space-y-1 text-xs text-gray-300">
+                <p><span className="text-white">Medium:</span> medium.com/me/settings/security → Integration token → <code className="text-green-400">MEDIUM_INTEGRATION_TOKEN</code></p>
+                <p><span className="text-white">Dev.to:</span> dev.to/settings/extensions → API key → <code className="text-green-400">DEVTO_API_KEY</code></p>
+                <p><span className="text-white">Reddit:</span> reddit.com/prefs/apps → "script" app → <code className="text-green-400">REDDIT_CLIENT_ID / SECRET / USERNAME / PASSWORD</code></p>
+              </div>
+            </div>
+            <div className="bg-black/30 border border-yellow-500/20 rounded-lg p-2.5">
+              <p className="text-xs font-semibold text-yellow-400 mb-1">🟡 Tier 2 — Needs App Registration (1–4 hrs)</p>
+              <div className="space-y-1 text-xs text-gray-300">
+                <p><span className="text-white">LinkedIn:</span> linkedin.com/developers → <code className="text-green-400">LINKEDIN_ACCESS_TOKEN + LINKEDIN_PERSON_URN</code></p>
+                <p><span className="text-white">YouTube:</span> Google Cloud Console → YouTube Data API v3 → OAuth2 → <code className="text-green-400">YOUTUBE_CLIENT_ID / SECRET / REFRESH_TOKEN</code></p>
+              </div>
+            </div>
+            <div className="bg-black/30 border border-red-500/20 rounded-lg p-2.5">
+              <p className="text-xs font-semibold text-red-400 mb-1">🔴 Tier 3 — App Review Required (days–weeks)</p>
+              <div className="space-y-1 text-xs text-gray-300">
+                <p><span className="text-white">Facebook + Instagram + Threads:</span> developers.facebook.com → one Meta app → <code className="text-green-400">FB_PAGE_ACCESS_TOKEN / IG_ACCESS_TOKEN / THREADS_ACCESS_TOKEN</code></p>
+                <p><span className="text-white">TikTok:</span> developers.tiktok.com → Content Posting API approval → <code className="text-green-400">TIKTOK_ACCESS_TOKEN</code></p>
+              </div>
+            </div>
+          </div>
+          <p className="text-xs text-gray-500">
+            Full guide: <span className="text-blue-400">SOCIAL_SETUP.md</span> in your repo. Check live status at{" "}
+            <code className="text-green-400 bg-black/30 px-1 rounded">/api/cycle/connectors</code>
+          </p>
+        </div>
+      ),
+    },
+    {
+      title: "📹 Faceless Video Creation — How It Works",
+      body: (
+        <div className="space-y-3">
+          <p className="text-xs text-gray-400">
+            You never appear on camera. The system does the thinking; CapCut does the editing.
+          </p>
+          <div className="space-y-2 text-xs">
+            <div className="flex gap-3 p-2.5 rounded-lg bg-black/30 border border-white/5">
+              <span className="text-green-400 font-bold text-base leading-none mt-0.5">1</span>
+              <div>
+                <p className="text-white font-semibold">AI writes the script</p>
+                <p className="text-gray-400">Scout finds a trending topic → AI generates hook + narration sections + CTA. Go to <span className="text-green-400">Content Factory</span> → pick any idea → click <span className="text-green-400">Generate Script</span>.</p>
+              </div>
+            </div>
+            <div className="flex gap-3 p-2.5 rounded-lg bg-black/30 border border-white/5">
+              <span className="text-green-400 font-bold text-base leading-none mt-0.5">2</span>
+              <div>
+                <p className="text-white font-semibold">Get the Export Pack</p>
+                <p className="text-gray-400">Click <span className="text-green-400">Export Pack</span> on any idea. You get a formatted <span className="text-white">video_script</span> with hook, bullet narration, and CTA — plus captions and hashtags pre-written.</p>
+              </div>
+            </div>
+            <div className="flex gap-3 p-2.5 rounded-lg bg-black/30 border border-white/5">
+              <span className="text-green-400 font-bold text-base leading-none mt-0.5">3</span>
+              <div>
+                <p className="text-white font-semibold">Film in CapCut (free)</p>
+                <p className="text-gray-400">Use CapCut's AI text-to-speech (free tier) to narrate. Add stock footage from their library. Export as 9:16 vertical for TikTok/Shorts/Reels or 16:9 for full YouTube.</p>
+              </div>
+            </div>
+            <div className="flex gap-3 p-2.5 rounded-lg bg-black/30 border border-white/5">
+              <span className="text-green-400 font-bold text-base leading-none mt-0.5">4</span>
+              <div>
+                <p className="text-white font-semibold">Post &amp; mark as done</p>
+                <p className="text-gray-400">Upload manually via TikTok / YouTube Studio / Instagram, or configure API tokens for auto-upload. Mark as posted in <span className="text-green-400">Publishing</span> to track analytics.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      ),
+    },
+    {
+      title: "Step 5 — Test the auto-cycle",
       body: status ? (
         <div className="space-y-3">
           <Row
             ok={true}
             label={`Daily auto-cycle scheduled @ ${status.daily_cycle_hour_utc}:00 UTC`}
-            hint="Scrapes scout → drafts content → queues posting log. Run a one-off below to confirm wiring."
+            hint="Scouts trending topics → writes scripts → auto-posts to configured text platforms → generates Export Packs for video/manual. Run a one-off below to confirm everything is wired."
           />
           <Button
             onClick={() => runCycle.mutate()}
@@ -167,27 +254,49 @@ export default function QuickstartWizard() {
             {runCycle.isPending ? "Running dry-run cycle…" : "Run a test cycle now"}
           </Button>
           {runCycle.data?.data && (
-            <div className="text-xs text-green-400 bg-black/40 border border-green-500/20 rounded-md p-2" data-testid="cycle-result">
-              ✓ Cycle ran. Ideas: {runCycle.data.data.ideas_created || 0} · Drafts: {runCycle.data.data.publishing_drafts || 0} · Opportunities: {runCycle.data.data.opportunities_scanned || 0}
+            <div className="text-xs text-green-400 bg-black/40 border border-green-500/20 rounded-md p-2 space-y-1" data-testid="cycle-result">
+              <p>✓ Cycle ran. Ideas: {runCycle.data.data.ideas_created || 0} · Drafts: {runCycle.data.data.publishing_drafts || 0} · Opportunities: {runCycle.data.data.opportunities_scanned || 0}</p>
+              {runCycle.data.data.auto_posted > 0 && (
+                <p>🚀 Auto-posted to: {runCycle.data.data.live_connectors?.join(", ") || "configured platforms"}</p>
+              )}
+              {runCycle.data.data.export_packs > 0 && (
+                <p>📦 Export packs ready — go to Content Factory → any idea → Export Pack</p>
+              )}
+              {runCycle.data.data.auto_posted === 0 && runCycle.data.data.export_packs > 0 && (
+                <p className="text-yellow-400">⚠ No social credentials configured yet — add them in Step 4 above</p>
+              )}
             </div>
           )}
         </div>
       ) : null,
     },
     {
-      title: "You're ready",
+      title: "You're live 🚀",
       body: (
         <div className="space-y-3 text-sm text-gray-300">
-          <p className="text-green-400 font-medium">All systems green. Pin these to your bookmarks:</p>
-          <ul className="space-y-1.5 text-xs text-gray-300">
-            <li>• <span className="text-white">/overview</span> — Command Center + Profit Meter</li>
-            <li>• <span className="text-white">/scout</span> — find viral content + grant opportunities</li>
-            <li>• <span className="text-white">/proof-of-work</span> — record real earnings</li>
-            <li>• <span className="text-white">/analytics</span> — AI Advisor + UTM attribution</li>
-            <li>• <span className="text-white">/pricing</span> — generate Stripe share-links</li>
-          </ul>
+          <p className="text-green-400 font-medium">Command OS is fully operational. Your daily workflow:</p>
+          <div className="bg-black/30 border border-white/5 rounded-lg p-3 space-y-1.5 text-xs">
+            <p className="text-white font-semibold">Every morning (automated):</p>
+            <p className="text-gray-400">Scout finds viral ideas → AI writes scripts → posts to text platforms → export packs generated for video</p>
+            <p className="text-white font-semibold mt-2">Your 10-minute video routine:</p>
+            <p className="text-gray-400">Content Factory → pick top idea → Export Pack → copy video_script → CapCut → film with TTS → post</p>
+          </div>
+          <div className="grid grid-cols-2 gap-1.5 text-xs">
+            <div className="bg-black/30 border border-white/5 rounded p-2">
+              <p className="text-white font-semibold mb-0.5">Key pages</p>
+              <p className="text-gray-400">/studio — Content Factory</p>
+              <p className="text-gray-400">/scout — Viral ideas</p>
+              <p className="text-gray-400">/sovereign — Cash AI advisor</p>
+            </div>
+            <div className="bg-black/30 border border-white/5 rounded p-2">
+              <p className="text-white font-semibold mb-0.5">Revenue tracking</p>
+              <p className="text-gray-400">/proof-of-work — log income</p>
+              <p className="text-gray-400">/analytics — UTM + ROI</p>
+              <p className="text-gray-400">/pricing — Stripe links</p>
+            </div>
+          </div>
           <p className="text-xs text-gray-500">
-            Deployment guide: <span className="text-blue-400">/app/DEPLOY-TO-OCI.md</span> (also in your repo).
+            Check live connector status: <code className="text-green-400 bg-black/30 px-1 rounded">/api/cycle/connectors</code>
           </p>
         </div>
       ),

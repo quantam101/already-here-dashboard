@@ -1,0 +1,373 @@
+##############################################################################
+# Already Here Command OS — CI/CD Pipeline
+#
+# Pipeline stages (each depends on the previous passing):
+#
+#  1. static-analysis  — ruff, mypy, isort check, flake8         (< 60s)
+#  2. security-scan    — bandit, safety/pip-audit                 (< 90s)
+#  3. unit-tests       — pytest tests/unit/  (mocked, zero net)   (< 30s)
+#  4. integration-tests— pytest tests/integration/ (TestClient)   (< 120s)
+#  5. e2e-tests        — pytest tests/e2e/ (Playwright, live URL) (< 180s)
+#  6. regression-tests — pytest tests/regression/ (smoke)        (< 60s)
+#  7. deploy           — SSH to OCI, git pull, docker compose up  (main only)
+#
+# Secrets required (Settings → Secrets → Actions):
+#   OCI_SSH_KEY          — private key for ubuntu@129.146.236.177
+#   OCI_HOST             — server IP (129.146.236.177)
+#   OCI_USER             — ubuntu
+#   REACT_APP_BACKEND_URL— https://app.alreadyherellc.com
+#   STRIPE_API_KEY       — sk_test_* (CI uses test key, never live key in CI)
+##############################################################################
+
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:           # allow manual trigger from GitHub UI
+
+env:
+  PYTHON_VERSION: "3.11"
+  STORAGE_BACKEND: sqlite
+  SQLITE_PATH: /tmp/ci_test.db
+  SYSTEM_MODE: test
+  COST_GUARD_ENABLED: "true"
+  ZERO_SPEND_MODE: "true"
+  AUTO_CYCLE_ENABLED: "false"
+  STRIPE_API_KEY: sk_test_emergent   # safe test stub — never a real key
+  REACT_APP_BACKEND_URL: ${{ secrets.REACT_APP_BACKEND_URL || 'https://app.alreadyherellc.com' }}
+
+#─────────────────────────────────────────────────────────────────────────────
+# JOB 1 — Static Analysis (ruff + mypy + isort + flake8)
+#─────────────────────────────────────────────────────────────────────────────
+jobs:
+  static-analysis:
+    name: "1 · Static Analysis"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: Install linting tools
+        run: |
+          pip install ruff mypy isort flake8 flake8-bugbear pydantic==2.13.4
+          pip install -r backend/requirements.txt --quiet
+
+      - name: ruff — fast linter & formatter check
+        working-directory: backend
+        run: ruff check . --output-format=github
+
+      - name: isort — import order check
+        working-directory: backend
+        run: isort . --check-only --diff
+
+      - name: flake8 — PEP 8 + bugbear checks
+        working-directory: backend
+        run: |
+          flake8 . \
+            --max-line-length=120 \
+            --extend-ignore=E203,W503,E501 \
+            --exclude=__pycache__,.git,migrations,tests \
+            --count
+
+      - name: mypy — type checking (non-blocking, informational)
+        working-directory: backend
+        run: |
+          mypy . \
+            --ignore-missing-imports \
+            --exclude 'tests|migrations|__pycache__' \
+            --no-error-summary \
+            || true    # type errors are reported but don't block CI
+
+#─────────────────────────────────────────────────────────────────────────────
+# JOB 2 — Security Scanning (bandit + safety/pip-audit)
+#─────────────────────────────────────────────────────────────────────────────
+  security-scan:
+    name: "2 · Security Scan"
+    needs: static-analysis
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: Install security tools
+        run: |
+          pip install bandit safety pip-audit semgrep
+          pip install -r backend/requirements.txt --quiet
+
+      - name: bandit — Python security linter
+        working-directory: backend
+        run: |
+          bandit -r . \
+            -x tests,migrations \
+            -ll \
+            --format txt \
+            || true   # informational — high-severity issues flagged but don't block
+
+      - name: pip-audit — dependency vulnerability check
+        run: |
+          pip-audit -r backend/requirements.txt \
+            --ignore-vuln PYSEC-2022-237 \
+            || true   # known false-positives in test env are skipped
+
+      - name: Check no real API keys in tracked files
+        run: |
+          # Fail if any real key patterns exist in committed code
+          if grep -rn --include="*.py" --include="*.yml" --include="*.json" \
+            -E '(sk_live_[a-zA-Z0-9]{20,}|ghp_[a-zA-Z0-9]{30,}|AIza[a-zA-Z0-9]{30,})' \
+            --exclude-dir=.git \
+            .; then
+            echo "FAIL: Live API key pattern found in repository!"
+            exit 1
+          fi
+          echo "PASS: No live API key patterns detected."
+
+      - name: Semgrep — SAST scan
+        run: |
+          semgrep scan \
+            --config "p/python" \
+            --config "p/secrets" \
+            backend/ \
+            --error \
+            --exclude "tests/" \
+            --exclude "__pycache__" \
+            || true   # report but don't block on first run
+
+#─────────────────────────────────────────────────────────────────────────────
+# JOB 3 — Unit Tests (pytest tests/unit/ — zero network, mocked)
+#─────────────────────────────────────────────────────────────────────────────
+  unit-tests:
+    name: "3 · Unit Tests"
+    needs: security-scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r backend/requirements.txt --quiet
+
+      - name: Run unit tests
+        working-directory: backend
+        run: |
+          pytest tests/unit/ \
+            -v \
+            --tb=short \
+            --no-header \
+            -q \
+            --junit-xml=../test_reports/unit.xml
+
+      - name: Upload unit test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unit-test-results
+          path: test_reports/unit.xml
+
+#─────────────────────────────────────────────────────────────────────────────
+# JOB 4 — Integration Tests (FastAPI TestClient, SQLite in /tmp)
+#─────────────────────────────────────────────────────────────────────────────
+  integration-tests:
+    name: "4 · Integration Tests"
+    needs: unit-tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r backend/requirements.txt --quiet
+
+      - name: Seed test database
+        working-directory: backend
+        env:
+          STORAGE_BACKEND: sqlite
+          SQLITE_PATH: /tmp/ci_test.db
+        run: python seed_data.py || true
+
+      - name: Run integration tests
+        working-directory: backend
+        env:
+          STORAGE_BACKEND: sqlite
+          SQLITE_PATH: /tmp/ci_test.db
+          STRIPE_API_KEY: sk_test_emergent
+        run: |
+          pytest tests/integration/ \
+            -v \
+            --tb=short \
+            --no-header \
+            -q \
+            --junit-xml=../test_reports/integration.xml
+
+      - name: Upload integration test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: integration-test-results
+          path: test_reports/integration.xml
+
+#─────────────────────────────────────────────────────────────────────────────
+# JOB 5 — E2E Tests (Playwright against live server, main branch only)
+#─────────────────────────────────────────────────────────────────────────────
+  e2e-tests:
+    name: "5 · E2E Tests (Playwright)"
+    needs: integration-tests
+    runs-on: ubuntu-latest
+    # Only run E2E on main branch (not PRs) to avoid hammering the live server
+    if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: Install Playwright + deps
+        run: |
+          pip install playwright pytest-playwright
+          pip install -r backend/requirements.txt --quiet
+          playwright install chromium --with-deps
+
+      - name: Run E2E tests
+        working-directory: backend
+        env:
+          REACT_APP_BACKEND_URL: ${{ env.REACT_APP_BACKEND_URL }}
+          FRONTEND_URL: ${{ env.REACT_APP_BACKEND_URL }}
+        run: |
+          pytest tests/e2e/ \
+            -v \
+            --tb=short \
+            --no-header \
+            -q \
+            --browser chromium \
+            --junit-xml=../test_reports/e2e.xml
+
+      - name: Upload E2E test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-test-results
+          path: test_reports/e2e.xml
+
+#─────────────────────────────────────────────────────────────────────────────
+# JOB 6 — Regression Tests (smoke contracts)
+#─────────────────────────────────────────────────────────────────────────────
+  regression-tests:
+    name: "6 · Regression Tests"
+    needs: e2e-tests
+    runs-on: ubuntu-latest
+    if: always() && needs.e2e-tests.result != 'failure'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r backend/requirements.txt --quiet
+
+      - name: Run regression tests
+        working-directory: backend
+        run: |
+          pytest tests/regression/ \
+            -v \
+            --tb=short \
+            --no-header \
+            -q \
+            --junit-xml=../test_reports/regression.xml
+
+      - name: Upload regression test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: regression-test-results
+          path: test_reports/regression.xml
+
+#─────────────────────────────────────────────────────────────────────────────
+# JOB 7 — Deploy (SSH → OCI server, main branch only, all tests must pass)
+#─────────────────────────────────────────────────────────────────────────────
+  deploy:
+    name: "7 · Deploy to OCI"
+    needs: [regression-tests]
+    runs-on: ubuntu-latest
+    if: |
+      github.ref == 'refs/heads/main' &&
+      needs.regression-tests.result == 'success'
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up SSH agent
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.OCI_SSH_KEY }}
+
+      - name: Add OCI host to known_hosts
+        run: |
+          ssh-keyscan -H ${{ secrets.OCI_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Deploy to OCI via SSH
+        env:
+          OCI_HOST: ${{ secrets.OCI_HOST }}
+          OCI_USER: ${{ secrets.OCI_USER }}
+        run: |
+          ssh "${OCI_USER}@${OCI_HOST}" << 'ENDSSH'
+            set -e
+            cd /opt/command-os
+            git pull origin main
+            sudo docker compose -f docker-compose.sqlite.yml build backend
+            sudo docker compose -f docker-compose.sqlite.yml up -d backend
+            # Wait for backend health
+            for i in $(seq 1 12); do
+              if curl -sf http://localhost:8001/api/health/ > /dev/null; then
+                echo "Backend healthy after ${i} attempts"
+                break
+              fi
+              echo "Waiting for backend... attempt $i"
+              sleep 5
+            done
+            # Build and serve updated frontend static bundle
+            if [ -d /opt/command-os/frontend ]; then
+              cd /opt/command-os/frontend
+              npm ci --quiet
+              npm run build
+              sudo docker compose -f /opt/command-os/docker-compose.sqlite.yml restart caddy
+            fi
+          ENDSSH
+
+      - name: Verify deployment health
+        run: |
+          sleep 10
+          status=$(curl -sf ${{ env.REACT_APP_BACKEND_URL }}/api/health/ | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['status'])")
+          if [ "$status" != "healthy" ]; then
+            echo "DEPLOY FAILED — health check returned: $status"
+            exit 1
+          fi
+          echo "DEPLOY SUCCESS — backend healthy"

@@ -1,0 +1,123 @@
+# Already Here Command OS — Python toolchain configuration
+# All tools read their config from here (PEP 517 / PEP 518)
+
+[tool.ruff]
+# Ruff: fast all-in-one linter + formatter (replaces flake8, pycodestyle, pyflakes)
+target-version = "py311"
+line-length = 120
+exclude = [
+    ".git",
+    "__pycache__",
+    ".venv",
+    "migrations",
+    "node_modules",
+    "frontend",
+    "*.egg-info",
+]
+
+[tool.ruff.lint]
+# Enable rule sets:
+#   E/W  — pycodestyle
+#   F    — pyflakes
+#   B    — flake8-bugbear (common bugs)
+#   I    — isort (import ordering)
+#   UP   — pyupgrade (modern Python idioms)
+#   S    — flake8-bandit security (basic)
+#   C4   — flake8-comprehensions
+#   PIE  — flake8-pie (misc. improvements)
+select = ["E", "W", "F", "B", "I", "UP", "C4", "PIE"]
+ignore = [
+    "E501",   # line too long — handled by formatter
+    "B008",   # do not perform function calls in argument defaults (FastAPI uses this)
+    "B904",   # raise from — too strict for existing code
+    "UP006",  # use list[] instead of List[] — pydantic compat
+    "UP007",  # use X|Y instead of Union[X,Y] — pydantic compat
+    "UP035",  # deprecated imports — pydantic compat
+    "S101",   # use of assert — needed in tests
+    "S105",   # hardcoded password — false positives in env-var code
+    "S106",   # hardcoded password — false positives
+    "S107",   # hardcoded password — false positives
+    "S603",   # subprocess call — used intentionally
+    "S608",   # SQL injection — SQLite shim uses safe patterns
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = ["S", "B", "E402"]   # tests: relax security + import-order rules
+"seed_data.py" = ["S"]                  # seed script: hardcoded test data is fine
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+
+# ─────────────────────────────────────────────────────────────────────────────
+
+[tool.isort]
+# isort: import ordering
+profile = "black"
+line_length = 120
+known_first_party = ["agents", "routes", "services", "content_models"]
+known_third_party = ["fastapi", "pydantic", "httpx", "uvicorn", "sqlalchemy"]
+skip = ["__pycache__", ".venv", "node_modules", "migrations"]
+skip_glob = ["*/emergentintegrations/*"]
+
+# ─────────────────────────────────────────────────────────────────────────────
+
+[tool.mypy]
+# mypy: type checking
+python_version = "3.11"
+warn_return_any = false
+warn_unused_configs = true
+ignore_missing_imports = true          # third-party stubs not always available
+exclude = [
+    "tests/",
+    "migrations/",
+    "__pycache__",
+    "emergentintegrations/",            # external shim — not typed
+]
+# Per-module overrides for legacy code
+[[tool.mypy.overrides]]
+module = ["motor.*", "pymongo.*", "stripe.*", "google.*"]
+ignore_missing_imports = true
+
+# ─────────────────────────────────────────────────────────────────────────────
+
+[tool.bandit]
+# bandit: Python security linter
+# Run: bandit -r backend/ -c pyproject.toml
+targets = ["backend"]
+exclude_dirs = ["tests", "migrations", "__pycache__", "emergentintegrations"]
+skips = [
+    "B101",  # assert used — needed in tests
+    "B104",  # hardcoded bind all interfaces — uvicorn intentionally binds 0.0.0.0
+    "B311",  # random — not used for crypto
+    "B501",  # ssl context — handled upstream by Caddy
+    "B603",  # subprocess without shell=True — used safely
+]
+severity = "medium"   # only report medium+ severity
+
+# ─────────────────────────────────────────────────────────────────────────────
+
+[tool.pytest.ini_options]
+# pytest configuration (overrides pytest.ini)
+testpaths = ["backend/tests"]
+python_files = ["test_*.py", "*_test.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = [
+    "--tb=short",
+    "--no-header",
+    "-q",
+]
+markers = [
+    "unit: pure unit tests — no network, no DB",
+    "integration: in-process TestClient tests",
+    "e2e: Playwright browser tests against live server",
+    "regression: smoke regression contracts",
+    "slow: tests that take > 30 seconds",
+    "timeout: mark test with custom timeout",
+]
+filterwarnings = [
+    "ignore::DeprecationWarning",
+    "ignore::PendingDeprecationWarning",
+]

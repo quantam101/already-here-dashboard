@@ -1,0 +1,93 @@
+# Semgrep custom rules for Already Here Command OS
+# Run: semgrep scan --config .semgrep.yml backend/
+#
+# These rules enforce project-specific security requirements
+# on top of the standard "p/python" and "p/secrets" rulesets.
+
+rules:
+
+  # ── Secret Leakage Prevention ─────────────────────────────────────────────
+
+  - id: no-hardcoded-api-keys
+    patterns:
+      - pattern: $KEY = "sk_live_..."
+      - pattern: $KEY = "sk_test_..."
+      - pattern: $KEY = "ghp_..."
+      - pattern: $KEY = "AIza..."
+    message: |
+      Hardcoded API key detected in $KEY.
+      Keys must NEVER be committed — use os.environ.get() or .env file.
+    severity: ERROR
+    languages: [python]
+    metadata:
+      category: security
+      confidence: HIGH
+
+  - id: no-env-get-with-default-key
+    patterns:
+      - pattern: os.environ.get($KEY, "sk_live_...")
+      - pattern: os.environ.get($KEY, "sk_test_real_...")
+    message: |
+      Real API key used as default in os.environ.get() — use empty string or None.
+    severity: WARNING
+    languages: [python]
+
+  # ── SQL Injection ─────────────────────────────────────────────────────────
+
+  - id: no-f-string-in-sql
+    pattern: cursor.execute(f"...")
+    message: |
+      F-string used in SQL query — use parameterised queries to prevent injection.
+      Replace with: cursor.execute("SELECT ... WHERE id = ?", (value,))
+    severity: ERROR
+    languages: [python]
+    metadata:
+      category: security
+      confidence: HIGH
+
+  # ── Auth Bypass Prevention ────────────────────────────────────────────────
+
+  - id: no-auth-disabled-flag
+    patterns:
+      - pattern: auth_required = False
+      - pattern: SKIP_AUTH = True
+      - pattern: bypass_auth = True
+    message: |
+      Auth bypass flag detected. Remove before merging to main.
+    severity: WARNING
+    languages: [python]
+
+  # ── Sensitive Data in Logs ────────────────────────────────────────────────
+
+  - id: no-token-in-log
+    patterns:
+      - pattern: logger.$METHOD("...", ..., $TOKEN, ...)
+        metavariable-regex:
+          metavariable: $TOKEN
+          regex: ".*token.*|.*key.*|.*secret.*|.*password.*"
+    message: |
+      Possible sensitive value ($TOKEN) passed to logger. Use masked/redacted version.
+    severity: WARNING
+    languages: [python]
+
+  # ── Cost Guard — Paid API Protection ─────────────────────────────────────
+
+  - id: no-openai-direct-call
+    patterns:
+      - pattern: openai.ChatCompletion.create(...)
+      - pattern: openai.chat.completions.create(model="gpt-4o", ...)
+      - pattern: openai.chat.completions.create(model="gpt-4-turbo", ...)
+    message: |
+      Direct OpenAI paid model call detected. Route through the LLM failover chain
+      (services/llm_runner.py) to maintain $0 cost compliance.
+    severity: WARNING
+    languages: [python]
+
+  # ── Docker / Infrastructure ───────────────────────────────────────────────
+
+  - id: no-privileged-mode-in-compose
+    pattern: privileged: true
+    message: |
+      Privileged mode enabled in Docker Compose. Remove unless absolutely required.
+    severity: WARNING
+    languages: [yaml]
