@@ -23,7 +23,16 @@ Build a complete enterprise-grade, governed multi-agent operating system consoli
 
 ## What's Been Implemented (2026-02-XX)
 
-### Iteration 22 - Phase-2 & Phase-3 Video Engine: AI Avatars + Sora Bridge (latest)
+### Iteration 23 - Real LLM key + retry-with-backoff + Viral Hook Generator (latest)
+**Books and audiobooks now produce real Gemini-generated content. 148/148 pytest.**
+
+- **Wired Google AI Studio key** into `LLM_API_KEY` + `GEMINI_API_KEY` env vars. `llm_mock_mode` now reports `false`. Books, proposals, advisor, cycle, hooks — all four endpoints now generate real Gemini 3 Flash content.
+- **`llm_adapter.llm_completion()` retry-with-backoff**: transient upstream errors (503 ServiceUnavailable, 429 Rate Limit, timeout, connection reset) now retry 3× with exponential backoff (1s, 2s). Tested: Gemini periodically returns "model overloaded" — the retry layer now masks this from the operator.
+- **`POST /api/hooks/` — Viral Hook Generator** (new endpoint). Takes `{topic, niche, tone, count}`, returns N hook variants graded by pattern (negation / curiosity_gap / bold_claim / listicle / controversy / pattern_interrupt). The "first 4 seconds" hooks the reference doc calls the actual differentiator over which AI model you use.
+- **`<HookGeneratorButton/>` widget** mounted next to the HOOK input on `/video-studio`. Operator types a topic, hits "Generate 5 variants", picks the strongest, and it auto-populates the script's HOOK field. Verified end-to-end with real Gemini output: 4 distinct on-brief hooks generated in ~3s.
+- **`hooksAPI.generate()`** added to `frontend/src/lib/api.js`.
+
+### Iteration 22 - Phase-2 & Phase-3 Video Engine: AI Avatars + Sora Bridge
 **Phase 2 + Phase 3 shipped. All 3 video modes now LIVE. 146/146 pytest including end-to-end avatar render.**
 
 **Phase 2 — AI Avatar (animated-portrait) — LIVE:**

@@ -224,6 +224,10 @@ export const videoAPI = {
   deletePortrait: (id) => api.delete(`/video/portraits/${id}`),
 };
 
+export const hooksAPI = {
+  generate: (payload) => api.post("/hooks/", payload),
+};
+
 // Governance (L0-L5 + HITL approval queue)
 export const governanceAPI = {
   status: () => api.get("/governance/status"),

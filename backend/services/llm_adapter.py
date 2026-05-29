@@ -152,10 +152,11 @@ async def llm_completion(
 ) -> str:
     """Send a one-shot completion. Returns the response text.
 
-    In mock mode (see _mock_mode_active) returns a deterministic synthesized
-    response instead of calling the real provider — lets the full test suite
-    + dashboard work without a real API key.
+    Retries transient upstream errors (503 ServiceUnavailable, 429 Rate Limit,
+    connection resets) up to 3 times with exponential backoff. Permanent
+    errors (auth, 4xx other than 429) bubble up immediately.
     """
+    import asyncio
     if _mock_mode_active():
         return _mock_response(system_msg, prompt)
 
@@ -183,11 +184,28 @@ async def llm_completion(
         kwargs["metadata"] = {"session_id": session_id}
 
     logger.debug("llm_adapter call: %s session=%s", full_model, session_id)
-    resp = await litellm.acompletion(**kwargs)
-    try:
-        return resp["choices"][0]["message"]["content"] or ""
-    except (KeyError, IndexError, TypeError) as e:
-        raise RuntimeError(f"Unexpected litellm response shape: {e}") from e
+    last_err: Exception | None = None
+    for attempt in range(3):
+        try:
+            resp = await litellm.acompletion(**kwargs)
+            return resp["choices"][0]["message"]["content"] or ""
+        except (KeyError, IndexError, TypeError) as e:
+            raise RuntimeError(f"Unexpected litellm response shape: {e}") from e
+        except Exception as e:
+            msg = str(e).lower()
+            transient = (
+                "503" in msg or "unavailable" in msg or "overloaded" in msg
+                or "429" in msg or "rate" in msg
+                or "timeout" in msg or "connection" in msg
+            )
+            if not transient or attempt == 2:
+                raise
+            last_err = e
+            wait = 2 ** attempt  # 1s, 2s
+            logger.warning("llm transient error attempt %d, retrying in %ds: %s", attempt + 1, wait, str(e)[:120])
+            await asyncio.sleep(wait)
+    # unreachable, but keep mypy happy
+    raise last_err or RuntimeError("llm_completion exhausted retries")
 
 
 def any_key_configured() -> bool:

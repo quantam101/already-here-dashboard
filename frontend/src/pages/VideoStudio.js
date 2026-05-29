@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Film, Loader2, Download, Trash2, Play, AlertTriangle, CheckCircle2, Mic } from "lucide-react";
-import { videoAPI } from "../lib/api";
+import { Film, Loader2, Download, Trash2, Play, AlertTriangle, CheckCircle2, Mic, Sparkles } from "lucide-react";
+import { videoAPI, hooksAPI } from "../lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -17,6 +17,96 @@ const STATUS_PILL = {
   complete: "bg-green-500/15 text-green-300 border-green-500/30",
   failed: "bg-red-500/15 text-red-300 border-red-500/30",
 };
+
+function HookGeneratorButton({ currentHook, onPicked }) {
+  const [open, setOpen] = useState(false);
+  const [topic, setTopic] = useState(currentHook || "");
+  const [niche, setNiche] = useState("personal finance");
+  const [loading, setLoading] = useState(false);
+  const [variants, setVariants] = useState([]);
+
+  const generate = async () => {
+    if (!topic.trim()) {
+      toast.error("Enter a topic first");
+      return;
+    }
+    setLoading(true);
+    try {
+      const r = await hooksAPI.generate({ topic, niche, count: 5 });
+      setVariants(r.data.variants || []);
+    } catch (e) {
+      toast.error(`Hook generator failed: ${e?.response?.data?.detail || e.message}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (!open) {
+    return (
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="text-[11px] text-purple-300 hover:text-purple-100 flex items-center gap-1"
+        data-testid="hook-generator-toggle"
+      >
+        <Sparkles className="w-3 h-3" /> AI hook generator
+      </button>
+    );
+  }
+  return (
+    <div className="absolute right-4 top-auto mt-1 z-10 bg-[rgba(15,20,35,0.97)] backdrop-blur border border-purple-500/40 rounded-lg p-3 w-[min(420px,90vw)] shadow-2xl"
+         data-testid="hook-generator-panel">
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-xs font-semibold text-purple-200 flex items-center gap-1.5">
+          <Sparkles className="w-3 h-3" /> Viral Hook Generator
+        </span>
+        <button onClick={() => setOpen(false)} className="text-gray-400 hover:text-white text-xs">×</button>
+      </div>
+      <div className="space-y-2 mb-2">
+        <Input
+          value={topic}
+          onChange={(e) => setTopic(e.target.value)}
+          placeholder="Topic / proof point"
+          className="bg-black/40 border-white/10 text-xs h-8"
+          data-testid="hook-gen-topic"
+        />
+        <Input
+          value={niche}
+          onChange={(e) => setNiche(e.target.value)}
+          placeholder="Niche (e.g. personal finance, weird local history)"
+          className="bg-black/40 border-white/10 text-xs h-8"
+          data-testid="hook-gen-niche"
+        />
+        <Button
+          onClick={generate}
+          disabled={loading}
+          size="sm"
+          className="w-full bg-purple-600 hover:bg-purple-700 h-7 text-xs"
+          data-testid="hook-gen-run"
+        >
+          {loading ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <Sparkles className="w-3 h-3 mr-1" />}
+          Generate 5 hook variants
+        </Button>
+      </div>
+      {variants.length > 0 && (
+        <div className="space-y-1.5 mt-2 pt-2 border-t border-white/10 max-h-72 overflow-y-auto">
+          {variants.map((v) => (
+            <button
+              key={v.pattern + v.hook}
+              type="button"
+              onClick={() => { onPicked(v.hook); setOpen(false); }}
+              className="w-full text-left p-2 rounded hover:bg-purple-500/15 border border-transparent hover:border-purple-500/30 transition-all"
+              data-testid={`hook-pick-${v.pattern}`}
+            >
+              <div className="text-[10px] uppercase tracking-wider text-purple-300/70 mb-0.5">{v.pattern.replace(/_/g, " ")}</div>
+              <div className="text-xs text-white leading-snug">{v.hook}</div>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 function CapabilityCard({ data }) {
   if (!data) return null;
@@ -190,7 +280,13 @@ function RenderForm({ voices, capability, onSubmit, isSubmitting }) {
         )}
 
         <div>
-          <label className="text-xs text-gray-400 mb-1 block">HOOK (first 3 seconds)</label>
+          <div className="flex items-center justify-between mb-1">
+            <label className="text-xs text-gray-400">HOOK (first 3 seconds — the differentiator)</label>
+            <HookGeneratorButton
+              currentHook={hook}
+              onPicked={(h) => setHook(h)}
+            />
+          </div>
           <Input
             value={hook}
             onChange={(e) => setHook(e.target.value)}
