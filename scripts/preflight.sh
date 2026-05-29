@@ -82,7 +82,7 @@ if [ -d "$ROOT/.git" ]; then
   if [ -n "$REMOTE" ]; then
     check_pass "git remote: $REMOTE"
   else
-    check_warn "no git remote set — push to GitHub first (Save to GitHub button or `git remote add origin <url>`)"
+    check_warn "no git remote set — push to GitHub first (use the Save to GitHub button)"
   fi
   if [ "$UNCOMMITTED" = "0" ]; then
     check_pass "working tree clean"
