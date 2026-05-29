@@ -21,9 +21,19 @@ Build a complete enterprise-grade, governed multi-agent operating system consoli
 - Oracle Cloud Always Free deployment ready + local laptop deployment fallback
 - MongoDB local-first persistence
 
-## What's Been Implemented (2026-05-28)
+## What's Been Implemented (2026-02-XX)
 
-### Iteration 16 - ProfitEngineV5 Alignment: Governance + Master Revenue Equation + Tier Router + Catch-and-Correct Panel (latest)
+### Iteration 17 - Full Emergent Decoupling Verified (latest)
+**App is now 100% autonomous and free of any Emergent platform dependency. 123/123 pytest still green.**
+- **`emergentintegrations` removed entirely.** Replaced with:
+  - `services/llm_adapter.py` → `litellm` (Gemini / Claude / OpenAI direct), with placeholder-key short-circuit so test runs never make real network calls.
+  - `services/stripe_adapter.py` → raw `stripe` pip SDK with the same placeholder-key short-circuit.
+  - `routes/auth.py` → local `OPERATOR_TOKEN` flow (no Emergent OAuth dependency); `AuthGate.js` updated accordingly.
+- **Verified:** `pytest backend/tests/backend_test.py` → **123/123 PASSING** after decoupling. Stripe smoke + LLM-calling routes both behave correctly with placeholder keys.
+- **Fixed:** React key-prop anti-pattern in `CatchAndCorrectPanel.js` (array-index → stable `${category}-${severity}-${message}` composite). ESLint clean.
+- **`ZERO_DOLLAR_ENTERPRISE.md`** — confirmed populated end-to-end (iteration 16 §10 tech-stack equivalency table, governance gate matrix, deferred-roadmap rationale, verification curls).
+
+### Iteration 16 - ProfitEngineV5 Alignment: Governance + Master Revenue Equation + Tier Router + Catch-and-Correct Panel
 **~85% of the ProfitEngineV5 blueprint now operational on $0/mo infra. 123/123 pytest passing.**
 - **Declarative L0-L5 Governance** (blueprint §5 §6): `governance.yaml` + `services/governance_service.py::enforce()` single chokepoint + `routes/governance.py` (status/manifest/reload/approvals CRUD). Wired `capital_allocation` gate into Stripe smoke-test.
 - **Master Revenue Equation tracker** (blueprint §2): `routes/revenue_equation.py` computes `Q_D × C_R × A_OV × P_F × F_C × P_M` from live data; identifies bottleneck. `RevenueEquationCard` on `/overview`.

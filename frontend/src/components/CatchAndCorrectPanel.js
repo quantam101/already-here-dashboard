@@ -106,9 +106,9 @@ export default function CatchAndCorrectPanel() {
           <div className="space-y-1.5 max-h-80 overflow-y-auto pr-1">
             {findings.map((f, i) => (
               <div
-                key={i}
+                key={`${f.category}-${f.severity}-${f.message}`}
                 className={`border rounded px-2 py-1.5 ${SEVERITY_STYLE[f.severity] || SEVERITY_STYLE.low}`}
-                data-testid={`catch-finding-${i}`}
+                data-testid={`catch-finding-${f.category}-${i}`}
               >
                 <div className="flex items-start gap-1.5">
                   <AlertTriangle className="w-3 h-3 mt-0.5 shrink-0" />
