@@ -601,6 +601,84 @@ class TestGovernance:
         assert "error" in r.json() or r.json().get("status") == "approved"
 
 
+# ---------------- Governance — wired HITL gates (iteration 18) ----------------
+class TestGovernanceGatesWired:
+    """Verifies the 4 wired HITL gates declared in governance.yaml::route_gates.
+
+    The preview environment runs at AUTONOMY_LEVEL=L5 (operator-trust mode), so
+    every gate is *cleared by autonomy*. These tests assert:
+      (a) the manifest mapping exists for each new route
+      (b) the endpoints respond successfully (gate is non-blocking at L5)
+      (c) the new POST /api/payments/keys/rotate endpoint validates inputs
+          and stages credentials without touching the live .env file.
+    """
+
+    def test_manifest_contains_all_wired_gates(self, api):
+        r = api.get(f"{BASE_URL}/api/governance/manifest")
+        assert r.status_code == 200
+        gates = r.json().get("route_gates", {}) or {}
+        # Iteration 18 wired four NEW endpoints on top of the existing capital_allocation ones
+        expected = {
+            "POST /api/proposals/draft":           "compliance_content",
+            "POST /api/books/":                    "compliance_content",
+            "POST /api/cycle/run":                 "mass_outreach",
+            "POST /api/publishing/":               "mass_outreach",
+            "POST /api/payments/keys/rotate":      "payment_modification",
+        }
+        for route, gate_id in expected.items():
+            assert gates.get(route) == gate_id, (
+                f"expected route_gates[{route!r}] == {gate_id!r}, got {gates.get(route)!r}"
+            )
+
+    def test_rotate_rejects_empty_key(self, api):
+        r = api.post(f"{BASE_URL}/api/payments/keys/rotate", json={"stripe_api_key": ""})
+        assert r.status_code == 400
+
+    def test_rotate_rejects_malformed_key(self, api):
+        r = api.post(f"{BASE_URL}/api/payments/keys/rotate", json={"stripe_api_key": "definitely_not_a_stripe_key"})
+        assert r.status_code == 400
+        assert "sk_test_" in r.text or "sk_live_" in r.text
+
+    def test_rotate_stages_valid_test_key(self, api):
+        # AUTONOMY_LEVEL=L5 in this env -> payment_modification gate is bypassed
+        # by autonomy bracket and the rotation stages to .env.proposed.
+        r = api.post(f"{BASE_URL}/api/payments/keys/rotate", json={
+            "stripe_api_key": "sk_test_pytest_proposed_rotation_demo_key_xyz",
+            "stripe_webhook_secret": "whsec_pytest_demo",
+            "note": "pytest rotation",
+        })
+        assert r.status_code == 200, r.text
+        d = r.json()
+        assert d["staged"] is True
+        assert d["new_key_mode"] == "test"
+        assert d["webhook_secret_staged"] is True
+        assert d["proposed_path"].endswith(".env.proposed")
+        # And critically — the live .env was NOT overwritten with the proposed value
+        assert "next_step" in d and "NOT touched" in d["next_step"]
+
+    def test_publishing_drafted_status_is_not_gated(self, api):
+        """Drafts/exports don't trigger mass_outreach — only `posted` does.
+
+        We use a known-good seeded stream id; if it doesn't exist we skip rather
+        than fail (seed-order can vary across environments).
+        """
+        streams = api.get(f"{BASE_URL}/api/revenue/").json()
+        if not streams:
+            pytest.skip("no seeded revenue streams")
+        sid = streams[0]["id"]
+        r = api.post(f"{BASE_URL}/api/publishing/", json={
+            "stream_id": sid,
+            "platform": "blog",
+            "title": "pytest gate-check drafted",
+            "status": "drafted",
+        })
+        # At L5 this just creates the record cleanly. At lower autonomy, drafted
+        # would *still* bypass the gate (only `posted` triggers it).
+        assert r.status_code in (200, 201), r.text
+
+
+
+
 # ---------------- Master Revenue Equation ----------------
 class TestRevenueEquation:
     def test_equation_returns_full_shape(self, api):

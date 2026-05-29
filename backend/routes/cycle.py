@@ -10,13 +10,14 @@ Demonstrates the complete proof-of-work flow:
 
 Cost Guard: $0 (all sources free, generation via Emergent LLM Key).
 """
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel
 from typing import Optional
 from datetime import datetime, timezone
 import uuid
 
 from services.audit_service import log_audit_event
+from services import governance_service as gov
 from routes.scout import scout_viral
 
 router = APIRouter()
@@ -83,6 +84,7 @@ def _make_publishing_draft(
 
 @router.post("/run", response_model=CycleResult)
 async def run_cycle(
+    http_request: Request,
     stream_id: str = "rev-001",
     max_ideas: int = 3,
     platforms: str = "blog,medium,reddit,linkedin",
@@ -93,7 +95,13 @@ async def run_cycle(
     Note: This is the operator-driven "drafted" flow. Operator still publishes
     manually (Cost Guard - no auto-posting without approval) then advances each
     publishing record's status to 'posted' with the live URL.
+
+    Gated on `mass_outreach` (HITL required below L4).
     """
+    await gov.enforce(
+        db=db, request=http_request, action_id="mass_outreach",
+        context={"route": "cycle/run", "stream_id": stream_id, "max_ideas": max_ideas, "platforms": platforms},
+    )
     started = datetime.now(timezone.utc)
     cycle_id = f"cyc-{uuid.uuid4().hex[:8]}"
     platform_list = [p.strip() for p in platforms.split(",") if p.strip()]

@@ -11,7 +11,7 @@ Document types supported:
   - invoice: itemized invoice
   - cover_letter: cover letter for any of the above
 """
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Request
 from pydantic import BaseModel, Field
 from typing import Optional
 from datetime import datetime, timezone
@@ -20,6 +20,7 @@ import uuid
 
 from services.audit_service import log_audit_event
 from services.llm_runner import run_cached
+from services import governance_service as gov
 
 router = APIRouter()
 
@@ -186,9 +187,14 @@ Produce the FULL document in clean markdown. Each numbered section must be prese
 
 
 @router.post("/draft", response_model=ProposalDocument, status_code=201)
-async def draft_proposal(req: ProposalDraftRequest, db=Depends(get_db)):
-    """Generate a full draft using Emergent LLM (Gemini 3 Flash - FREE)."""
+async def draft_proposal(req: ProposalDraftRequest, http_request: Request, db=Depends(get_db)):
+    """Generate a full draft. Gated on `compliance_content` (HITL below L4)."""
     _validate_doc_type(req.doc_type)
+
+    await gov.enforce(
+        db=db, request=http_request, action_id="compliance_content",
+        context={"route": "proposals/draft", "doc_type": req.doc_type, "title": req.title[:120]},
+    )
 
     response = await run_cached(
         db, "gemini", "gemini-3-flash-preview",

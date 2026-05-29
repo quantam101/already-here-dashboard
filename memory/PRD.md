@@ -23,7 +23,22 @@ Build a complete enterprise-grade, governed multi-agent operating system consoli
 
 ## What's Been Implemented (2026-02-XX)
 
-### Iteration 17 - Full Emergent Decoupling Verified (latest)
+### Iteration 18 - Remaining HITL Governance Gates Wired (latest)
+**All 5 ProfitEngineV5 §5 gates now have live route enforcement. 128/128 pytest.**
+- **`compliance_content` gate** wired into:
+  - `POST /api/proposals/draft` (`routes/proposals.py::draft_proposal`)
+  - `POST /api/books/` (`routes/books.py::create_book`)
+- **`mass_outreach` gate** wired into:
+  - `POST /api/cycle/run` (`routes/cycle.py::run_cycle`)
+  - `POST /api/publishing/` — *conditionally*, only fires when `status=="posted"` (the actual external-facing outreach event; drafts/exports bypass the gate)
+- **`payment_modification` gate** + new endpoint:
+  - `POST /api/payments/keys/rotate` accepts `{stripe_api_key, stripe_webhook_secret, note}`, validates the key shape (`sk_test_` / `sk_live_` / `rk_*`), enforces the gate (requires L5 or HITL approval), then stages credentials to `backend/.env.proposed` — **never overwriting the live `.env`** to guarantee no silent mis-rotation.
+- **Manifest updated** — `governance.yaml::route_gates` now declares all 8 gated routes. `GET /api/governance/manifest` is the single auditable source.
+- **`AUTONOMY_LEVEL=L5`** added to `backend/.env` so the preview environment runs in operator-trust mode by default (gates fire only when operator dials autonomy down).
+- **End-to-end HITL flow verified via curl**: L3 request → 202 with `approval_id` → operator approves → replay with `X-Approval-Id` header → 200.
+- **5 new pytest tests** in `TestGovernanceGatesWired` (manifest mapping, rotate validation × 2, rotate staging, publishing drafted bypass). Total **128/128 PASSING**.
+
+### Iteration 17 - Full Emergent Decoupling Verified
 **App is now 100% autonomous and free of any Emergent platform dependency. 123/123 pytest still green.**
 - **`emergentintegrations` removed entirely.** Replaced with:
   - `services/llm_adapter.py` → `litellm` (Gemini / Claude / OpenAI direct), with placeholder-key short-circuit so test runs never make real network calls.

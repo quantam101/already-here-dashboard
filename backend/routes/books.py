@@ -9,7 +9,7 @@ Stored in MongoDB `books` collection; downloadable from frontend.
 
 Adds a new revenue stream: rev-books.
 """
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Request
 from fastapi.responses import PlainTextResponse, Response
 from pydantic import BaseModel, Field
 from typing import Optional
@@ -19,6 +19,7 @@ import uuid
 
 from services.audit_service import log_audit_event
 from services.llm_runner import run_cached
+from services import governance_service as gov
 
 router = APIRouter()
 
@@ -149,16 +150,23 @@ def _parse_outline(raw: str, fallback_count: int) -> list[dict]:
 
 
 @router.post("/", response_model=Book, status_code=201)
-async def create_book(req: BookCreateRequest, db=Depends(get_db)):
+async def create_book(req: BookCreateRequest, http_request: Request, db=Depends(get_db)):
     """Generate a full book chapter-by-chapter. Returns the complete Book document.
 
     NOTE: This is synchronous (waits for full generation). For a 6-chapter book
     expect ~30-60 seconds. Use small chapter_count + small word_target for fast
     iteration; scale up once you're happy with the outline.
+
+    Gated on `compliance_content` (HITL required below L4).
     """
     _validate_book_type(req.book_type)
     if req.chapter_count < 1 or req.chapter_count > MAX_CHAPTER_COUNT:
         raise HTTPException(status_code=400, detail=f"chapter_count must be 1..{MAX_CHAPTER_COUNT}")
+
+    await gov.enforce(
+        db=db, request=http_request, action_id="compliance_content",
+        context={"route": "books/", "book_type": req.book_type, "title": req.title[:120], "chapters": req.chapter_count},
+    )
 
     await _ensure_books_stream(db)
 

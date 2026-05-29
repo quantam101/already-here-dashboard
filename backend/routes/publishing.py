@@ -9,13 +9,14 @@ Every post the operator publishes (manually or via approved API) is logged here:
 
 This is the auditable chain: idea -> script -> export -> post URL -> verified.
 """
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Request
 from pydantic import BaseModel, Field
 from typing import Optional
 from datetime import datetime, timezone
 import uuid
 
 from services.audit_service import log_audit_event
+from services import governance_service as gov
 
 router = APIRouter()
 
@@ -63,12 +64,24 @@ def _validate_status(status: str) -> None:
 
 
 @router.post("/", response_model=PublishingRecord, status_code=201)
-async def create_publishing_record(payload: PublishingCreate, db=Depends(get_db)):
-    """Log a new publishing event (idea/exported/posted)."""
+async def create_publishing_record(payload: PublishingCreate, http_request: Request, db=Depends(get_db)):
+    """Log a new publishing event (idea/exported/posted).
+
+    Gated on `mass_outreach` ONLY when the record is being marked `posted`
+    (the actual external-facing outreach event). Drafted/exported records are
+    internal staging and bypass the gate.
+    """
     _validate_status(payload.status)
     stream = await db.revenue_streams.find_one({"id": payload.stream_id}, {"_id": 0})
     if not stream:
         raise HTTPException(status_code=404, detail=f"Revenue stream '{payload.stream_id}' not found")
+
+    if payload.status == "posted":
+        await gov.enforce(
+            db=db, request=http_request, action_id="mass_outreach",
+            context={"route": "publishing/", "platform": payload.platform,
+                     "stream_id": payload.stream_id, "title": payload.title[:120]},
+        )
 
     record = PublishingRecord(**payload.model_dump())
     if payload.status == "posted" and payload.post_url:

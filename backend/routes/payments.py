@@ -23,6 +23,7 @@ from services.stripe_adapter import (
 )
 import stripe as stripe_sdk
 from services.audit_service import log_audit_event
+from services import governance_service as gov
 
 router = APIRouter()
 
@@ -564,3 +565,90 @@ async def generate_share_link(
         "package_id": package_id,
         "amount": PACKAGES[package_id]["amount"],
     }
+
+
+# ---------------------------------------------------------------------------
+# Stripe key rotation — payment_modification gate (HITL required below L5)
+# ---------------------------------------------------------------------------
+
+class StripeKeyRotation(BaseModel):
+    stripe_api_key: str
+    stripe_webhook_secret: Optional[str] = None
+    note: Optional[str] = None
+
+
+def _validate_stripe_key_shape(key: str) -> str:
+    """Cheap structural check — refuses obvious garbage before any gate fires."""
+    k = (key or "").strip()
+    if not k:
+        raise HTTPException(status_code=400, detail="stripe_api_key is required")
+    if not (k.startswith("sk_test_") or k.startswith("sk_live_") or k.startswith("rk_live_") or k.startswith("rk_test_")):
+        raise HTTPException(
+            status_code=400,
+            detail="stripe_api_key must start with sk_test_, sk_live_, rk_test_, or rk_live_",
+        )
+    if len(k) < 20:
+        raise HTTPException(status_code=400, detail="stripe_api_key looks too short to be valid")
+    return k
+
+
+@router.post("/keys/rotate")
+async def rotate_stripe_keys(
+    body: StripeKeyRotation,
+    http_request: Request,
+    db=Depends(get_db),
+):
+    """Stage a Stripe API key + webhook secret rotation for operator review.
+
+    HITL-gated on `payment_modification` (requires L5 / approval below).
+
+    The endpoint NEVER overwrites the live `backend/.env`. Instead, it writes
+    the proposed credentials to `backend/.env.proposed` so the operator can
+    diff, copy, and restart on their own terms. This guarantees you can never
+    silently brick live payments by hitting the wrong button in the UI.
+    """
+    new_key = _validate_stripe_key_shape(body.stripe_api_key)
+
+    await gov.enforce(
+        db=db, request=http_request, action_id="payment_modification",
+        context={
+            "route": "payments/keys/rotate",
+            "new_key_mode": "live" if new_key.startswith("sk_live_") else "test",
+            "new_key_suffix": new_key[-4:],
+            "webhook_secret_provided": bool(body.stripe_webhook_secret),
+            "note": (body.note or "")[:240],
+        },
+    )
+
+    # Approval cleared — write the stage file. Never the live .env.
+    proposed_path = "/app/backend/.env.proposed"
+    lines = [f"STRIPE_API_KEY={new_key}"]
+    if body.stripe_webhook_secret:
+        lines.append(f"STRIPE_WEBHOOK_SECRET={body.stripe_webhook_secret.strip()}")
+    lines.append(f"# proposed {datetime.now(timezone.utc).isoformat()} via /api/payments/keys/rotate")
+    with open(proposed_path, "w") as f:
+        f.write("\n".join(lines) + "\n")
+
+    await log_audit_event(
+        db, "stripe.keys.proposed", "operator", "rotate",
+        "stripe_credentials", new_key[-4:],
+        metadata={
+            "mode": "live" if new_key.startswith("sk_live_") else "test",
+            "webhook_secret_proposed": bool(body.stripe_webhook_secret),
+            "proposed_path": proposed_path,
+        },
+    )
+
+    return {
+        "staged": True,
+        "proposed_path": proposed_path,
+        "new_key_mode": "live" if new_key.startswith("sk_live_") else "test",
+        "new_key_suffix": new_key[-4:],
+        "webhook_secret_staged": bool(body.stripe_webhook_secret),
+        "next_step": (
+            "Operator: review `cat /app/backend/.env.proposed`, then on the host run "
+            "`cp /app/backend/.env.proposed /app/backend/.env && sudo supervisorctl restart backend` "
+            "to apply. The live `.env` is intentionally NOT touched by this endpoint."
+        ),
+    }
+

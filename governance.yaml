@@ -90,7 +90,9 @@ hitl_gates:
 route_gates:
   "POST /api/payments/checkout":         "capital_allocation"
   "POST /api/payments/smoke-test/create": "capital_allocation"
+  "POST /api/payments/keys/rotate":      "payment_modification"
   "POST /api/ledger/import-csv":         "capital_allocation"
   "POST /api/proposals/draft":           "compliance_content"
   "POST /api/books/":                    "compliance_content"
   "POST /api/cycle/run":                 "mass_outreach"
+  "POST /api/publishing/":               "mass_outreach"
