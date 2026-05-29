@@ -1156,6 +1156,25 @@ class TestBooksE2E:
         # Plain renderer prepends title with period
         assert created_book["title"] in r.text
 
+    def test_audiobook_first_get_returns_202(self, created_book, api_session):
+        """First GET kicks off a background TTS render and returns 202."""
+        r = api_session.get(f"{BASE_URL}/api/books/{created_book['id']}/audio.mp3")
+        # Either 202 (rendering started just now) OR 200 (cached from a prior test run).
+        # Both are valid states for the endpoint.
+        assert r.status_code in (200, 202), r.text
+        if r.status_code == 202:
+            d = r.json()
+            assert d["detail"]["status"] == "rendering"
+            assert "estimated_seconds" in d["detail"]
+
+    def test_audiobook_generate_endpoint_queues(self, created_book, api_session):
+        """POST /audio/generate kicks the render explicitly and returns status."""
+        r = api_session.post(f"{BASE_URL}/api/books/{created_book['id']}/audio/generate")
+        assert r.status_code == 200, r.text
+        d = r.json()
+        assert d["status"] in ("ready", "rendering", "queued")
+        assert d["mp3_url"].endswith("/audio.mp3")
+
     def test_download_increments_count(self, created_book, api_session):
         # Already downloaded twice above; expect >= 2
         r = api_session.get(f"{BASE_URL}/api/books/{created_book['id']}")

@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { BookOpen, Plus, Download, Play, Pause, Trash2, FileText, Headphones } from "lucide-react";
-import { booksAPI } from "../lib/api";
+import { BookOpen, Plus, Download, Play, Pause, Trash2, FileText, Headphones, AlertTriangle } from "lucide-react";
+import { booksAPI, systemAPI } from "../lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -127,12 +127,38 @@ function NewBookDialog() {
 }
 
 function AudioBookPlayer({ book }) {
-  const [isPlaying, setIsPlaying] = useState(false);
+  const [mode, setMode] = useState("server"); // server | browser
+  const [serverState, setServerState] = useState("idle"); // idle | rendering | ready | failed
+  const [browserPlaying, setBrowserPlaying] = useState(false);
   const utterRef = useRef(null);
+  const mp3Url = booksAPI.downloadMp3(book.id);
 
   useEffect(() => () => window.speechSynthesis?.cancel(), []);
 
-  const play = () => {
+  // Poll the MP3 url every 5s until it returns 200, then unlock the <audio> element.
+  useEffect(() => {
+    if (mode !== "server" || serverState === "ready") return undefined;
+    let cancelled = false;
+    const tick = async () => {
+      try {
+        const r = await fetch(mp3Url, { method: "HEAD" });
+        if (cancelled) return;
+        if (r.status === 200) setServerState("ready");
+        else if (r.status === 202) setServerState("rendering");
+        else setServerState("failed");
+      } catch {
+        if (!cancelled) setServerState("failed");
+      }
+    };
+    tick();
+    const handle = window.setInterval(tick, 5000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(handle);
+    };
+  }, [mode, serverState, mp3Url]);
+
+  const playBrowser = () => {
     if (typeof window === "undefined" || !window.speechSynthesis) {
       toast.error("Your browser does not support speech synthesis");
       return;
@@ -146,32 +172,83 @@ function AudioBookPlayer({ book }) {
     const text = lines.join(" ");
     const u = new SpeechSynthesisUtterance(text);
     u.rate = 1.05;
-    u.onend = () => setIsPlaying(false);
-    u.onerror = () => setIsPlaying(false);
+    u.onend = () => setBrowserPlaying(false);
+    u.onerror = () => setBrowserPlaying(false);
     utterRef.current = u;
     window.speechSynthesis.speak(u);
-    setIsPlaying(true);
+    setBrowserPlaying(true);
   };
 
-  const stop = () => {
+  const stopBrowser = () => {
     window.speechSynthesis?.cancel();
-    setIsPlaying(false);
+    setBrowserPlaying(false);
   };
 
   return (
-    <Button
-      size="sm"
-      variant="outline"
-      onClick={isPlaying ? stop : play}
-      className="border-purple-500/30 text-purple-300 hover:bg-purple-500/10"
-      data-testid={`audio-${book.id}`}
-    >
-      {isPlaying ? (
-        <><Pause className="w-3.5 h-3.5 mr-1" /> Stop</>
+    <div className="flex flex-wrap items-center gap-2" data-testid={`audio-${book.id}`}>
+      {mode === "server" ? (
+        <>
+          {serverState === "ready" ? (
+            <>
+              <audio
+                controls
+                src={mp3Url}
+                preload="none"
+                className="h-9 max-w-[260px]"
+                data-testid={`audio-mp3-${book.id}`}
+              />
+              <a
+                href={mp3Url}
+                download={`${book.title.replace(/\s+/g, "_").slice(0, 60)}.mp3`}
+                className="text-xs text-purple-300 hover:text-purple-200 underline"
+                data-testid={`audio-download-${book.id}`}
+              >
+                Download MP3
+              </a>
+            </>
+          ) : serverState === "rendering" ? (
+            <span className="text-xs text-amber-300 flex items-center gap-1.5" data-testid={`audio-rendering-${book.id}`}>
+              <Headphones className="w-3 h-3 animate-pulse" /> Audiobook rendering... ~30-60s per chapter
+            </span>
+          ) : serverState === "failed" ? (
+            <span className="text-xs text-red-400">MP3 render failed — try browser voice fallback</span>
+          ) : (
+            <span className="text-xs text-gray-400">checking audiobook...</span>
+          )}
+          <button
+            type="button"
+            onClick={() => setMode("browser")}
+            className="text-[10px] text-gray-500 hover:text-gray-300 underline"
+            data-testid={`audio-fallback-${book.id}`}
+          >
+            use browser voice
+          </button>
+        </>
       ) : (
-        <><Play className="w-3.5 h-3.5 mr-1" /> Audiobook</>
+        <>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={browserPlaying ? stopBrowser : playBrowser}
+            className="border-purple-500/30 text-purple-300 hover:bg-purple-500/10"
+            data-testid={`audio-browser-btn-${book.id}`}
+          >
+            {browserPlaying ? (
+              <><Pause className="w-3.5 h-3.5 mr-1" /> Stop</>
+            ) : (
+              <><Play className="w-3.5 h-3.5 mr-1" /> Browser TTS</>
+            )}
+          </Button>
+          <button
+            type="button"
+            onClick={() => setMode("server")}
+            className="text-[10px] text-gray-500 hover:text-gray-300 underline"
+          >
+            back to MP3
+          </button>
+        </>
       )}
-    </Button>
+    </div>
   );
 }
 
@@ -235,6 +312,11 @@ export default function Books() {
     queryKey: ["bookStats"],
     queryFn: () => booksAPI.stats().then((r) => r.data),
   });
+  const { data: sysStatus } = useQuery({
+    queryKey: ["system-status-books"],
+    queryFn: () => systemAPI.status().then((r) => r.data),
+    refetchInterval: 60000,
+  });
   const del = useMutation({
     mutationFn: (id) => booksAPI.delete(id),
     onSuccess: () => {
@@ -253,6 +335,23 @@ export default function Books() {
 
   return (
     <div data-testid="books-page" className="p-6 dark-themed-page space-y-6">
+      {sysStatus?.llm_mock_mode && (
+        <div
+          className="bg-amber-500/10 border border-amber-500/40 rounded-lg p-3 flex items-start gap-3"
+          data-testid="llm-mock-banner"
+        >
+          <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+          <div className="text-sm">
+            <p className="font-semibold text-amber-200">LLM is in MOCK MODE — books will contain placeholder text.</p>
+            <p className="text-amber-200/80 text-xs mt-1 leading-relaxed">
+              Your <code className="bg-black/40 px-1 py-0.5 rounded">LLM_API_KEY</code> in <code>backend/.env</code> is a placeholder
+              (<code>sk-mock-…</code> or <code>sk-emergent-…</code>). Real content needs a real provider key.
+              Swap it for a Google AI Studio (free tier), Anthropic, or OpenAI key and restart the backend.
+              Audiobook MP3 generation also works in mock mode — the placeholder text will just be read aloud.
+            </p>
+          </div>
+        </div>
+      )}
       <div className="page-header flex items-center justify-between gap-4">
         <div>
           <h1>Books & Audiobooks</h1>

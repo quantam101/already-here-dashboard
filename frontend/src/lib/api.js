@@ -168,6 +168,7 @@ export const booksAPI = {
   stats: () => api.get("/books/stats/overview"),
   downloadMd: (id) => `${API}/books/${id}/download.md`,
   downloadTxt: (id) => `${API}/books/${id}/download.txt`,
+  downloadMp3: (id, voiceId) => `${API}/books/${id}/audio.mp3${voiceId ? `?voice_id=${encodeURIComponent(voiceId)}` : ""}`,
 };
 
 // Auth (optional - only used if backend has OPERATOR_EMAIL set)

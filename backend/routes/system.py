@@ -56,6 +56,12 @@ async def system_status(db=Depends(get_db)):
 
     bw = await get_bitwarden_service().status()
 
+    # LLM mock-mode is the silent killer of "books not working" / "scripts coming
+    # out as placeholder text". Surface it explicitly so the UI can warn the
+    # operator instead of letting them generate gibberish for free.
+    from services.llm_adapter import _mock_mode_active
+    llm_mock = _mock_mode_active()
+
     return {
         "operator_email_set": bool(operator_email),
         "operator_email_masked": (
@@ -66,6 +72,7 @@ async def system_status(db=Depends(get_db)):
         "stripe_mode": _stripe_mode(),
         "stripe_webhook_secret_set": stripe_webhook_secret_set,
         "llm_key_set": llm_key_set,
+        "llm_mock_mode": llm_mock,
         "llm_providers_configured": configured_providers(),
         "daily_cycle_hour_utc": daily_cycle_hour,
         "counts": counts,
