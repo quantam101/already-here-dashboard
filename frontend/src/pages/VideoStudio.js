@@ -352,6 +352,16 @@ function RenderForm({ voices, capability, onSubmit, isSubmitting }) {
           {isSubmitting ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Play className="w-4 h-4 mr-2" />}
           Render {mode === "avatar_lipsync" ? "Avatar" : mode === "external_provider" ? "Generative" : "Faceless"} Video
         </Button>
+
+        {mode === "faceless" && (
+          <ABTestButton
+            topic={hook || body.slice(0, 80)}
+            scriptBody={body}
+            cta={cta}
+            shotList={shots.split("\n").map((s) => s.trim()).filter(Boolean)}
+            voiceId={voiceId}
+          />
+        )}
       </div>
     </div>
   );
@@ -438,6 +448,66 @@ function JobCard({ job, onDelete }) {
         <p className="text-xs text-red-400 mt-2 font-mono break-all" data-testid={`video-error-${job.id}`}>
           {job.error}
         </p>
+      )}
+    </div>
+  );
+}
+
+function ABTestButton({ topic, scriptBody, cta, shotList, voiceId }) {
+  const [loading, setLoading] = useState(false);
+  const [batch, setBatch] = useState(null);
+  const queryClient = useQueryClient();
+
+  const fire = async () => {
+    if (!topic.trim()) {
+      toast.error("Add a HOOK or SCRIPT body so the topic isn't empty");
+      return;
+    }
+    setLoading(true);
+    try {
+      const r = await hooksAPI.abTest({
+        topic, niche: "general", script_body: scriptBody, cta,
+        shot_list: shotList && shotList.length ? shotList : ["scene a", "scene b"],
+        voice_id: voiceId || undefined, count: 5,
+      });
+      setBatch(r.data);
+      toast.success(`A/B batch fired: ${r.data.job_ids.length} videos rendering in parallel`);
+      queryClient.invalidateQueries({ queryKey: ["video-jobs"] });
+    } catch (e) {
+      toast.error(`A/B test failed: ${e?.response?.data?.detail || e.message}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="mt-2" data-testid="ab-test-block">
+      <button
+        type="button"
+        onClick={fire}
+        disabled={loading}
+        className="w-full text-sm py-2 px-3 rounded border border-amber-500/30 bg-amber-500/5 hover:bg-amber-500/15 text-amber-200 flex items-center justify-center gap-2 transition-colors disabled:opacity-50"
+        data-testid="ab-test-btn"
+      >
+        {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+        Hook A/B Tester — render 5 variants in parallel
+      </button>
+      {batch && (
+        <div className="mt-2 bg-amber-500/5 border border-amber-500/20 rounded p-2 text-xs space-y-1.5" data-testid="ab-test-result">
+          <p className="text-amber-200 font-semibold">{batch.variants.length} variants rendering — scroll down to "Recent Renders":</p>
+          {batch.variants.map((v, i) => (
+            <div key={v.pattern + v.hook} className="flex items-start gap-2">
+              <code className="text-amber-300 text-[10px] shrink-0 mt-0.5">{batch.job_ids[i]?.slice(0, 12) || ""}</code>
+              <span className="text-gray-300 leading-snug">
+                <span className="text-amber-300/80 uppercase text-[9px] mr-1">{v.pattern.replace(/_/g, " ")}</span>
+                {v.hook}
+              </span>
+            </div>
+          ))}
+          <p className="text-gray-500 text-[10px] mt-2 pt-2 border-t border-white/5">
+            Post each to a separate burner account, wait 4 hours, then re-render the full-length video with the winning hook.
+          </p>
+        </div>
       )}
     </div>
   );

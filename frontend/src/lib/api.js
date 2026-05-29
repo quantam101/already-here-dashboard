@@ -226,6 +226,7 @@ export const videoAPI = {
 
 export const hooksAPI = {
   generate: (payload) => api.post("/hooks/", payload),
+  abTest: (payload) => api.post("/hooks/ab-test", payload),
 };
 
 // Governance (L0-L5 + HITL approval queue)

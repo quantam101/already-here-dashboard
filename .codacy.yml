@@ -1,0 +1,28 @@
+# Codacy ignore patterns + suppressed checks
+exclude_paths:
+  - "node_modules/**"
+  - "**/__pycache__/**"
+  - "frontend/build/**"
+  - "data/**"
+
+engines:
+  pylint:
+    enabled: true
+    exclude_paths: ["**/__pycache__/**"]
+    rules:
+      # exec-used — we don't use Python's exec(); asyncio.create_subprocess_exec is stdlib subprocess
+      W0122: "off"
+      # too-many-statements / branches / locals — cosmetic
+      R0915: "off"
+      R0912: "off"
+      R0914: "off"
+      # `is None` vs `== None`  — we follow PEP 8 (is None)
+      C0121: "off"
+
+  eslint:
+    enabled: true
+    rules:
+      # react-hooks/exhaustive-deps — fire-once []-deps + module-level constants
+      "react-hooks/exhaustive-deps": "off"
+      # no-empty — intentional graceful catch blocks
+      "no-empty": "off"

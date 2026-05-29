@@ -109,3 +109,86 @@ async def generate_hooks(req: HookRequest, db=Depends(get_db)):
         # operator can still copy/edit instead of returning empty
         variants = [HookVariant(pattern="raw", hook=raw.strip()[:200])]
     return HookResponse(topic=req.topic, niche=req.niche, variants=variants)
+
+
+# ---------------------------------------------------------------------------
+# Hook A/B Tester — generate N hooks, fire N parallel ~10s video renders
+# ---------------------------------------------------------------------------
+
+class ABTestRequest(BaseModel):
+    topic: str = Field(..., description="Used to generate the hook variants")
+    niche: str = Field("personal finance")
+    tone: str = Field("direct")
+    # Body + cta + shots are kept short (10s render) for fast A/B turnaround
+    script_body: str = Field("", description="One sentence to follow the hook")
+    cta: str = Field("Follow for more.", description="One-sentence CTA")
+    shot_list: list[str] = Field(default_factory=lambda: ["scene a", "scene b"])
+    voice_id: str | None = None
+    count: int = Field(5, ge=2, le=6)
+
+
+class ABTestResponse(BaseModel):
+    variants: list[HookVariant]
+    job_ids: list[str]
+    next_step: str
+
+
+@router.post("/ab-test", response_model=ABTestResponse)
+async def ab_test_hooks(req: ABTestRequest, db=Depends(get_db)):
+    """One-click 'Hook A/B Tester': pick the strongest hook by data, not vibes.
+
+    Pipeline:
+      1. Generate `count` hook variants for the topic (single LLM call).
+      2. Fire `count` parallel video render jobs through the existing video
+         engine, each using one variant as the HOOK.
+      3. Return the list of job_ids. Operator polls the existing
+         /api/video/jobs/{id} endpoints, downloads all 5 MP4s, posts to
+         burner accounts, picks the winner after 4h based on watch-through.
+    """
+    if not req.topic.strip():
+        raise HTTPException(status_code=400, detail="topic is required")
+
+    # Step 1: generate hooks (reuse the same code path the manual endpoint uses)
+    hook_req = HookRequest(topic=req.topic, niche=req.niche, tone=req.tone, count=req.count)
+    raw = await run_cached(
+        db, "gemini", "gemini-3-flash-preview",
+        SYSTEM_MSG, _format_prompt(hook_req),
+        session_id=f"abtest-{req.niche[:20]}-{req.topic[:40]}",
+        tier=3,
+    )
+    variants = _parse_hooks(raw)
+    if not variants:
+        raise HTTPException(
+            status_code=502,
+            detail=f"hook generator returned unparseable output: {raw[:200]}",
+        )
+
+    # Step 2: fire parallel video renders, one per variant
+    from services.video import engine as _video_engine
+    import asyncio
+
+    job_ids: list[str] = []
+    for variant in variants:
+        script_dict = {
+            "hook": variant.hook,
+            "script_body": req.script_body or f"{req.topic}. Try this.",
+            "cta": req.cta,
+            "shot_list": req.shot_list or ["scene", "scene"],
+        }
+        job = await _video_engine.create_job(
+            db, script=script_dict, voice_id=req.voice_id, mode="faceless",
+        )
+        job_ids.append(job["id"])
+        # Fire-and-forget the render coroutine in the background
+        asyncio.create_task(_video_engine.run_pipeline(db, job["id"]))
+
+    return ABTestResponse(
+        variants=variants,
+        job_ids=job_ids,
+        next_step=(
+            f"Poll GET /api/video/jobs/<id> for each of the {len(job_ids)} job_ids. "
+            "When all complete, download the MP4s, post each to a separate burner "
+            "TikTok/Reels/Shorts account, wait 4h, pick the one with the highest "
+            "watch-through, then re-render the full-length version with that hook."
+        ),
+    )
