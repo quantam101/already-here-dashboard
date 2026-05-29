@@ -47,8 +47,8 @@ function CapabilityCard({ data }) {
         <div className="mt-3 pt-3 border-t border-white/5">
           <p className="text-[10px] uppercase tracking-wider text-amber-300 mb-1.5">Operator actions</p>
           <ul className="text-xs text-gray-400 space-y-1 list-disc list-inside">
-            {data.operator_actions.map((a, i) => (
-              <li key={i}>{a}</li>
+            {data.operator_actions.map((a) => (
+              <li key={a.slice(0, 60)}>{a}</li>
             ))}
           </ul>
         </div>
