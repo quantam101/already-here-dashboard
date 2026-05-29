@@ -205,8 +205,8 @@ export const governanceAPI = {
   manifest: () => api.get("/governance/manifest"),
   reload: () => api.post("/governance/manifest/reload"),
   approvals: (status) => api.get("/governance/approvals" + (status ? `?status=${status}` : "")),
-  approve: (id, note = "") => api.post(`/governance/approvals/${id}/approve`, { note }),
-  reject: (id, note = "") => api.post(`/governance/approvals/${id}/reject`, { note }),
+  approve: (id, note = "", actor = "operator") => api.post(`/governance/approvals/${id}/approve`, { note, actor }),
+  reject: (id, note = "", actor = "operator") => api.post(`/governance/approvals/${id}/reject`, { note, actor }),
 };
 
 // Master Revenue Equation tracker (Q_D × C_R × A_OV × P_F × F_C × P_M)

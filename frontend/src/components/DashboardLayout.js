@@ -2,6 +2,7 @@ import { Outlet, NavLink, useLocation } from "react-router-dom";
 import { useMemo, useState } from "react";
 import QuickstartWizard from "./QuickstartWizard";
 import CatchAndCorrectPanel from "./CatchAndCorrectPanel";
+import GovernanceStatusBadges from "./GovernanceStatusBadges";
 import {
   LayoutDashboard,
   DollarSign,
@@ -119,6 +120,7 @@ export default function DashboardLayout() {
             </div>
             <div className="text-xs text-gray-400">All services operational</div>
             <div className="text-xs text-green-400 mt-1">$0/month cost</div>
+            <GovernanceStatusBadges />
             <button
               onClick={() => {
                 window.localStorage.removeItem("ah_quickstart_completed_v1");
