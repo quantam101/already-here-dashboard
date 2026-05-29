@@ -23,7 +23,52 @@ Build a complete enterprise-grade, governed multi-agent operating system consoli
 
 ## What's Been Implemented (2026-02-XX)
 
-### Iteration 20 - Sidebar HITL Badges + Governance Approvals Queue UI + One-Shot OCI Deploy (latest)
+### Iteration 21 - Video Engine (Faceless Video Pipeline) (latest)
+**$0/mo, OCI-Always-Free-compatible video generator. 142/142 pytest including 9 new video tests.**
+
+**Engine architecture (all $0):**
+- **ffmpeg** (apt package) — concat + scale-to-vertical + caption burn + audio mix
+- **Piper TTS** (`pip install piper-tts`) — neural TTS, ARM-compatible ONNX, ~60 MB per voice
+- **Pexels API** (free tier, 200 req/hr) — stock footage with `sha256(shot)[:16]` cache
+- **Pexels fallback** — deterministic hex-colour placeholder clip with shot text burned in (so the pipeline never deadlocks during dev / when no key is set)
+
+**Performance (measured on OCI-equivalent CPU):** ~8 seconds to render a 10-second 1080×1920 vertical MP4 (H.264 ultrafast + AAC 128k) end-to-end.
+
+**Files added:**
+- `backend/routes/video.py` — 8 endpoints
+- `backend/services/video/{__init__,stock,tts,composer,engine}.py` — pipeline orchestrator
+- `frontend/src/pages/VideoStudio.js` — full UI at `/video-studio`
+- `frontend/src/lib/api.js` — `videoAPI` helpers
+- `/app/VIDEO_ENGINE.md` — full build doc (13 sections)
+- `/app/data/voices/en_US-amy-medium.onnx[+.json]` — default voice
+- `backend/tests/test_video_engine.py` — 9 tests including the full end-to-end render
+
+**API surface (all under `/api/video`):**
+| Method | Path | Notes |
+|---|---|---|
+| GET | /config | ffmpeg+piper+voices+pexels capability self-report |
+| GET | /voices | installed Piper voices |
+| POST | /render | queue a render job (BackgroundTask) |
+| POST | /render-from-script | render an existing `content_scripts` row |
+| GET | /jobs | list recent jobs (default 30) |
+| GET | /jobs/{id} | poll status + progress_pct + message |
+| GET | /jobs/{id}/download | download finished MP4 (409 until complete) |
+| DELETE | /jobs/{id} | remove job + MP4 |
+
+**Tiered modes (in capability_report):**
+- **`faceless`** ✅ shipped — stock + TTS + ffmpeg, $0/render
+- **`avatar_lipsync`** 🟡 scaffolded — Phase-2, Wav2Lip ONNX; endpoint returns HTTP 501 with operator install hints
+- **`external_provider`** 🟡 scaffolded — Phase-3 Sora 2/Veo bridge through litellm; endpoint returns HTTP 501
+
+**Deepfake guardrails baked into `VIDEO_ENGINE.md §8`** (operator-self consent flag, AI-generated watermark default-on, public-figure CLIP-embedding detection routed through the `compliance_content` HITL gate). Engine ships the legitimate use-cases (avatar lipsync onto own face / consenting subject / AI-synthesized portrait) and documents why unconsented public-figure swaps are gated.
+
+**OCI bootstrap script updated** to auto-install ffmpeg + piper-tts + the default Amy voice during deployment so the engine works on a fresh OCI VM without manual setup.
+
+**Sidebar nav** — new `Video Engine` entry (Film icon) routes to `/video-studio`.
+
+**End-to-end render verified via pytest** (`test_full_render_pipeline`): kick-off → poll until `status=complete` → download MP4 → verify Content-Type=video/mp4 → confirm >10KB payload → delete cleanup.
+
+### Iteration 20 - Sidebar HITL Badges + Governance Approvals Queue UI + One-Shot OCI Deploy
 **133/133 pytest + testing-agent verification → 0 issues / 0 action items.**
 
 - **`<GovernanceStatusBadges/>`** (new) mounted in the sidebar's System Status box. Polls `GET /api/governance/approvals?status=pending` and `GET /api/lifelong-catch-correct/` every 30s. Renders:

@@ -199,6 +199,19 @@ export const distillationAPI = {
 };
 
 
+// Faceless Video Engine
+export const videoAPI = {
+  config: () => api.get("/video/config"),
+  voices: () => api.get("/video/voices"),
+  render: (payload) => api.post("/video/render", payload),
+  renderFromScript: (scriptId, voiceId) =>
+    api.post("/video/render-from-script", { script_id: scriptId, voice_id: voiceId }),
+  jobs: (limit = 30) => api.get(`/video/jobs?limit=${limit}`),
+  job: (id) => api.get(`/video/jobs/${id}`),
+  downloadUrl: (id) => `${BACKEND_URL}/api/video/jobs/${id}/download`,
+  deleteJob: (id) => api.delete(`/video/jobs/${id}`),
+};
+
 // Governance (L0-L5 + HITL approval queue)
 export const governanceAPI = {
   status: () => api.get("/governance/status"),

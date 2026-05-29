@@ -103,6 +103,19 @@ if ! command -v bw >/dev/null 2>&1; then
     || warn "bw CLI install skipped (offline / arch mismatch). Run later: see /secrets page in dashboard."
 fi
 
+log "3c/6  installing video engine deps (ffmpeg + Piper TTS + default voice)..."
+apt-get install -y -qq ffmpeg python3-pip
+pip3 install --quiet --break-system-packages piper-tts onnxruntime 2>/dev/null || pip3 install --quiet piper-tts onnxruntime || warn "piper-tts install skipped — install manually inside container"
+mkdir -p /opt/command-os/data/voices
+if [ ! -f /opt/command-os/data/voices/en_US-amy-medium.onnx ]; then
+  curl -fsSL -o /opt/command-os/data/voices/en_US-amy-medium.onnx \
+    "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/amy/medium/en_US-amy-medium.onnx" \
+    && curl -fsSL -o /opt/command-os/data/voices/en_US-amy-medium.onnx.json \
+       "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/amy/medium/en_US-amy-medium.onnx.json" \
+    && log "Piper voice downloaded: en_US-amy-medium (~60 MB)" \
+    || warn "voice download failed — fetch manually from huggingface.co/rhasspy/piper-voices"
+fi
+
 log "4/6  cloning repo to /opt/command-os..."
 mkdir -p /opt
 [ -d /opt/command-os ] || git clone "$REPO" /opt/command-os

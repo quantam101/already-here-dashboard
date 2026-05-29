@@ -10,6 +10,7 @@ import Deployments from "./pages/Deployments";
 import Approvals from "./pages/Approvals";
 import Audit from "./pages/Audit";
 import ContentStudio from "./pages/ContentStudio";
+import VideoStudio from "./pages/VideoStudio";
 import ProofOfWork from "./pages/ProofOfWork";
 import Scout from "./pages/Scout";
 import Proposals from "./pages/Proposals";
@@ -33,6 +34,7 @@ function App() {
               <Route path="revenue" element={<Revenue />} />
               <Route path="content" element={<Content />} />
               <Route path="studio" element={<ContentStudio />} />
+              <Route path="video-studio" element={<VideoStudio />} />
               <Route path="agents" element={<Agents />} />
               <Route path="builds" element={<Builds />} />
               <Route path="deployments" element={<Deployments />} />

@@ -23,6 +23,7 @@ import {
   Shield as ShieldIcon,
   Menu,
   X,
+  Film,
 } from "lucide-react";
 
 const NAVIGATION = [
@@ -31,6 +32,7 @@ const NAVIGATION = [
   { name: "Income Streams", path: "/revenue", icon: DollarSign, section: "operations" },
   { name: "AI Agents", path: "/agents", icon: Bot, section: "operations" },
   { name: "Content Factory", path: "/studio", icon: Sparkles, section: "operations" },
+  { name: "Video Engine", path: "/video-studio", icon: Film, section: "operations" },
   { name: "Scout", path: "/scout", icon: Radar, section: "operations" },
   { name: "Proof of Work", path: "/proof-of-work", icon: Trophy, section: "revenue" },
   { name: "Pricing & Pay In", path: "/pricing", icon: CreditCard, section: "revenue" },
