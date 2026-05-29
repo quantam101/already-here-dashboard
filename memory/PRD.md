@@ -23,7 +23,34 @@ Build a complete enterprise-grade, governed multi-agent operating system consoli
 
 ## What's Been Implemented (2026-02-XX)
 
-### Iteration 18 - Remaining HITL Governance Gates Wired (latest)
+### Iteration 19 - Total Emergent Scrub + 2-of-2 Dual-Actor Approval + DEPLOY-NOW Runbook (latest)
+**133/133 pytest passing. App now ships with ZERO user-visible Emergent traces and a true enterprise dual-actor control on critical gates.**
+
+**Total Emergent scrub (every shipped artifact):**
+- `frontend/public/index.html` — removed the "Made with Emergent" floating badge, the `assets.emergent.sh/scripts/emergent-main.js` injection, and the hardcoded PostHog analytics block (which phoned home to a third-party project). Production HTML now contains zero external Emergent or PostHog references.
+- `frontend/src/pages/Pricing.js` — stripped "(configured by Emergent)" copy from the Stripe Test Mode notice.
+- `frontend/src/components/QuickstartWizard.js` — removed legacy `emergent_llm_key_set` fallback read.
+- `frontend/src/lib/clipboard.js` — generic "restricted iframes" comment instead of name-checking Emergent.
+- `backend/routes/system.py` — removed `emergent_llm_key_set` field from `/api/system/status`. New canonical key is `llm_key_set`.
+- `backend/routes/cost.py` — `/api/cost/policy` now lists "litellm + LLM provider API key (BYO key)" instead of "Emergent LLM (Universal Key)".
+- `backend/routes/books.py`, `proposals.py`, `cycle.py`, `advisor.py`, `services/content_generation_service.py` — every public docstring de-branded.
+- `backend/routes/auth.py`, `services/llm_adapter.py`, `services/stripe_adapter.py` — module headers cleaned of "replaces Emergent…" migration commentary.
+- `backend/.env` — `EMERGENT_LLM_KEY=` renamed to `LLM_API_KEY=` (the adapter still reads the legacy var as a fallback so existing operators don't break).
+- **Deploy artifacts**: `scripts/oci-bootstrap.sh`, `scripts/preflight.sh`, `scripts/validate-oci.sh`, `scripts/deploy-local.sh`, `cloud-init.sh`, `docker-compose.yml`, `docker-compose.sqlite.yml` — all now write `LLM_API_KEY` first and only fall through to legacy `EMERGENT_LLM_KEY` for backwards compatibility.
+
+**2-of-2 dual-actor approval policy** (`services/governance_service.py`):
+- New env flag `DUAL_ACTOR_APPROVAL=true` activates the two-person rule on all `severity=critical` gates (L5: `capital_allocation`, `payment_modification`, `contract_execution`, `pii_access`, `security_modification`, `private_data_to_public_llm`).
+- Approval rows now carry `required_decisions` (computed at creation) + a `decisions` append-only ledger of `{actor, approve, note, decided_at}` entries.
+- `decide_approval()` dedupes by actor so one operator can't satisfy the 2-of-2 rule alone. A single `reject` from any actor finalizes status to `rejected`.
+- 202 response from `enforce()` includes `required_decisions` so the UI can label the gate "TWO-PERSON RULE active — needs N distinct actors".
+- Verified end-to-end via curl: L3+critical → 202 with `required_decisions=2`, alice approves → still pending, alice double-approves → still pending (idempotent), bob approves → status flips, request clears with `X-Approval-Id`.
+- 5 new pytest unit tests in `tests/test_dual_actor_approval.py` (single-actor flow, critical 2-of-2, high-severity gates stay 1-of-1 even with flag on, any reject finalizes, unknown id returns empty).
+
+**`DEPLOY-NOW.md`** — single ultra-tight 8-section OCI runbook tailored to the user's repeated stumbling points: exact instance specs (VM.Standard.A1.Flex Ubuntu 22.04, NOT 20.04/24.04), public-subnet requirement, OCI key-file `chmod 600` step, port 80/443 ingress rules, DNS A-records, one-line bootstrap, mandatory `.env` overrides, and three guaranteed-to-hit troubleshooting recipes.
+
+**Test totals:** 128 integration + 5 dual-actor unit = **133/133 PASSING**. Ruff clean. ESLint clean. Served HTML scrubbed (0 hits for `emergent`/`posthog`/`made with`).
+
+### Iteration 18 - Remaining HITL Governance Gates Wired
 **All 5 ProfitEngineV5 §5 gates now have live route enforcement. 128/128 pytest.**
 - **`compliance_content` gate** wired into:
   - `POST /api/proposals/draft` (`routes/proposals.py::draft_proposal`)

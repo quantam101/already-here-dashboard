@@ -1,8 +1,6 @@
 """
-Stripe adapter — direct calls to the official `stripe` SDK, replacing the
-previous `emergentintegrations.payments.stripe.checkout.StripeCheckout`
-wrapper. Keeps the same 3-method surface area so the routes don't need to
-change extensively.
+Stripe adapter — direct calls to the official `stripe` SDK with a 3-method
+surface area used by the payments routes.
 
 Mock mode: when STRIPE_API_KEY starts with `sk_test_placeholder` or
 `sk_test_emergent` (legacy), or is unset, the adapter returns synthesized

@@ -1,7 +1,7 @@
 """
 Proposal Engine - AI-powered grant, contract, RFP, invoice, capability statement writer.
 
-Uses Emergent LLM Key (Cost Guard compliant - $0 to operator).
+Uses litellm with a single BYO LLM provider key (Cost Guard compliant - cheap to operator).
 
 Document types supported:
   - grant_proposal: federal/foundation grant response

@@ -1,7 +1,6 @@
 """
 LLM adapter — vendor-neutral abstraction over OpenAI/Anthropic/Gemini using
-the open-source `litellm` library. Replaces the previous `emergentintegrations`
-dependency so the codebase can be shipped to any buyer without Emergent ties.
+the open-source `litellm` library. Operators bring their own provider key.
 
 Mock mode: if `LLM_MOCK_MODE=true` is set OR the configured key starts with
 `sk-mock-`, the adapter returns deterministic canned responses instead of

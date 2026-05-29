@@ -1,15 +1,14 @@
 """
 Auth - Single-operator gate.
 
-Replaces the previous Emergent-managed OAuth path with a vendor-neutral
-OPERATOR_TOKEN flow:
+Vendor-neutral OPERATOR_TOKEN flow:
 
   - Set OPERATOR_TOKEN=<long_random_string>  in the backend .env
   - Set OPERATOR_EMAIL=<your_email>          in the backend .env
   - Frontend prompts for the token at /login → POST /api/auth/login
   - On success, the server issues an httpOnly session cookie that lasts 7d
 
-For multi-user / Google-OAuth deployments later, drop a new dependency at
+For multi-user / OAuth deployments later, drop a new dependency at
 `get_current_user` — the cookie + session_token schema below is generic.
 """
 from fastapi import APIRouter, HTTPException, Request, Response, Depends, Header

@@ -111,7 +111,7 @@ async def cost_policy():
         "manual_export_when_api_paid": True,
         "fail_closed_on_missing_secret": True,
         "approved_free_integrations": [
-            "Emergent LLM (Universal Key) — Gemini/Claude/GPT text + Nano Banana images",
+            "litellm + LLM provider API key (Gemini / Claude / OpenAI text + images, BYO key)",
             "Stripe Checkout (test mode by default)",
             "Reddit JSON API (no auth)",
             "HackerNews API (no auth)",

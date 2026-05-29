@@ -47,7 +47,7 @@ else
 fi
 
 section "Backend env keys referenced"
-for k in MONGO_URL DB_NAME EMERGENT_LLM_KEY; do
+for k in MONGO_URL DB_NAME LLM_API_KEY; do
   if grep -rq "$k" "$ROOT/backend" 2>/dev/null; then check_pass "$k used in backend code"; else check_warn "$k not referenced"; fi
 done
 
@@ -82,7 +82,7 @@ if [ -d "$ROOT/.git" ]; then
   if [ -n "$REMOTE" ]; then
     check_pass "git remote: $REMOTE"
   else
-    check_warn "no git remote set — push to GitHub via Emergent 'Save to GitHub' button first"
+    check_warn "no git remote set — push to GitHub first (Save to GitHub button or `git remote add origin <url>`)"
   fi
   if [ "$UNCOMMITTED" = "0" ]; then
     check_pass "working tree clean"

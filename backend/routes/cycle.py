@@ -8,7 +8,7 @@ Demonstrates the complete proof-of-work flow:
   4. Create publishing records in 'drafted' state for each platform
   5. Return the cycle report
 
-Cost Guard: $0 (all sources free, generation via Emergent LLM Key).
+Cost Guard: $0 (all sources free; LLM generation via litellm + BYO key).
 """
 from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel

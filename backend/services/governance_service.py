@@ -114,6 +114,22 @@ def route_to_gate(method: str, path: str) -> Optional[str]:
 # ---------------------------------------------------------------------------
 
 async def create_approval_row(db, action_id: str, context: dict) -> dict:
+    """Create a pending approval row.
+
+    `required_decisions` is computed at creation time:
+      - 2 if env `DUAL_ACTOR_APPROVAL=true` AND the gate's severity is "critical"
+        (i.e. all L5 gates: capital_allocation, payment_modification,
+        contract_execution, pii_access, security_modification,
+        private_data_to_public_llm).
+      - 1 otherwise.
+
+    `decisions` is an append-only ledger; each entry has actor/note/decided_at.
+    Status flips to "approved" only when len(decisions) >= required_decisions
+    AND every decision is an `approve`.
+    """
+    g = gate(action_id) or {}
+    dual = os.environ.get("DUAL_ACTOR_APPROVAL", "").strip().lower() in {"1", "true", "yes", "on"}
+    required = 2 if (dual and g.get("severity") == "critical") else 1
     row = {
         "id": f"appr-{uuid.uuid4().hex[:12]}",
         "action_id": action_id,
@@ -123,6 +139,8 @@ async def create_approval_row(db, action_id: str, context: dict) -> dict:
         "decided_at": None,
         "decided_by": None,
         "decision_note": None,
+        "required_decisions": required,
+        "decisions": [],
     }
     await db[APPROVAL_COLLECTION].insert_one(row)
     return row
@@ -137,19 +155,65 @@ async def list_approvals(db, status: str | None = None, limit: int = 50) -> list
     return await db[APPROVAL_COLLECTION].find(q, {"_id": 0}).sort("requested_at", -1).to_list(limit)
 
 
-async def decide_approval(db, approval_id: str, *, approve: bool, note: str = "", actor: str = "operator") -> dict:
-    new_status = "approved" if approve else "rejected"
-    await db[APPROVAL_COLLECTION].update_one(
-        {"id": approval_id},
-        {"$set": {
-            "status": new_status,
-            "decided_at": datetime.now(timezone.utc).isoformat(),
-            "decided_by": actor,
-            "decision_note": note,
-        }},
-    )
+async def decide_approval(
+    db, approval_id: str, *, approve: bool, note: str = "", actor: str = "operator"
+) -> dict:
+    """Apply one decision to an approval row. Two-person rule when enabled.
+
+    - Reject by any single actor → status becomes "rejected" immediately.
+    - Approve: append to `decisions` (deduped by actor). Status flips to
+      "approved" once distinct approving actors >= required_decisions.
+    - Same actor double-approving cannot satisfy the 2-of-2 rule (deduped).
+    """
     row = await get_approval(db, approval_id)
-    return row or {}
+    if not row:
+        return {}
+    if row.get("status") in {"approved", "rejected"}:
+        return row  # final — no further decisions accepted
+
+    now_iso = datetime.now(timezone.utc).isoformat()
+    decision_entry = {
+        "actor": actor,
+        "approve": approve,
+        "note": note,
+        "decided_at": now_iso,
+    }
+
+    if not approve:
+        rejected_decisions = list(row.get("decisions") or []) + [decision_entry]
+        await db[APPROVAL_COLLECTION].update_one(
+            {"id": approval_id},
+            {"$set": {
+                "status": "rejected",
+                "decided_at": now_iso,
+                "decided_by": actor,
+                "decision_note": note,
+                "decisions": rejected_decisions,
+            }},
+        )
+        return await get_approval(db, approval_id) or {}
+
+    # Approve flow — append, then check threshold against distinct actors
+    decisions = list(row.get("decisions") or [])
+    # dedupe: if this actor already approved, skip the append (idempotent)
+    if not any(d.get("actor") == actor and d.get("approve") for d in decisions):
+        decisions.append(decision_entry)
+
+    required = int(row.get("required_decisions") or 1)
+    distinct_approvers = {d.get("actor") for d in decisions if d.get("approve")}
+    final = len(distinct_approvers) >= required
+
+    update = {
+        "decisions": decisions,
+        "decided_at": now_iso,
+        "decided_by": actor,
+        "decision_note": note,
+    }
+    if final:
+        update["status"] = "approved"
+
+    await db[APPROVAL_COLLECTION].update_one({"id": approval_id}, {"$set": update})
+    return await get_approval(db, approval_id) or {}
 
 
 # ---------------------------------------------------------------------------
@@ -194,6 +258,17 @@ async def enforce(
 
     # No usable approval — create a pending row and return 202.
     row = await create_approval_row(db, action_id, context or {})
+    required = int(row.get("required_decisions") or 1)
+    next_step = (
+        f"Operator approves via POST /api/governance/approvals/{row['id']}/approve "
+        f"(actor=<distinct_id>), then re-issue this request with header "
+        f"`X-Approval-Id: {row['id']}`."
+    )
+    if required >= 2:
+        next_step += (
+            f" TWO-PERSON RULE active: this gate needs {required} distinct actors to "
+            f"approve before the request will clear (set actor= in the approve body)."
+        )
     raise HTTPException(
         status_code=202,
         detail={
@@ -203,9 +278,7 @@ async def enforce(
             "description": g.get("description"),
             "current_autonomy_level": current_level(),
             "required_min_level": g.get("min_level"),
-            "next_step": (
-                "Operator approves via POST /api/governance/approvals/{approval_id}/approve, "
-                "then re-issue this request with header `X-Approval-Id: <id>`."
-            ),
+            "required_decisions": required,
+            "next_step": next_step,
         },
     )

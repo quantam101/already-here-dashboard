@@ -4,7 +4,7 @@ Books & Long-Form Agent - Generates books, ebooks, manuals, journals, workbooks.
 Output formats: markdown (downloadable), plain text (for browser audiobook playback
 via Web Speech API SpeechSynthesis - $0 cost, runs on operator's device).
 
-Generation: chapter-by-chapter via Emergent LLM (Gemini 3 Flash, $0).
+Generation: chapter-by-chapter via litellm (Gemini 3 Flash by default, $0-cheap, BYO key).
 Stored in MongoDB `books` collection; downloadable from frontend.
 
 Adds a new revenue stream: rev-books.

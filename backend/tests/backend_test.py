@@ -1233,16 +1233,18 @@ class TestSystemStatus:
         d = r.json()
         for k in (
             "operator_email_set", "stripe_mode", "stripe_webhook_secret_set",
-            "emergent_llm_key_set", "daily_cycle_hour_utc", "counts",
+            "llm_key_set", "daily_cycle_hour_utc", "counts",
             "is_seeded", "system_mode",
         ):
             assert k in d, f"missing key: {k}"
+        # vendor lock-in scrub: the legacy emergent-specific field must be GONE
+        assert "emergent_llm_key_set" not in d, "legacy emergent_llm_key_set must be removed"
         # counts must include core collections
         for c in ("revenue_streams", "agents", "builds", "ledger_entries", "books"):
             assert c in d["counts"]
         # types
         assert isinstance(d["operator_email_set"], bool)
-        assert isinstance(d["emergent_llm_key_set"], bool)
+        assert isinstance(d["llm_key_set"], bool)
         assert isinstance(d["is_seeded"], bool)
         assert d["stripe_mode"] in ("live", "test", "missing", "unknown")
 

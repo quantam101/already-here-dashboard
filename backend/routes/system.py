@@ -67,8 +67,6 @@ async def system_status(db=Depends(get_db)):
         "stripe_webhook_secret_set": stripe_webhook_secret_set,
         "llm_key_set": llm_key_set,
         "llm_providers_configured": configured_providers(),
-        # backwards-compat alias for the old wizard
-        "emergent_llm_key_set": llm_key_set,
         "daily_cycle_hour_utc": daily_cycle_hour,
         "counts": counts,
         "is_seeded": counts["revenue_streams"] >= 3 and counts["agents"] >= 3,

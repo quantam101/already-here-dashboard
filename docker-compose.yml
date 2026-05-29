@@ -31,10 +31,13 @@ services:
       MONGO_URL: mongodb://mongodb:27017
       DB_NAME: ${DB_NAME:-command_os_prod}
       CORS_ORIGINS: ${CORS_ORIGINS:-*}
-      EMERGENT_LLM_KEY: ${EMERGENT_LLM_KEY}
-      STRIPE_API_KEY: ${STRIPE_API_KEY:-sk_test_emergent}
+      LLM_API_KEY: ${LLM_API_KEY:-${EMERGENT_LLM_KEY:-}}
+      STRIPE_API_KEY: ${STRIPE_API_KEY:-sk_test_placeholder}
       STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
       OPERATOR_EMAIL: ${OPERATOR_EMAIL:-}
+      OPERATOR_TOKEN: ${OPERATOR_TOKEN:-}
+      AUTONOMY_LEVEL: ${AUTONOMY_LEVEL:-L3}
+      DUAL_ACTOR_APPROVAL: ${DUAL_ACTOR_APPROVAL:-false}
       BW_SESSION: ${BW_SESSION:-}
       SYSTEM_MODE: production
       COST_GUARD_ENABLED: "true"

@@ -135,8 +135,8 @@ export default function QuickstartWizard() {
       body: status ? (
         <div className="space-y-3">
           <Row
-            ok={status.llm_key_set ?? status.emergent_llm_key_set}
-            label={(status.llm_key_set ?? status.emergent_llm_key_set) ? "LLM provider key active" : "LLM provider key missing"}
+            ok={status.llm_key_set}
+            label={status.llm_key_set ? "LLM provider key active" : "LLM provider key missing"}
             hint="Powers proposals, books, advisor, scout parsing — vendor-neutral via litellm."
           />
           <Row

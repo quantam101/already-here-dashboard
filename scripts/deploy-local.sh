@@ -83,7 +83,7 @@ deploy_docker() {
     cat > .env <<EOF
 DB_NAME=command_os_local
 CORS_ORIGINS=http://localhost:3000,http://localhost
-EMERGENT_LLM_KEY=${EMERGENT_LLM_KEY:-}
+LLM_API_KEY=${LLM_API_KEY:-${EMERGENT_LLM_KEY:-}}
 EOF
   }
 
@@ -100,7 +100,7 @@ docker_down() {
 }
 
 # ---------------------------------------------------------------------------
-# Native mode (Emergent-style local supervisor processes)
+# Native mode (local supervisor processes)
 # ---------------------------------------------------------------------------
 deploy_native() {
   log "Native deployment (laptop/terminal direct mode)..."
@@ -115,7 +115,7 @@ deploy_native() {
   echo ""
   echo "  cd frontend && yarn install && yarn start &"
   echo ""
-  warn "For supervised mode this app already uses supervisorctl in the Emergent container."
+  warn "For supervised mode use supervisorctl with the configs under /etc/supervisor/conf.d/."
 }
 
 # ---------------------------------------------------------------------------

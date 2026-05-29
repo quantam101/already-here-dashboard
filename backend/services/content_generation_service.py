@@ -99,7 +99,7 @@ def create_fallback_script(idea: dict, error: str) -> ContentScript:
 async def generate_script_from_idea(idea: dict, db=None) -> ContentScript:
     """
     Generate a content script from an idea using AI.
-    Uses Emergent LLM key with Gemini for zero-cost generation.
+    Uses litellm with the configured LLM provider key (Gemini 3 Flash by default).
 
     Runs through the unified llm_runner so:
       - Identical idea prompts hit the cache and skip the LLM call
