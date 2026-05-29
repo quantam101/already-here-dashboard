@@ -13,15 +13,17 @@ Endpoints:
 from __future__ import annotations
 
 import os
+import shutil
+import uuid
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException, Request, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, Request, BackgroundTasks, UploadFile, File, Form
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
 from services import governance_service as gov
 from services.audit_service import log_audit_event
-from services.video import engine, tts
+from services.video import avatar, engine, tts
 
 router = APIRouter()
 
@@ -45,12 +47,15 @@ class ScriptBlock(BaseModel):
 class RenderRequest(BaseModel):
     script: ScriptBlock
     voice_id: str | None = None
-    mode: str = "faceless"  # avatar_lipsync + external_provider coming in phase-2
+    mode: str = "faceless"  # faceless | avatar_lipsync | external_provider
+    portrait_id: str | None = None  # for avatar_lipsync — file id from /portraits/upload
 
 
 class RenderFromScriptRequest(BaseModel):
     script_id: str
     voice_id: str | None = None
+    mode: str = "faceless"
+    portrait_id: str | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -74,38 +79,96 @@ async def voices():
 async def render(req: RenderRequest, http_request: Request, background: BackgroundTasks, db=Depends(get_db)):
     if req.mode not in {"faceless", "avatar_lipsync", "external_provider"}:
         raise HTTPException(status_code=400, detail=f"unknown mode: {req.mode}")
-    if req.mode != "faceless":
-        # Phase-2 modes are scaffolded; refuse cleanly with operator guidance
-        raise HTTPException(
-            status_code=501,
-            detail=(
-                f"mode '{req.mode}' is scaffolded but not yet implemented. "
-                "Open issue: install Wav2Lip ONNX (avatar_lipsync) or set OPENAI_VIDEO_KEY (external_provider). "
-                "See /app/VIDEO_ENGINE.md §Phase-2."
-            ),
-        )
-
-    # Governance: cycle/mass_outreach gate would only fire on actual posting,
-    # not on rendering. Rendering is internal staging, so no gate is enforced.
 
     caps = engine.capability_report()
-    if not caps["modes_available"]["faceless"]:
+    if not caps["modes_available"].get(req.mode):
+        details = caps["external_provider_status"] if req.mode == "external_provider" else None
         raise HTTPException(
             status_code=503,
             detail={
-                "error": "faceless mode unavailable",
+                "error": f"{req.mode} mode unavailable",
                 "missing": caps["operator_actions"],
+                "external_provider_status": details,
             },
         )
 
+    portrait_path: str | None = None
+    if req.mode == "avatar_lipsync":
+        if not req.portrait_id:
+            raise HTTPException(
+                status_code=400,
+                detail="avatar_lipsync mode requires `portrait_id` from POST /api/video/portraits/upload",
+            )
+        candidate = avatar.PORTRAITS_DIR / req.portrait_id
+        if not candidate.exists():
+            raise HTTPException(status_code=404, detail=f"portrait {req.portrait_id} not found")
+        portrait_path = str(candidate)
+
     script_dict = req.script.model_dump()
-    job = await engine.create_job(db, script=script_dict, voice_id=req.voice_id, mode=req.mode)
+    job = await engine.create_job(
+        db, script=script_dict, voice_id=req.voice_id, mode=req.mode, portrait_path=portrait_path,
+    )
     background.add_task(_run_pipeline_task, job["id"])
     await log_audit_event(
         db, "video.render.started", "operator", "render", "video_job", job["id"],
-        metadata={"mode": req.mode, "voice": req.voice_id, "shots": len(script_dict.get("shot_list") or [])},
+        metadata={
+            "mode": req.mode, "voice": req.voice_id,
+            "shots": len(script_dict.get("shot_list") or []),
+            "portrait_id": req.portrait_id,
+        },
     )
-    return {"job_id": job["id"], "status": job["status"], "next": f"GET /api/video/jobs/{job['id']}"}
+    return {"job_id": job["id"], "status": job["status"], "mode": req.mode, "next": f"GET /api/video/jobs/{job['id']}"}
+
+
+@router.post("/portraits/upload")
+async def upload_portrait(file: UploadFile = File(...)):
+    """Upload a portrait image for avatar_lipsync mode.
+
+    Returns a portrait_id (the filename on disk) that the operator passes
+    to POST /render. Files are stored in /app/data/portraits/ with a
+    random uuid prefix to avoid collisions.
+
+    Constraints:
+      - Max 10 MB
+      - Must be image/jpeg, image/png, or image/webp
+      - File extension is preserved
+    """
+    if file.content_type not in {"image/jpeg", "image/png", "image/webp"}:
+        raise HTTPException(status_code=400, detail=f"unsupported content type: {file.content_type}")
+    data = await file.read()
+    if len(data) > 10 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="portrait must be < 10 MB")
+    if len(data) < 1024:
+        raise HTTPException(status_code=400, detail="portrait suspiciously tiny (< 1 KB)")
+    ext = {"image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp"}[file.content_type]
+    portrait_id = f"{uuid.uuid4().hex[:12]}{ext}"
+    dest = avatar.PORTRAITS_DIR / portrait_id
+    dest.write_bytes(data)
+    return {
+        "portrait_id": portrait_id,
+        "size_bytes": len(data),
+        "content_type": file.content_type,
+        "next": "use this portrait_id in POST /api/video/render with mode='avatar_lipsync'",
+    }
+
+
+@router.get("/portraits")
+async def list_portraits():
+    """List uploaded portraits (filename, size, mtime)."""
+    rows = []
+    for p in sorted(avatar.PORTRAITS_DIR.iterdir(), key=lambda x: -x.stat().st_mtime if x.is_file() else 0):
+        if p.is_file() and p.suffix.lower() in {".jpg", ".jpeg", ".png", ".webp"}:
+            rows.append({"portrait_id": p.name, "size_bytes": p.stat().st_size, "mtime": p.stat().st_mtime})
+    return rows
+
+
+@router.delete("/portraits/{portrait_id}")
+async def delete_portrait(portrait_id: str):
+    p = avatar.PORTRAITS_DIR / portrait_id
+    if p.exists() and p.is_file():
+        p.unlink()
+        return {"deleted": True}
+    return {"deleted": False}
 
 
 async def _run_pipeline_task(job_id: str) -> None:
@@ -130,6 +193,8 @@ async def render_from_script(
             shot_list=script.get("shot_list") or [],
         ),
         voice_id=req.voice_id,
+        mode=req.mode,
+        portrait_id=req.portrait_id,
     )
     return await render(payload, http_request, background, db)
 

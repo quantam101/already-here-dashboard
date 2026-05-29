@@ -69,12 +69,37 @@ function CapPill({ label, ok, note }) {
   );
 }
 
-function RenderForm({ voices, onSubmit, isSubmitting }) {
+function RenderForm({ voices, capability, onSubmit, isSubmitting }) {
   const [hook, setHook] = useState("Stop scrolling — this changes how you think about money.");
   const [body, setBody] = useState("Most people work for money. Smart people build systems that pay them while they sleep.");
   const [cta, setCta] = useState("Follow for daily money tactics.");
   const [shots, setShots] = useState("money stack\nperson typing on laptop\ngraph going up\ncoffee morning\nphone notification");
   const [voiceId, setVoiceId] = useState("");
+  const [mode, setMode] = useState("faceless");
+  const [portraitId, setPortraitId] = useState("");
+  const [uploading, setUploading] = useState(false);
+
+  const queryClient = useQueryClient();
+  const { data: portraits = [] } = useQuery({
+    queryKey: ["video-portraits"],
+    queryFn: () => videoAPI.listPortraits().then((r) => r.data),
+  });
+
+  const handleUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    try {
+      const r = await videoAPI.uploadPortrait(file);
+      setPortraitId(r.data.portrait_id);
+      toast.success(`Portrait uploaded: ${r.data.portrait_id}`);
+      queryClient.invalidateQueries({ queryKey: ["video-portraits"] });
+    } catch (err) {
+      toast.error(`Upload failed: ${err?.response?.data?.detail || err.message}`);
+    } finally {
+      setUploading(false);
+    }
+  };
 
   const handle = () => {
     const shot_list = shots.split("\n").map((s) => s.trim()).filter(Boolean);
@@ -82,20 +107,88 @@ function RenderForm({ voices, onSubmit, isSubmitting }) {
       toast.error("Add at least a HOOK or SCRIPT body");
       return;
     }
-    if (shot_list.length < 1) {
-      toast.error("Add at least 1 shot description");
+    if (mode === "faceless" && shot_list.length < 1) {
+      toast.error("Faceless mode needs at least 1 shot description");
       return;
     }
-    onSubmit({ script: { hook, script_body: body, cta, shot_list }, voice_id: voiceId || undefined });
+    if (mode === "avatar_lipsync" && !portraitId) {
+      toast.error("Avatar mode requires uploading a portrait first");
+      return;
+    }
+    onSubmit({
+      script: { hook, script_body: body, cta, shot_list },
+      voice_id: voiceId || undefined,
+      mode,
+      portrait_id: mode === "avatar_lipsync" ? portraitId : undefined,
+    });
   };
+
+  const modeAvailable = (m) => capability?.modes_available?.[m];
 
   return (
     <div className="metric-card mb-6" data-testid="video-render-form">
       <div className="flex items-center gap-2 mb-4">
         <Film className="w-4 h-4 text-purple-400" />
-        <h3 className="text-base font-semibold text-white">Render a Faceless Video</h3>
+        <h3 className="text-base font-semibold text-white">Render a Video</h3>
       </div>
       <div className="space-y-3">
+        <div>
+          <label className="text-xs text-gray-400 mb-1 block">Render Mode</label>
+          <div className="grid grid-cols-3 gap-2">
+            <ModePill id="faceless" current={mode} setCurrent={setMode}
+              ok={modeAvailable("faceless")} label="Faceless" subtitle="Stock + TTS — $0" />
+            <ModePill id="avatar_lipsync" current={mode} setCurrent={setMode}
+              ok={modeAvailable("avatar_lipsync")} label="AI Avatar" subtitle="Portrait + TTS — $0" />
+            <ModePill id="external_provider" current={mode} setCurrent={setMode}
+              ok={modeAvailable("external_provider")} label="Generative AI" subtitle="Sora 2 — paid" />
+          </div>
+        </div>
+
+        {mode === "avatar_lipsync" && (
+          <div className="bg-purple-500/5 border border-purple-500/20 rounded p-3 space-y-2">
+            <label className="text-xs text-purple-300 block">Portrait image (face photo, jpg/png/webp, &lt;10MB)</label>
+            <div className="flex gap-2">
+              <input
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                onChange={handleUpload}
+                disabled={uploading}
+                className="text-xs text-gray-300 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:bg-purple-600 file:text-white"
+                data-testid="video-portrait-upload"
+              />
+              {portraits.length > 0 && (
+                <select
+                  value={portraitId}
+                  onChange={(e) => setPortraitId(e.target.value)}
+                  className="text-xs bg-black/30 border border-white/10 rounded px-2 py-1 text-white"
+                  data-testid="video-portrait-select"
+                >
+                  <option value="">— pick existing —</option>
+                  {portraits.map((p) => (
+                    <option key={p.portrait_id} value={p.portrait_id}>{p.portrait_id}</option>
+                  ))}
+                </select>
+              )}
+            </div>
+            {portraitId && (
+              <p className="text-[10px] text-purple-200 font-mono">selected: {portraitId}</p>
+            )}
+            <p className="text-[10px] text-gray-500 leading-relaxed">
+              Output watermarked "AI-generated" by default. Animated-portrait pipeline (free, no GPU) — for true Wav2Lip lipsync, drop a model at <code>/app/data/lipsync_models/wav2lip.onnx</code>.
+            </p>
+          </div>
+        )}
+
+        {mode === "external_provider" && (
+          <div className="bg-amber-500/5 border border-amber-500/20 rounded p-3">
+            <p className="text-xs text-amber-200 leading-relaxed">
+              Generative AI mode uses an external provider (Sora 2 / Veo). Each render costs $0.50–$2 against your{" "}
+              <code>OPENAI_VIDEO_KEY</code> / <code>LLM_API_KEY</code>. Renders above{" "}
+              <code>EXTERNAL_VIDEO_GATE_USD</code> route through HITL <code>capital_allocation</code> gate.
+            </p>
+          </div>
+        )}
+
         <div>
           <label className="text-xs text-gray-400 mb-1 block">HOOK (first 3 seconds)</label>
           <Input
@@ -124,18 +217,20 @@ function RenderForm({ voices, onSubmit, isSubmitting }) {
             className="bg-black/30 border-white/10"
           />
         </div>
-        <div>
-          <label className="text-xs text-gray-400 mb-1 block">
-            SHOT LIST (one per line — each becomes a 5-second clip)
-          </label>
-          <Textarea
-            value={shots}
-            onChange={(e) => setShots(e.target.value)}
-            rows={5}
-            data-testid="video-shots-input"
-            className="bg-black/30 border-white/10 font-mono text-xs"
-          />
-        </div>
+        {mode === "faceless" && (
+          <div>
+            <label className="text-xs text-gray-400 mb-1 block">
+              SHOT LIST (one per line — each becomes a 5-second clip)
+            </label>
+            <Textarea
+              value={shots}
+              onChange={(e) => setShots(e.target.value)}
+              rows={5}
+              data-testid="video-shots-input"
+              className="bg-black/30 border-white/10 font-mono text-xs"
+            />
+          </div>
+        )}
         <div>
           <label className="text-xs text-gray-400 mb-1 block flex items-center gap-1.5">
             <Mic className="w-3 h-3" /> Voice
@@ -154,15 +249,33 @@ function RenderForm({ voices, onSubmit, isSubmitting }) {
         </div>
         <Button
           onClick={handle}
-          disabled={isSubmitting}
+          disabled={isSubmitting || !modeAvailable(mode)}
           className="w-full bg-purple-600 hover:bg-purple-700"
           data-testid="video-render-btn"
         >
           {isSubmitting ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Play className="w-4 h-4 mr-2" />}
-          Render Video
+          Render {mode === "avatar_lipsync" ? "Avatar" : mode === "external_provider" ? "Generative" : "Faceless"} Video
         </Button>
       </div>
     </div>
+  );
+}
+
+function ModePill({ id, current, setCurrent, ok, label, subtitle }) {
+  const active = current === id;
+  return (
+    <button
+      onClick={() => ok && setCurrent(id)}
+      disabled={!ok}
+      data-testid={`video-mode-${id}`}
+      className={`text-left px-3 py-2 rounded border text-xs transition-all
+        ${active ? "border-purple-400 bg-purple-500/15 text-white" : "border-white/10 bg-black/20 text-gray-300 hover:border-white/30"}
+        ${!ok ? "opacity-40 cursor-not-allowed" : "cursor-pointer"}`}
+    >
+      <div className="font-semibold">{label}</div>
+      <div className="text-[10px] text-gray-400 mt-0.5">{subtitle}</div>
+      {!ok && <div className="text-[9px] text-red-400 mt-0.5">unavailable</div>}
+    </button>
   );
 }
 
@@ -286,6 +399,7 @@ export default function VideoStudio() {
       <CapabilityCard data={config} />
       <RenderForm
         voices={voices}
+        capability={config}
         onSubmit={(payload) => render.mutate(payload)}
         isSubmitting={render.isPending}
       />

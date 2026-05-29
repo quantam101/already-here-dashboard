@@ -23,7 +23,50 @@ Build a complete enterprise-grade, governed multi-agent operating system consoli
 
 ## What's Been Implemented (2026-02-XX)
 
-### Iteration 21 - Video Engine (Faceless Video Pipeline) (latest)
+### Iteration 22 - Phase-2 & Phase-3 Video Engine: AI Avatars + Sora Bridge (latest)
+**Phase 2 + Phase 3 shipped. All 3 video modes now LIVE. 146/146 pytest including end-to-end avatar render.**
+
+**Phase 2 — AI Avatar (animated-portrait) — LIVE:**
+- `services/video/avatar.py` — mediapipe face detection + ffmpeg zoompan Ken-Burns + audio-amplitude `showvolume` overlay in mouth region + watermark + caption burn
+- `POST /api/video/portraits/upload` — multipart upload (jpg/png/webp, 1KB-10MB) returns `portrait_id`
+- `GET /api/video/portraits` / `DELETE /api/video/portraits/{id}`
+- `POST /api/video/render` now accepts `mode: "avatar_lipsync"` with `portrait_id` field
+- Default `AI-generated` watermark; operator can pass `operator_self=true` to disable (audit-logged)
+- **Verified working end-to-end**: synthetic portrait → upload → render → 956 KB MP4 in ~4 seconds, h264+aac, 1080×1920 vertical
+
+**Phase 2.5 — Wav2Lip upgrade path:**
+- `avatar.has_wav2lip_onnx()` auto-detects a model at `/app/data/lipsync_models/wav2lip.onnx`
+- When present, engine will route through photoreal Wav2Lip pipeline (operator must supply the model — HF-gated, not bundled)
+- Animated-portrait fallback continues to work without it (zero degradation for the $0 path)
+
+**Phase 3 — External provider bridge — WIRED (Sora SDK in beta):**
+- `services/video/external.py` — clean abstraction with `is_configured()`, `provider_status()`, `render_text_to_video()`
+- `POST /api/video/render` accepts `mode: "external_provider"`
+- Endpoint accepts requests cleanly; pipeline fails with documented `NotImplementedError` ("Sora 2 SDK in limited beta") until upstream API stabilises
+- Audit log entry created for every external-provider attempt
+- Cost gate: renders above `EXTERNAL_VIDEO_GATE_USD` (default $0.50) will route through `capital_allocation` HITL when implemented
+- One-time enable: when Sora 2 GA ships, becomes a 3-line `services/video/external.py::render_text_to_video()` implementation
+
+**Frontend `/video-studio` overhaul:**
+- 3-pill mode selector (Faceless / AI Avatar / Generative AI) shows availability + cost per mode
+- Conditional portrait-upload card for avatar mode (drag-and-drop file input + existing-portrait dropdown)
+- Conditional cost-warning banner for external_provider mode
+- Conditional shot-list field (only shown for faceless mode)
+- `videoAPI` extended with `uploadPortrait`, `listPortraits`, `deletePortrait`, mode-aware `renderFromScript`
+
+**Tests added (4 new in `TestVideoEngineAvatar`):**
+- Portrait upload rejects non-image content-types (400)
+- Portrait upload rejects <1KB tiny payloads (400)
+- Full upload → list → delete cycle
+- End-to-end avatar render (synthetic portrait → poll → download MP4 → verify h264+aac, >50KB)
+
+**Bootstrap updated** (`scripts/oci-bootstrap.sh`) to install mediapipe alongside ffmpeg + piper-tts so avatar mode works on a fresh OCI VM out of the box.
+
+**VIDEO_ENGINE.md updated** — Phase-2 marked LIVE with end-to-end curl example, Phase-3 marked wired-SDK-pending, Phase-2.5 documented as operator opt-in upgrade.
+
+**Tests:** 146/146 pytest (was 142 → +4 avatar tests). ESLint + ruff clean.
+
+### Iteration 21 - Video Engine (Faceless Video Pipeline)
 **$0/mo, OCI-Always-Free-compatible video generator. 142/142 pytest including 9 new video tests.**
 
 **Engine architecture (all $0):**

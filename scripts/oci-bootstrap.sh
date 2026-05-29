@@ -103,9 +103,11 @@ if ! command -v bw >/dev/null 2>&1; then
     || warn "bw CLI install skipped (offline / arch mismatch). Run later: see /secrets page in dashboard."
 fi
 
-log "3c/6  installing video engine deps (ffmpeg + Piper TTS + default voice)..."
+log "3c/6  installing video engine deps (ffmpeg + Piper TTS + mediapipe + default voice)..."
 apt-get install -y -qq ffmpeg python3-pip
-pip3 install --quiet --break-system-packages piper-tts onnxruntime 2>/dev/null || pip3 install --quiet piper-tts onnxruntime || warn "piper-tts install skipped — install manually inside container"
+pip3 install --quiet --break-system-packages piper-tts onnxruntime mediapipe 2>/dev/null \
+  || pip3 install --quiet piper-tts onnxruntime mediapipe \
+  || warn "video deps install partial — re-run inside container if missing"
 mkdir -p /opt/command-os/data/voices
 if [ ! -f /opt/command-os/data/voices/en_US-amy-medium.onnx ]; then
   curl -fsSL -o /opt/command-os/data/voices/en_US-amy-medium.onnx \

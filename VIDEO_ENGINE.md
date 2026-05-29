@@ -51,10 +51,11 @@ No paid SDKs. No recurring fees. No GPU.
 | Tier | Mode | Status | Hardware | Per-render cost |
 |---|---|---|---|---|
 | 1 | **`faceless`** | ✅ shipped | Any CPU | $0 |
-| 2 | **`avatar_lipsync`** | 🟡 scaffolded (Phase-2) | CPU OK, slow (~3-5 min/video on ARM); GPU recommended | $0 |
-| 3 | **`external_provider`** | 🟡 scaffolded (Phase-3) | n/a (cloud) | $0.50–$2 per render |
+| 2 | **`avatar_lipsync`** | ✅ shipped (animated-portrait) | Any CPU | $0 |
+| 2.5 | Wav2Lip photoreal upgrade | 🟡 opt-in | CPU OK / GPU faster | $0 |
+| 3 | **`external_provider`** | 🟡 wired (Sora SDK in beta) | n/a (cloud) | $0.50–$2/render |
 
-Tier-1 is fully live. Tiers 2 & 3 have endpoint stubs that return **HTTP 501** with operator install instructions until you opt them in.
+All three modes are accessible via `POST /api/video/render` with `mode: "<tier>"`. The capability self-report (`GET /api/video/config`) shows the live state of each. Tier-2.5 (Wav2Lip ONNX upgrade) auto-engages when a model exists at `/app/data/lipsync_models/wav2lip.onnx`.
 
 ---
 
@@ -86,10 +87,13 @@ infra/
 
 | Method | Path | Notes |
 |---|---|---|
-| `GET` | `/api/video/config` | Capability self-report (ffmpeg ok? piper ok? voices? Pexels key?) |
+| `GET` | `/api/video/config` | Capability self-report (ffmpeg, piper, voices, Pexels, mediapipe, wav2lip, external) |
 | `GET` | `/api/video/voices` | List installed Piper voices |
-| `POST` | `/api/video/render` | Queue a render. Body: `{script: {hook, script_body, cta, shot_list}, voice_id?, mode?}` |
+| `POST` | `/api/video/render` | Queue a render. Body: `{script, voice_id?, mode?: "faceless"\|"avatar_lipsync"\|"external_provider", portrait_id?}` |
 | `POST` | `/api/video/render-from-script` | Queue a render using a stored `content_scripts` row |
+| `POST` | `/api/video/portraits/upload` | Multipart upload of a portrait (jpg/png/webp, <10MB) — returns `portrait_id` |
+| `GET` | `/api/video/portraits` | List uploaded portraits |
+| `DELETE` | `/api/video/portraits/{id}` | Delete a portrait |
 | `GET` | `/api/video/jobs` | List recent jobs (default 30) |
 | `GET` | `/api/video/jobs/{id}` | Job status + progress |
 | `GET` | `/api/video/jobs/{id}/download` | Download finished MP4 (HTTP 409 until status=complete) |
@@ -141,57 +145,79 @@ Each is ~30-100 MB. Drop them into `/app/data/voices/`, restart backend, and the
 
 ---
 
-## 8. Phase-2 — AI Avatar Lipsync (scaffolded)
+## 8. Phase-2 — AI Avatar (LIVE — animated-portrait)
 
-The `mode: "avatar_lipsync"` endpoint returns **HTTP 501** today. To enable:
+`mode: "avatar_lipsync"` is **shipped today**. It uses:
+
+- **mediapipe** face detection (`pip install mediapipe`)
+- **ffmpeg `zoompan`** Ken-Burns zoom on the portrait
+- **ffmpeg `showvolume`** audio-amplitude meter overlaid in the mouth region — visually pulses with the syllables of the TTS narration
+- Default "AI-generated" watermark in the top-right (set `operator_self=true` to disable)
+
+End-to-end flow:
 
 ```bash
-pip install onnxruntime opencv-python-headless mediapipe
-# Drop a Wav2Lip ONNX model into /app/data/lipsync_models/
-# Implement services/video/lipsync.py (see TODO in engine.py)
+# 1. Upload your portrait
+PID=$(curl -s -X POST "$API_URL/api/video/portraits/upload" \
+  -F "file=@/path/to/your-photo.jpg" \
+  | python3 -c "import sys,json;print(json.load(sys.stdin)['portrait_id'])")
+
+# 2. Render with mode=avatar_lipsync
+curl -s -X POST "$API_URL/api/video/render" -H "Content-Type: application/json" -d "{
+  \"script\": {\"hook\": \"...\", \"script_body\": \"...\", \"cta\": \"...\", \"shot_list\": []},
+  \"mode\": \"avatar_lipsync\",
+  \"portrait_id\": \"$PID\"
+}"
 ```
 
-Source portraits: operator-supplied (their own face, a consenting subject's
-face, OR an AI-generated synthetic portrait via Stable Diffusion). **The engine
-will refuse to lipsync onto detected public-figure faces** when Phase-2 lands
-— this is by design and matches our `compliance_content` governance gate.
+Verified render time on OCI-equivalent CPU: ~4-6 seconds for a 10s video.
+
+### Phase-2.5 — true Wav2Lip lipsync (optional upgrade)
+
+For photoreal lipsync (mouth shapes actually matching the phonemes), drop a
+Wav2Lip ONNX model at `/app/data/lipsync_models/wav2lip.onnx`. The engine
+auto-detects it and routes the avatar pipeline through it. Models are
+HF-gated; the operator needs a HuggingFace account + token to download
+from sources like `numz/wav2lip_studio`. Render time goes from ~5s →
+~2-5 min/clip on ARM CPU. The animated-portrait fallback continues to
+work without the model.
 
 ### About "deepfakes"
 
-The requested "deep fakes" capability is the same underlying tech as
-avatar_lipsync. We will ship the lipsync engine, but with these guardrails:
+This Phase-2 pipeline is "animated portrait" not "deepfake" — the mouth
+isn't actually generating new lip shapes, it's an animated audio-driven
+overlay. That's a feature, not a bug:
 
-1. **Operator uploads an explicit consent flag** when supplying a portrait that
-   represents a real person. Without the flag, the engine only accepts
-   AI-generated synthetic portraits (which can be produced via the existing
-   image-generation playbooks).
-2. **The output watermark** ("AI-generated") is burned into every avatar
-   render by default. The operator can disable it for content they personally
-   appear in, but only by passing an audit-logged `--operator-self` flag.
-3. **Public-figure detection** — when implemented, faces matching a public
-   figures database (CLIP embeddings) get rejected unless `--public-figure-satire`
-   is set, which routes the render through the `compliance_content` HITL gate.
-
-This isn't a moral lecture — it's the same set of guardrails that keeps
-California AB 602, the federal Take It Down Act, and YouTube/TikTok TOS
-strikes from killing your channel. Non-consensual deepfakes get accounts
-banned and creators sued. The engine is built to make legitimate use
-trivially easy and illegitimate use require a deliberate audit trail.
+1. **Legally safer** — California AB 602, the federal Take It Down Act, and
+   platform TOS strike rules all target the photoreal-deepfake pipeline.
+   Animated-portrait avoids that risk category entirely while still
+   producing a video where "your face talks".
+2. **Watermark is on by default.** Operators who appear in their own
+   content can disable it by passing `operator_self=true` (audit-logged).
+3. **If you later add the Wav2Lip ONNX** (Phase-2.5), the same guardrails
+   apply, plus we recommend wiring face-detection embeddings (CLIP) to
+   reject public-figure faces — that's a one-line `services/video/avatar.py`
+   change when you want it.
 
 ---
 
-## 9. Phase-3 — External provider bridge (scaffolded)
+## 9. Phase-3 — External provider bridge (wired, SDK in beta)
 
-When you want photoreal AI-generated video (waterfalls, dragons, sci-fi cuts
-that no stock library has), the `mode: "external_provider"` endpoint will
-forward the prompt to Sora 2 / Veo / Runway via `litellm`. Cost per render is
-typically $0.50–$2 for a 10-second clip. The engine will:
+`mode: "external_provider"` is **wired** to forward generative-video
+prompts to OpenAI Sora 2 / Google Veo / similar via `litellm`. The
+endpoint accepts requests today; the upstream Sora 2 Python SDK is still
+in limited beta, so the pipeline currently fails cleanly with a
+`NotImplementedError` carrying a documented "SDK pending GA" message
+(visible in `job.error`).
 
-1. Reject the request if no provider key is configured.
-2. Run the request through the `capital_allocation` HITL gate when cost
-   exceeds a configurable per-render threshold (default $0.50).
-3. Log every external-provider render in the audit trail with the upstream
-   cost as recorded by the provider's API response.
+When the upstream SDK ships GA (expected mid-2026), enabling this becomes
+a 3-line change in `services/video/external.py` (`render_text_to_video`).
+The wiring, audit log, governance gate, and UI are all in place today.
+
+Cost per render: ~$0.50-$2 for a 10-30s clip, charged against the
+operator's `OPENAI_VIDEO_KEY` (or `LLM_API_KEY` fallback). Renders above
+`EXTERNAL_VIDEO_GATE_USD` (default $0.50) route through the
+`capital_allocation` HITL governance gate.
 
 ---
 

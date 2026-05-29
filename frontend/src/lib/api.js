@@ -204,12 +204,23 @@ export const videoAPI = {
   config: () => api.get("/video/config"),
   voices: () => api.get("/video/voices"),
   render: (payload) => api.post("/video/render", payload),
-  renderFromScript: (scriptId, voiceId) =>
-    api.post("/video/render-from-script", { script_id: scriptId, voice_id: voiceId }),
+  renderFromScript: (scriptId, voiceId, mode = "faceless", portraitId = null) =>
+    api.post("/video/render-from-script", {
+      script_id: scriptId, voice_id: voiceId, mode, portrait_id: portraitId,
+    }),
   jobs: (limit = 30) => api.get(`/video/jobs?limit=${limit}`),
   job: (id) => api.get(`/video/jobs/${id}`),
   downloadUrl: (id) => `${BACKEND_URL}/api/video/jobs/${id}/download`,
   deleteJob: (id) => api.delete(`/video/jobs/${id}`),
+  uploadPortrait: (file) => {
+    const fd = new FormData();
+    fd.append("file", file);
+    return api.post("/video/portraits/upload", fd, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+  },
+  listPortraits: () => api.get("/video/portraits"),
+  deletePortrait: (id) => api.delete(`/video/portraits/${id}`),
 };
 
 // Governance (L0-L5 + HITL approval queue)
