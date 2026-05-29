@@ -23,7 +23,30 @@ Build a complete enterprise-grade, governed multi-agent operating system consoli
 
 ## What's Been Implemented (2026-02-XX)
 
-### Iteration 19 - Total Emergent Scrub + 2-of-2 Dual-Actor Approval + DEPLOY-NOW Runbook (latest)
+### Iteration 20 - Sidebar HITL Badges + Governance Approvals Queue UI + One-Shot OCI Deploy (latest)
+**133/133 pytest + testing-agent verification → 0 issues / 0 action items.**
+
+- **`<GovernanceStatusBadges/>`** (new) mounted in the sidebar's System Status box. Polls `GET /api/governance/approvals?status=pending` and `GET /api/lifelong-catch-correct/` every 30s. Renders:
+  - Amber **HITL approvals N · M need 2nd** badge linking to `/approvals` (the `· M need 2nd` suffix appears only when dual-actor rule is active AND there are rows with 1-of-2 distinct approvals).
+  - Red **Catch & Correct N HIGH** badge for high-severity LCAC findings.
+  - Renders nothing when both counts are 0.
+
+- **`<GovernanceApprovals/>`** (new) — section rendered at the bottom of `/approvals`. Lists all governance-managed HITL approvals (separate collection from the legacy `approvals` table), with an actor-name input + per-row Approve/Reject buttons that route through `governanceAPI.approve(id, note, actor)` / `reject(id, note, actor)`. Each row shows severity, action_id, route, current decision count and (when applicable) the **2-of-2 · X/Y** badge that surfaces the dual-actor progress.
+
+- **`lib/api.js`**: `governanceAPI.approve`/`.reject` now accept an `actor` parameter (forwarded to the existing `{note, actor}` body shape on the backend).
+
+- **`scripts/one-shot-oci-deploy.sh`** — single-paste OCI bootstrap pre-filled with `alreadyherellc.com` + `dispatch@alreadyherellc.com`. Operator only edits one line (`GITHUB_REPO`) before pasting on the OCI host. Generates a strong `OPERATOR_TOKEN` via `openssl rand -hex 32` and prints the 4-step post-bootstrap sequence (nano backend/.env → docker compose restart → 3 curl health checks → browser open).
+
+- **Verification (testing agent iteration 9)**: 11/11 review items pass first run, 0 critical/minor issues. Confirmed:
+  - `governance/status` reports `autonomy_level=L5`, `route_gates_count=8`, `hitl_gates_count=9`.
+  - `governance/manifest` exposes all 8 wired route_gates 1:1 (no drift vs `governance.yaml`).
+  - `POST /api/payments/keys/rotate` validates shape and stages to `.env.proposed` without touching live `.env`.
+  - At L5, gated routes (`cycle/run`, `publishing/`) pass through with 200/201 (not 202).
+  - Frontend `/overview` shows `[data-testid="sidebar-governance-badges"]` rendering "HITL approvals 5" tied to live pending count.
+  - Frontend `/approvals` shows BOTH legacy section AND `[data-testid="governance-hitl-queue"]` with `2-of-2 · 0/2` badges visible on critical rows.
+  - Served HTML has 0 references to "Made with Emergent" or "posthog".
+
+### Iteration 19 - Total Emergent Scrub + 2-of-2 Dual-Actor Approval + DEPLOY-NOW Runbook
 **133/133 pytest passing. App now ships with ZERO user-visible Emergent traces and a true enterprise dual-actor control on critical gates.**
 
 **Total Emergent scrub (every shipped artifact):**
