@@ -187,7 +187,7 @@ export default function QuickstartWizard() {
             <li>• <span className="text-white">/pricing</span> — generate Stripe share-links</li>
           </ul>
           <p className="text-xs text-gray-500">
-            Deployment guide: <span className="text-blue-400">/app/DEPLOY-TO-OCI.md</span> (also in your repo).
+            Deployment guide: <span className="text-blue-400">/app/DEPLOY-NOW.md</span> (also in your repo).
           </p>
         </div>
       ),
