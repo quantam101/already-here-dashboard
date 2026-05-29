@@ -1,22 +1,29 @@
 """
-Emergent-managed Google Auth - Operator-only gate.
+Auth - Single-operator gate.
 
-Single-user mode: only the email in OPERATOR_EMAIL env can pass.
-Anyone else who logs in with Google is rejected at the session-creation step.
+Replaces the previous Emergent-managed OAuth path with a vendor-neutral
+OPERATOR_TOKEN flow:
+
+  - Set OPERATOR_TOKEN=<long_random_string>  in the backend .env
+  - Set OPERATOR_EMAIL=<your_email>          in the backend .env
+  - Frontend prompts for the token at /login → POST /api/auth/login
+  - On success, the server issues an httpOnly session cookie that lasts 7d
+
+For multi-user / Google-OAuth deployments later, drop a new dependency at
+`get_current_user` — the cookie + session_token schema below is generic.
 """
 from fastapi import APIRouter, HTTPException, Request, Response, Depends, Header
 from pydantic import BaseModel
 from datetime import datetime, timezone, timedelta
 from typing import Optional
+import hmac
 import os
 import uuid
-import httpx
 
 router = APIRouter()
 
 SESSION_TTL_DAYS = 7
 COOKIE_NAME = "session_token"
-EMERGENT_SESSION_DATA_URL = "https://demobackend.emergentagent.com/auth/v1/env/oauth/session-data"
 
 
 class User(BaseModel):
@@ -26,8 +33,9 @@ class User(BaseModel):
     picture: Optional[str] = None
 
 
-class SessionExchangeBody(BaseModel):
-    session_id: str
+class LoginBody(BaseModel):
+    operator_token: str
+    name: Optional[str] = None  # display name (optional)
 
 
 async def get_db():
@@ -39,12 +47,8 @@ def _operator_email() -> Optional[str]:
     return (os.environ.get("OPERATOR_EMAIL") or "").strip().lower() or None
 
 
-def _ensure_allowed(email: str) -> None:
-    op = _operator_email()
-    if not op:
-        return  # no allowlist configured → first-logged-in user becomes the operator
-    if email.lower() != op:
-        raise HTTPException(status_code=403, detail=f"Not the operator. Configured: {op}")
+def _operator_token() -> Optional[str]:
+    return (os.environ.get("OPERATOR_TOKEN") or "").strip() or None
 
 
 async def _resolve_session_token(
@@ -85,29 +89,31 @@ async def get_current_user(
     return User(**{k: user_doc.get(k) for k in ("user_id", "email", "name", "picture")})
 
 
-@router.post("/session")
-async def exchange_session(body: SessionExchangeBody, response: Response, db=Depends(get_db)):
-    """Frontend calls this after Emergent OAuth lands user back with #session_id=..."""
-    async with httpx.AsyncClient(timeout=10.0) as client:
-        try:
-            r = await client.get(EMERGENT_SESSION_DATA_URL, headers={"X-Session-ID": body.session_id})
-            r.raise_for_status()
-        except Exception as e:
-            raise HTTPException(status_code=401, detail=f"Emergent auth lookup failed: {e}") from e
-        data = r.json()
+@router.post("/login")
+async def login(body: LoginBody, response: Response, db=Depends(get_db)):
+    """Exchange a valid OPERATOR_TOKEN for a session cookie."""
+    expected = _operator_token()
+    if not expected:
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "OPERATOR_TOKEN is not configured on the server. Set it in "
+                "the backend .env and restart."
+            ),
+        )
 
-    email = (data.get("email") or "").strip()
-    if not email:
-        raise HTTPException(status_code=400, detail="No email returned from Emergent")
-    _ensure_allowed(email)
+    # Constant-time compare to defeat timing oracles
+    if not hmac.compare_digest(body.operator_token.strip(), expected):
+        raise HTTPException(status_code=401, detail="Invalid operator token")
 
-    # Upsert user
+    email = _operator_email() or "operator@localhost"
+
     existing = await db.users.find_one({"email": email}, {"_id": 0})
     if existing:
         user_id = existing["user_id"]
         await db.users.update_one(
             {"user_id": user_id},
-            {"$set": {"name": data.get("name"), "picture": data.get("picture"),
+            {"$set": {"name": body.name or existing.get("name") or "Operator",
                       "updated_at": datetime.now(timezone.utc).isoformat()}},
         )
     else:
@@ -115,15 +121,15 @@ async def exchange_session(body: SessionExchangeBody, response: Response, db=Dep
         await db.users.insert_one({
             "user_id": user_id,
             "email": email,
-            "name": data.get("name", ""),
-            "picture": data.get("picture"),
+            "name": body.name or "Operator",
+            "picture": None,
             "created_at": datetime.now(timezone.utc),
         })
 
-    # Store session
-    session_token = data.get("session_token") or f"st_{uuid.uuid4().hex}"
+    session_token = f"st_{uuid.uuid4().hex}"
     expires_at = datetime.now(timezone.utc) + timedelta(days=SESSION_TTL_DAYS)
-    await db.user_sessions.delete_many({"user_id": user_id})  # one active session per operator
+    # One active session per operator (kicks out any other open tabs)
+    await db.user_sessions.delete_many({"user_id": user_id})
     await db.user_sessions.insert_one({
         "user_id": user_id,
         "session_token": session_token,
@@ -136,7 +142,7 @@ async def exchange_session(body: SessionExchangeBody, response: Response, db=Dep
         secure=True, samesite="none", path="/",
         max_age=SESSION_TTL_DAYS * 86400,
     )
-    return {"user_id": user_id, "email": email, "name": data.get("name"), "picture": data.get("picture")}
+    return {"user_id": user_id, "email": email, "name": body.name or "Operator"}
 
 
 @router.get("/me", response_model=User)
@@ -155,6 +161,12 @@ async def logout(request: Request, response: Response, authorization: Optional[s
 
 @router.get("/config")
 async def config():
-    """Frontend reads this to know if auth is required + who the operator is."""
-    op = _operator_email()
-    return {"required": bool(op), "operator_email_hint": (op[:2] + "***@" + op.split("@")[-1]) if op else None}
+    """Frontend reads this to know which login flow to render + who the operator is."""
+    op_email = _operator_email()
+    op_token_set = bool(_operator_token())
+    return {
+        "required": bool(op_email or op_token_set),
+        "operator_email_hint": (op_email[:2] + "***@" + op_email.split("@")[-1]) if op_email else None,
+        "auth_mode": "operator_token",  # locked to this for now; future: 'google_oauth' | 'saml'
+        "operator_token_required": op_token_set,
+    }

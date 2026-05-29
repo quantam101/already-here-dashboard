@@ -21,6 +21,17 @@ Build a complete enterprise-grade, governed multi-agent operating system consoli
 - Oracle Cloud Always Free deployment ready + local laptop deployment fallback
 - MongoDB local-first persistence
 
+## What's Been Implemented (2026-05-28)
+
+### Iteration 16 - ProfitEngineV5 Alignment: Governance + Master Revenue Equation + Tier Router + Catch-and-Correct Panel (latest)
+**~85% of the ProfitEngineV5 blueprint now operational on $0/mo infra. 123/123 pytest passing.**
+- **Declarative L0-L5 Governance** (blueprint §5 §6): `governance.yaml` + `services/governance_service.py::enforce()` single chokepoint + `routes/governance.py` (status/manifest/reload/approvals CRUD). Wired `capital_allocation` gate into Stripe smoke-test.
+- **Master Revenue Equation tracker** (blueprint §2): `routes/revenue_equation.py` computes `Q_D × C_R × A_OV × P_F × F_C × P_M` from live data; identifies bottleneck. `RevenueEquationCard` on `/overview`.
+- **Tier-aware LLM router** (blueprint §3.5): `services/llm_runner.py::run_tiered(tier="low|mid|high")` — Tier 1 zero-LLM local; Tier 2 Gemini-3-Flash; Tier 3 Claude-Sonnet.
+- **Catch & Correct telemetry panel** (blueprint §8): Global `CatchAndCorrectPanel` mounted in `DashboardLayout`, polls every 30s, severity-coloured.
+- **`ZERO_DOLLAR_ENTERPRISE.md`** — every §10 enterprise spec mapped to a $0 OSS substitute.
+- **7 new pytest tests**. Total **123/123 passing**.
+
 ## What's Been Implemented (2026-05-26)
 
 ### Iteration 15 - Live-Mode Smoke Runner + Cache Hit Rate Chart + Final Go-Live Runbook (latest)

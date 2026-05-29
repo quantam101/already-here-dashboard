@@ -17,8 +17,8 @@ from datetime import datetime, timezone
 import os
 import uuid
 
-from emergentintegrations.payments.stripe.checkout import (
-    StripeCheckout,
+from services.stripe_adapter import (
+    StripeAdapter,
     CheckoutSessionRequest,
 )
 import stripe as stripe_sdk
@@ -89,13 +89,13 @@ async def get_db():
     return db
 
 
-def _get_stripe(http_request: Request) -> StripeCheckout:
+def _get_stripe(http_request: Request) -> StripeAdapter:
     api_key = os.environ.get("STRIPE_API_KEY")
     if not api_key:
         raise HTTPException(status_code=503, detail="STRIPE_API_KEY not configured")
     host_url = str(http_request.base_url).rstrip("/")
     webhook_url = f"{host_url}/api/payments/webhook"
-    return StripeCheckout(api_key=api_key, webhook_url=webhook_url)
+    return StripeAdapter(api_key=api_key, webhook_url=webhook_url)
 
 
 def _stripe_mode() -> str:
@@ -103,7 +103,7 @@ def _stripe_mode() -> str:
     key = os.environ.get("STRIPE_API_KEY", "") or ""
     if key.startswith("sk_live_"):
         return "live"
-    if key.startswith("sk_test_") or key == "sk_test_emergent":
+    if key.startswith("sk_test_"):
         return "test"
     if not key:
         return "missing"
@@ -405,6 +405,8 @@ async def smoke_test_create(http_request: Request, db=Depends(get_db)):
     webhook handler fires a full refund within seconds — confirming end-to-end
     that live keys + webhook secret + signature verification all work BEFORE
     routing real customers through the same path.
+
+    Governance gate: capital_allocation (HITL required below L5).
     """
     mode = _stripe_mode()
     if mode != "live":
@@ -417,6 +419,13 @@ async def smoke_test_create(http_request: Request, db=Depends(get_db)):
             status_code=400,
             detail="smoke-test requires STRIPE_WEBHOOK_SECRET (otherwise the auto-refund webhook never fires).",
         )
+
+    # Governance gate (after cheap pre-checks so config errors fail fast first)
+    from services import governance_service as gov
+    await gov.enforce(
+        db=db, request=http_request, action_id="capital_allocation",
+        context={"route": "smoke-test/create", "amount_usd": SMOKE_TEST_AMOUNT_USD},
+    )
 
     origin = str(http_request.base_url).rstrip("/")
     success_url = f"{origin}/payment-success?session_id={{CHECKOUT_SESSION_ID}}&smoke=1"

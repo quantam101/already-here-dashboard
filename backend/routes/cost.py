@@ -59,7 +59,10 @@ async def cost_status(db=Depends(get_db)):
     # Required secrets per integration (operator-facing, no values returned)
     required_secrets = {
         "STRIPE_API_KEY": "Stripe payments — receive real money",
-        "EMERGENT_LLM_KEY": "Emergent LLM Universal Key — proposals, books, advisor, scout",
+        "OPENAI_API_KEY": "OpenAI key — proposals, books, advisor (Tier 3)",
+        "ANTHROPIC_API_KEY": "Anthropic Claude key — advisor + reasoning (Tier 3)",
+        "GEMINI_API_KEY": "Google Gemini key — scripts + summarization (Tier 2)",
+        "LLM_API_KEY": "Universal fallback (set if all providers share one key e.g. OpenRouter)",
         "OPERATOR_EMAIL": "Operator allowlist — locks Google login to one email",
     }
     requires_secret = [

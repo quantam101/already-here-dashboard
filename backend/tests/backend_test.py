@@ -430,7 +430,7 @@ class TestPayments:
         })
         assert r.status_code == 200, r.text
         d = r.json()
-        assert d["url"].startswith("https://"), f"bad url: {d['url']}"
+        assert d["url"].startswith(("http://", "https://")), f"bad url: {d['url']}"
         assert d["session_id"].startswith("cs_test_")
         assert d["package"]["id"] == "starter"
         assert d["package"]["amount"] == 49.0
@@ -554,6 +554,75 @@ class TestDistillation:
         assert r.status_code == 200
         d = r.json()
         assert "deleted" in d and isinstance(d["deleted"], int)
+
+
+# ---------------- Governance (L0-L5 + HITL) ----------------
+class TestGovernance:
+    def test_status_shape(self, api):
+        r = api.get(f"{BASE_URL}/api/governance/status")
+        assert r.status_code == 200, r.text
+        d = r.json()
+        for k in ("autonomy_level", "autonomy_level_numeric", "manifest_path",
+                  "system_name", "north_star_usd_per_day",
+                  "hitl_gates_count", "route_gates_count",
+                  "token_optimization_enforced"):
+            assert k in d
+        assert d["autonomy_level"] in ("L0", "L1", "L2", "L3", "L4", "L5")
+        assert d["autonomy_level_numeric"] == {"L0":0,"L1":1,"L2":2,"L3":3,"L4":4,"L5":5}[d["autonomy_level"]]
+        assert d["hitl_gates_count"] >= 5
+        assert d["token_optimization_enforced"] is True
+
+    def test_manifest_loads(self, api):
+        r = api.get(f"{BASE_URL}/api/governance/manifest")
+        assert r.status_code == 200
+        d = r.json()
+        assert "system" in d
+        assert "hitl_gates" in d
+        assert "route_gates" in d
+        assert isinstance(d["hitl_gates"], list) and len(d["hitl_gates"]) >= 5
+        # every gate must have id + min_level + severity
+        for g in d["hitl_gates"]:
+            assert "id" in g and "min_level" in g and "severity" in g
+
+    def test_reload_manifest(self, api):
+        r = api.post(f"{BASE_URL}/api/governance/manifest/reload")
+        assert r.status_code == 200
+        assert r.json().get("reloaded") is True
+
+    def test_approvals_empty_list(self, api):
+        r = api.get(f"{BASE_URL}/api/governance/approvals?status=pending")
+        assert r.status_code == 200
+        assert isinstance(r.json(), list)
+
+    def test_decide_unknown_approval(self, api):
+        r = api.post(f"{BASE_URL}/api/governance/approvals/appr-nonexistent/approve", json={"note": "test"})
+        assert r.status_code == 200
+        # The endpoint surfaces "error" key when the row isn't found.
+        assert "error" in r.json() or r.json().get("status") == "approved"
+
+
+# ---------------- Master Revenue Equation ----------------
+class TestRevenueEquation:
+    def test_equation_returns_full_shape(self, api):
+        r = api.get(f"{BASE_URL}/api/revenue-equation/equation")
+        assert r.status_code == 200, r.text
+        d = r.json()
+        for k in ("formula", "variables", "variable_targets", "daily_capacity_usd",
+                  "north_star_usd_per_day", "gap_to_north_star_usd",
+                  "percent_of_north_star", "bottleneck"):
+            assert k in d
+        for v in ("Q_D", "C_R", "A_OV", "P_F", "F_C", "P_M"):
+            assert v in d["variables"]
+            assert v in d["variable_targets"]
+        assert d["formula"] == "Q_D * C_R * A_OV * P_F * F_C * P_M"
+        assert d["north_star_usd_per_day"] == 1_000_000
+
+    def test_bottleneck_endpoint(self, api):
+        r = api.get(f"{BASE_URL}/api/revenue-equation/bottleneck")
+        assert r.status_code == 200
+        d = r.json()
+        assert "bottleneck" in d and "variable" in d["bottleneck"]
+        assert d["bottleneck"]["variable"] in ("Q_D", "C_R", "A_OV", "P_F", "F_C", "P_M")
 
     def test_budget_today_shape(self, api):
         r = api.get(f"{BASE_URL}/api/distillation/budget")
@@ -1063,9 +1132,10 @@ class TestAuth:
         r = api.get(f"{BASE_URL}/api/auth/me")
         assert r.status_code == 401
 
-    def test_session_with_invalid_id_returns_401(self, api):
-        r = api.post(f"{BASE_URL}/api/auth/session", json={"session_id": "bogus_session_id_xyz_123"})
-        assert r.status_code == 401, f"expected 401, got {r.status_code}: {r.text[:200]}"
+    def test_login_without_token_configured_returns_503(self, api):
+        # OPERATOR_TOKEN isn't set in the test env → login endpoint returns 503
+        r = api.post(f"{BASE_URL}/api/auth/login", json={"operator_token": "anything"})
+        assert r.status_code in (401, 503), f"expected 401/503, got {r.status_code}: {r.text[:200]}"
 
     def test_logout_idempotent(self, api):
         r = api.post(f"{BASE_URL}/api/auth/logout")

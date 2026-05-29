@@ -1,6 +1,7 @@
 import { Outlet, NavLink, useLocation } from "react-router-dom";
 import { useMemo, useState } from "react";
 import QuickstartWizard from "./QuickstartWizard";
+import CatchAndCorrectPanel from "./CatchAndCorrectPanel";
 import {
   LayoutDashboard,
   DollarSign,
@@ -166,6 +167,7 @@ export default function DashboardLayout() {
         <Outlet />
       </main>
       <QuickstartWizard key={wizardKey} />
+      <CatchAndCorrectPanel />
     </div>
   );
 }

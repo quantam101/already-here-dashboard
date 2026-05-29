@@ -18,7 +18,6 @@ from datetime import datetime, timezone
 import os
 import uuid
 
-from emergentintegrations.llm.chat import LlmChat, UserMessage  # noqa: F401 (kept for downstream imports)
 from services.audit_service import log_audit_event
 from services.llm_runner import run_cached
 

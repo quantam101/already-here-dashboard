@@ -10,7 +10,6 @@ from datetime import datetime, timezone
 import json
 import uuid
 
-from emergentintegrations.llm.chat import LlmChat, UserMessage  # noqa: F401
 from routes.analytics import (
     conversion_funnel, stream_roi, momentum, viral_themes, platform_mix,
 )

@@ -1,0 +1,96 @@
+# ProfitEngineV5-style Governance Manifest
+# Declarative source of truth for autonomy level + Human-in-the-Loop (HITL) gates.
+# Read at startup by services/governance_service.py.
+#
+# Levels (matches blueprint §5):
+#   L0  Advisory      — observe only; no state changes
+#   L1  Drafting      — create staged drafts; no external send
+#   L2  Supervised    — execute internal workflows; halt before external
+#   L3  Bounded       — autonomous within explicit bounds (DEFAULT)
+#   L4  Enterprise    — full cross-agent autonomy; escalate only on block
+#   L5  Restricted    — full autonomy in low-risk isolated zones
+#
+# Any action with require_approval=true is blocked unless either:
+#   (a) global autonomy_level numerically >= the action's min_level, OR
+#   (b) an operator approval row exists in `approval_queue` with status='approved'.
+
+system:
+  name: "Already Here Command OS"
+  version: "v15-profitengine"
+  mode: "enterprise_controlled_autonomy"
+  autonomy_level: "L3"
+  north_star_usd_per_day: 1000000
+  unlock_threshold_usd: 25000
+  currency: "USD"
+  audit_required: true
+  token_optimization_enforced: true
+
+token_distillation:
+  default_format: "yaml"
+  semantic_compression: true
+  cache_layer: "db_backed_sha256"
+  cache_ttl_seconds: 2592000
+  daily_token_cap_env: "LLM_DAILY_TOKEN_CAP"
+  tiered_routing:
+    low: "local_python_runtime"
+    mid: "gemini-3-flash-preview"
+    high: "claude-sonnet-4-5-20250929"
+
+# Master Revenue Equation variables (blueprint §2)
+revenue_equation:
+  formula: "Q_D * C_R * A_OV * P_F * F_C * P_M"
+  variables:
+    Q_D:  { name: "Qualified Demand",      unit: "leads/day" }
+    C_R:  { name: "Conversion Rate",       unit: "ratio" }
+    A_OV: { name: "Average Order Value",   unit: "USD" }
+    P_F:  { name: "Purchase Frequency",    unit: "txns/customer/month" }
+    F_C:  { name: "Fulfillment Capacity",  unit: "txns/day" }
+    P_M:  { name: "Profit Margin",         unit: "ratio" }
+
+# Hard HITL gates — these block regardless of autonomy_level (blueprint §5 §9)
+hitl_gates:
+  - id: "capital_allocation"
+    description: "Move funds, adjust ad-spend caps, scale infra beyond baseline"
+    min_level: "L5"   # effectively always-approved-required
+    severity: "critical"
+  - id: "mass_outreach"
+    description: "Email/post batch > 50 recipients"
+    min_level: "L4"
+    severity: "high"
+  - id: "contract_execution"
+    description: "Sign vendor terms, SLAs, client proposals"
+    min_level: "L5"
+    severity: "critical"
+  - id: "payment_modification"
+    description: "Change live Stripe key, webhook secret, payout routing"
+    min_level: "L5"
+    severity: "critical"
+  - id: "production_deploy"
+    description: "Merge to main / deploy code to alreadyherellc.com"
+    min_level: "L4"
+    severity: "high"
+  - id: "pii_access"
+    description: "Expose unmasked customer PII to external API"
+    min_level: "L5"
+    severity: "critical"
+  - id: "security_modification"
+    description: "Edit IAM, rotate keys, disable monitoring"
+    min_level: "L5"
+    severity: "critical"
+  - id: "compliance_content"
+    description: "Publish financial/medical/tax/legal advice"
+    min_level: "L4"
+    severity: "high"
+  - id: "private_data_to_public_llm"
+    description: "Submit trade secrets to non-zero-retention LLM"
+    min_level: "L5"
+    severity: "critical"
+
+# Mapping of existing routes/actions to gate ids — checked by AutonomyGateway
+route_gates:
+  "POST /api/payments/checkout":         "capital_allocation"
+  "POST /api/payments/smoke-test/create": "capital_allocation"
+  "POST /api/ledger/import-csv":         "capital_allocation"
+  "POST /api/proposals/draft":           "compliance_content"
+  "POST /api/books/":                    "compliance_content"
+  "POST /api/cycle/run":                 "mass_outreach"

@@ -174,7 +174,7 @@ export const booksAPI = {
 export const authAPI = {
   config: () => api.get("/auth/config"),
   me: () => api.get("/auth/me"),
-  session: (sessionId) => api.post("/auth/session", { session_id: sessionId }),
+  login: (body) => api.post("/auth/login", body),
   logout: () => api.post("/auth/logout"),
 };
 
@@ -196,4 +196,26 @@ export const distillationAPI = {
   budget: () => api.get("/distillation/budget"),
   budgetHistory: (days = 14) => api.get(`/distillation/budget/history?days=${days}`),
   clear: () => api.post("/distillation/clear"),
+};
+
+
+// Governance (L0-L5 + HITL approval queue)
+export const governanceAPI = {
+  status: () => api.get("/governance/status"),
+  manifest: () => api.get("/governance/manifest"),
+  reload: () => api.post("/governance/manifest/reload"),
+  approvals: (status) => api.get("/governance/approvals" + (status ? `?status=${status}` : "")),
+  approve: (id, note = "") => api.post(`/governance/approvals/${id}/approve`, { note }),
+  reject: (id, note = "") => api.post(`/governance/approvals/${id}/reject`, { note }),
+};
+
+// Master Revenue Equation tracker (Q_D × C_R × A_OV × P_F × F_C × P_M)
+export const revenueEquationAPI = {
+  equation: () => api.get("/revenue-equation/equation"),
+  bottleneck: () => api.get("/revenue-equation/bottleneck"),
+};
+
+// Lifelong Catch and Correct telemetry
+export const lcacAPI = {
+  scan: () => api.get("/lifelong-catch-correct/"),
 };

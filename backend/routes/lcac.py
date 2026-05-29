@@ -43,12 +43,16 @@ async def lifelong_catch_correct(db=Depends(get_db)):
             "message": "Stripe in LIVE mode but no webhook secret configured",
             "suggestion": "Add STRIPE_WEBHOOK_SECRET to backend/.env so paid events are signature-verified",
         })
-    if not os.environ.get("EMERGENT_LLM_KEY"):
+    from services.llm_adapter import any_key_configured
+    if not any_key_configured():
         findings.append({
             "severity": "high",
             "category": "ai",
-            "message": "EMERGENT_LLM_KEY not set — AI features (proposals, scout, advisor, books) will fail",
-            "suggestion": "Get key from Emergent → Profile → Universal Key, add to backend/.env",
+            "message": "No LLM provider key set — AI features (proposals, scout, advisor, books) will fail",
+            "suggestion": (
+                "Set at least one of OPENAI_API_KEY, ANTHROPIC_API_KEY, "
+                "GEMINI_API_KEY, or LLM_API_KEY in backend/.env"
+            ),
         })
 
     # ─── Ledger anomalies ────────────────────────────────────────────────────

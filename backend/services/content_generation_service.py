@@ -1,10 +1,9 @@
 from content_models import ContentScript
-from emergentintegrations.llm.chat import LlmChat, UserMessage  # noqa: F401
-import os  # noqa: F401 (kept for backward-compat with callers)
 import logging
 
 from services.distillation_service import distill_text, to_yaml_payload
 from services.llm_runner import run_cached
+from services.llm_adapter import llm_completion, LLMProviderError
 
 logger = logging.getLogger(__name__)
 
@@ -114,18 +113,15 @@ async def generate_script_from_idea(idea: dict, db=None) -> ContentScript:
     )
 
     # `db` is optional for legacy callers. If absent we fall back to the
-    # legacy direct-call path (no caching, no budget tracking).
+    # direct-call path (no caching, no budget tracking).
     if db is None:
-        api_key = os.getenv('EMERGENT_LLM_KEY')
-        chat = LlmChat(
-            api_key=api_key,
-            session_id=f"script_gen_{idea['id']}",
-            system_message=system_msg,
-        )
-        chat.with_model("gemini", "gemini-3-flash-preview")
         try:
-            response = await chat.send_message(UserMessage(text=prompt))
-        except Exception as e:
+            response = await llm_completion(
+                provider="gemini", model="gemini-3-flash-preview",
+                system_msg=system_msg, prompt=prompt,
+                session_id=f"script_gen_{idea['id']}",
+            )
+        except (LLMProviderError, Exception) as e:
             return create_fallback_script(idea, str(e))
     else:
         try:
