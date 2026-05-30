@@ -12,6 +12,7 @@ All endpoints return structured opportunities. Operator + content agents can
 queue them as ContentIdeas, or the Proposal Engine can use grants/contracts
 to draft responses.
 """
+import asyncio
 import xml.etree.ElementTree as ET
 from datetime import UTC, datetime
 from urllib.parse import quote_plus
@@ -22,7 +23,9 @@ from pydantic import BaseModel
 
 router = APIRouter()
 
-DEFAULT_TIMEOUT = 15.0
+DEFAULT_TIMEOUT = 8.0   # per-request timeout (seconds)
+HN_ITEM_TIMEOUT = 5.0  # tighter timeout for individual HN item fetches
+VIRAL_ENDPOINT_TIMEOUT = 20.0  # overall budget for the /viral endpoint
 USER_AGENT = "AlreadyHere-Command-OS/1.0 (zero-spend scout)"
 
 
@@ -52,61 +55,99 @@ async def _fetch_text(url: str) -> str:
         return r.text
 
 
+async def _fetch_hn_item(hn_id: int) -> Opportunity | None:
+    """Fetch a single HN item with a tight timeout. Returns None on failure."""
+    try:
+        async with httpx.AsyncClient(timeout=HN_ITEM_TIMEOUT, follow_redirects=True) as c:
+            r = await c.get(
+                f"https://hacker-news.firebaseio.com/v0/item/{hn_id}.json",
+                headers={"User-Agent": USER_AGENT},
+            )
+            r.raise_for_status()
+            story = r.json()
+        if not story or not story.get("title"):
+            return None
+        return Opportunity(
+            id=f"hn-{story.get('id')}",
+            title=story.get("title", "")[:280],
+            source="hackernews",
+            kind="viral",
+            url=story.get("url", f"https://news.ycombinator.com/item?id={story.get('id')}"),
+            score=float(story.get("score", 0)),
+            posted_at=datetime.fromtimestamp(story.get("time", 0), tz=UTC).isoformat()
+            if story.get("time")
+            else None,
+            metadata={"by": story.get("by"), "descendants": story.get("descendants", 0)},
+        )
+    except Exception:
+        return None
+
+
 @router.get("/viral", response_model=list[Opportunity])
 async def scout_viral(
     subreddits: str = Query("EntrepreneurRideAlong+SideProject+Entrepreneur+SmallBusiness+passive_income"),
     limit: int = 25,
 ):
-    """Discover viral / trending content from Reddit + HackerNews."""
+    """Discover viral / trending content from Reddit + HackerNews.
+
+    All external calls run concurrently within a VIRAL_ENDPOINT_TIMEOUT budget
+    so this endpoint always returns within ~20s regardless of upstream latency.
+    """
     items: list[Opportunity] = []
 
-    # Reddit (multi-subreddit hot)
-    try:
-        reddit = await _fetch_json(f"https://www.reddit.com/r/{subreddits}/hot.json?limit={limit}")
-        for post in reddit.get("data", {}).get("children", []):
-            d = post.get("data", {})
-            items.append(Opportunity(
-                id=f"reddit-{d.get('id')}",
-                title=d.get("title", "")[:280],
-                source="reddit",
-                kind="viral",
-                url=f"https://reddit.com{d.get('permalink', '')}",
-                score=float(d.get("score", 0)),
-                summary=(d.get("selftext", "") or "")[:500],
-                posted_at=datetime.fromtimestamp(d.get("created_utc", 0), tz=UTC).isoformat() if d.get("created_utc") else None,
-                metadata={"subreddit": d.get("subreddit"), "comments": d.get("num_comments", 0)},
-            ))
-    except Exception as e:
-        items.append(Opportunity(
-            id="reddit-error", title=f"Reddit fetch error: {e}", source="reddit",
-            kind="viral", url="https://reddit.com", metadata={"error": str(e)},
-        ))
-
-    # HackerNews top stories
-    try:
-        ids = await _fetch_json("https://hacker-news.firebaseio.com/v0/topstories.json")
-        for hn_id in ids[:min(limit, 15)]:
-            try:
-                story = await _fetch_json(f"https://hacker-news.firebaseio.com/v0/item/{hn_id}.json")
-                if not story:
-                    continue
-                items.append(Opportunity(
-                    id=f"hn-{story.get('id')}",
-                    title=story.get("title", "")[:280],
-                    source="hackernews",
+    async def _reddit() -> list[Opportunity]:
+        try:
+            reddit = await _fetch_json(
+                f"https://www.reddit.com/r/{subreddits}/hot.json?limit={limit}"
+            )
+            out = []
+            for post in reddit.get("data", {}).get("children", []):
+                d = post.get("data", {})
+                out.append(Opportunity(
+                    id=f"reddit-{d.get('id')}",
+                    title=d.get("title", "")[:280],
+                    source="reddit",
                     kind="viral",
-                    url=story.get("url", f"https://news.ycombinator.com/item?id={story.get('id')}"),
-                    score=float(story.get("score", 0)),
-                    posted_at=datetime.fromtimestamp(story.get("time", 0), tz=UTC).isoformat() if story.get("time") else None,
-                    metadata={"by": story.get("by"), "descendants": story.get("descendants", 0)},
+                    url=f"https://reddit.com{d.get('permalink', '')}",
+                    score=float(d.get("score", 0)),
+                    summary=(d.get("selftext", "") or "")[:500],
+                    posted_at=datetime.fromtimestamp(d.get("created_utc", 0), tz=UTC).isoformat()
+                    if d.get("created_utc")
+                    else None,
+                    metadata={"subreddit": d.get("subreddit"), "comments": d.get("num_comments", 0)},
                 ))
-            except Exception:
-                continue
-    except Exception as e:
-        items.append(Opportunity(
-            id="hn-error", title=f"HackerNews fetch error: {e}", source="hackernews",
-            kind="viral", url="https://news.ycombinator.com", metadata={"error": str(e)},
-        ))
+            return out
+        except Exception as e:
+            return [Opportunity(
+                id="reddit-error", title=f"Reddit fetch error: {e}", source="reddit",
+                kind="viral", url="https://reddit.com", metadata={"error": str(e)},
+            )]
+
+    async def _hackernews() -> list[Opportunity]:
+        try:
+            ids = await _fetch_json("https://hacker-news.firebaseio.com/v0/topstories.json")
+            # Fetch all items concurrently — dramatically faster than sequential
+            tasks = [_fetch_hn_item(hn_id) for hn_id in ids[:min(limit, 15)]]
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+            return [r for r in results if isinstance(r, Opportunity)]
+        except Exception as e:
+            return [Opportunity(
+                id="hn-error", title=f"HackerNews fetch error: {e}", source="hackernews",
+                kind="viral", url="https://news.ycombinator.com", metadata={"error": str(e)},
+            )]
+
+    # Run Reddit + HackerNews concurrently, with a hard overall timeout
+    try:
+        reddit_items, hn_items = await asyncio.wait_for(
+            asyncio.gather(_reddit(), _hackernews()),
+            timeout=VIRAL_ENDPOINT_TIMEOUT,
+        )
+        items = list(reddit_items) + list(hn_items)
+    except asyncio.TimeoutError:
+        items = [Opportunity(
+            id="viral-timeout", title="Scout timed out — upstream APIs slow, try again",
+            source="scout", kind="viral", url="", metadata={"timeout": VIRAL_ENDPOINT_TIMEOUT},
+        )]
 
     items.sort(key=lambda x: x.score or 0, reverse=True)
     return items[:limit]
