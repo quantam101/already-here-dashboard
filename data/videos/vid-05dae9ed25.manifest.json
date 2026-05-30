@@ -1,0 +1,15 @@
+{
+  "job_id": "vid-05dae9ed25",
+  "mode": "faceless",
+  "shots": [
+    "dashboard glowing",
+    "graph going up",
+    "calendar weekly grid"
+  ],
+  "voice_id": null,
+  "clip_count": 3,
+  "music_id": "cinematic",
+  "adaptive_captions_used": true,
+  "size_bytes": 788588,
+  "created_at": "2026-05-29T23:49:56.295787+00:00"
+}

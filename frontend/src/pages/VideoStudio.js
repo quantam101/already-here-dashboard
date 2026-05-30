@@ -132,6 +132,10 @@ function CapabilityCard({ data }) {
         <CapPill label="Piper TTS" ok={data.piper_installed} />
         <CapPill label="Voices" ok={(data.voices_installed || []).length > 0} note={`${(data.voices_installed || []).length}`} />
         <CapPill label="Pexels API" ok={data.pexels_api_key_set} note={data.pexels_api_key_set ? "live" : "fallback"} />
+        <CapPill label="BG Music" ok={(data.music_tracks_available || []).length > 0} note={`${(data.music_tracks_available || []).length} tracks`} />
+        <CapPill label="Adaptive captions" ok={!!data.adaptive_captions_available} note={data.adaptive_captions_available ? "whisper local" : "uniform only"} />
+        <CapPill label="MediaPipe" ok={data.mediapipe_installed} note={data.mediapipe_installed ? "face-aware" : "ken-burns"} />
+        <CapPill label="Sora bridge" ok={data.external_provider_configured} note={data.external_provider_configured ? "wired" : "off"} />
       </div>
       {(data.operator_actions || []).length > 0 && (
         <div className="mt-3 pt-3 border-t border-white/5">
@@ -159,7 +163,7 @@ function CapPill({ label, ok, note }) {
   );
 }
 
-function RenderForm({ voices, capability, onSubmit, isSubmitting }) {
+function RenderForm({ voices, capability, music, onSubmit, isSubmitting }) {
   const [hook, setHook] = useState("Stop scrolling — this changes how you think about money.");
   const [body, setBody] = useState("Most people work for money. Smart people build systems that pay them while they sleep.");
   const [cta, setCta] = useState("Follow for daily money tactics.");
@@ -168,6 +172,8 @@ function RenderForm({ voices, capability, onSubmit, isSubmitting }) {
   const [mode, setMode] = useState("faceless");
   const [portraitId, setPortraitId] = useState("");
   const [uploading, setUploading] = useState(false);
+  const [musicId, setMusicId] = useState("");
+  const [adaptiveCaptions, setAdaptiveCaptions] = useState(false);
 
   const queryClient = useQueryClient();
   const { data: portraits = [] } = useQuery({
@@ -210,6 +216,8 @@ function RenderForm({ voices, capability, onSubmit, isSubmitting }) {
       voice_id: voiceId || undefined,
       mode,
       portrait_id: mode === "avatar_lipsync" ? portraitId : undefined,
+      music_id: musicId || undefined,
+      adaptive_captions: adaptiveCaptions,
     });
   };
 
@@ -342,6 +350,47 @@ function RenderForm({ voices, capability, onSubmit, isSubmitting }) {
               <option key={v.id} value={v.id}>{v.id}</option>
             ))}
           </select>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="text-xs text-gray-400 mb-1 block">Background music ($0/mo, CC0)</label>
+            <select
+              value={musicId}
+              onChange={(e) => setMusicId(e.target.value)}
+              className="w-full bg-black/30 border border-white/10 rounded px-3 py-2 text-sm text-white"
+              data-testid="video-music-select"
+            >
+              <option value="">— none —</option>
+              {(music || []).map((m) => (
+                <option key={m.id} value={m.id}>{m.label}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="text-xs text-gray-400 mb-1 block">Captions</label>
+            <button
+              type="button"
+              onClick={() => setAdaptiveCaptions((v) => !v)}
+              disabled={!capability?.adaptive_captions_available}
+              data-testid="video-adaptive-captions-toggle"
+              className={`w-full text-left text-xs px-3 py-2 rounded border transition-colors ${
+                adaptiveCaptions
+                  ? "border-emerald-400 bg-emerald-500/15 text-emerald-100"
+                  : "border-white/10 bg-black/20 text-gray-300 hover:border-white/30"
+              } ${!capability?.adaptive_captions_available ? "opacity-40 cursor-not-allowed" : "cursor-pointer"}`}
+            >
+              <div className="font-semibold flex items-center justify-between">
+                <span>{adaptiveCaptions ? "Adaptive (whisper)" : "Uniform timing"}</span>
+                <span className="text-[10px] opacity-70">{adaptiveCaptions ? "ON" : "OFF"}</span>
+              </div>
+              <div className="text-[10px] opacity-70 mt-0.5">
+                {adaptiveCaptions
+                  ? "Word-level timing transcribed from TTS"
+                  : "Equal duration per caption line"}
+              </div>
+            </button>
+          </div>
         </div>
         <Button
           onClick={handle}
@@ -527,6 +576,11 @@ export default function VideoStudio() {
     queryFn: () => videoAPI.voices().then((r) => r.data.installed),
   });
 
+  const { data: music } = useQuery({
+    queryKey: ["video-music"],
+    queryFn: () => videoAPI.music().then((r) => r.data.available),
+  });
+
   const { data: jobs = [] } = useQuery({
     queryKey: ["video-jobs"],
     queryFn: () => videoAPI.jobs(20).then((r) => r.data),
@@ -566,6 +620,7 @@ export default function VideoStudio() {
       <RenderForm
         voices={voices}
         capability={config}
+        music={music}
         onSubmit={(payload) => render.mutate(payload)}
         isSubmitting={render.isPending}
       />

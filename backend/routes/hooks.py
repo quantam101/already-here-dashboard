@@ -75,6 +75,26 @@ def _format_prompt(req: HookRequest) -> str:
     )
 
 
+def _deterministic_hooks(topic: str, niche: str, count: int) -> list["HookVariant"]:
+    """Template-based fallback hooks — used when every LLM quota is exhausted.
+
+    Not as creative as a real LLM, but guarantees the A/B test pipeline
+    never deadlocks. Each template instantiates one of the 6 proven
+    viral-hook patterns with the operator's topic/niche slotted in.
+    """
+    t = (topic or "").strip().rstrip(".") or "this"
+    n = (niche or "").strip().rstrip(".") or "your niche"
+    bank = [
+        ("negation", f"Stop doing {t} the way everyone in {n} taught you."),
+        ("curiosity_gap", f"You will never guess what actually moves the needle in {n}."),
+        ("bold_claim", f"I tested {t} for 30 days and the result broke {n}."),
+        ("listicle", f"Three rules about {t} every {n} pro silently breaks."),
+        ("controversy", f"Everyone in {n} is wrong about {t}. Here is the proof."),
+        ("pattern_interrupt", f"Mistake. That is what {t} really is in {n}."),
+    ]
+    return [HookVariant(pattern=p, hook=h) for p, h in bank[: max(1, min(count, len(bank)))]]
+
+
 def _parse_hooks(raw: str) -> list[HookVariant]:
     out: list[HookVariant] = []
     current_pattern: str | None = None
@@ -97,17 +117,24 @@ def _parse_hooks(raw: str) -> list[HookVariant]:
 async def generate_hooks(req: HookRequest, db=Depends(get_db)):
     if not req.topic.strip():
         raise HTTPException(status_code=400, detail="topic is required")
-    raw = await run_cached(
-        db, "gemini", "gemini-3-flash-preview",
-        SYSTEM_MSG, _format_prompt(req),
-        session_id=f"hooks-{req.niche[:20]}-{req.topic[:40]}",
-        tier=3,
-    )
-    variants = _parse_hooks(raw)
-    if not variants:
-        # parser failed — surface the raw LLM output as one variant so the
-        # operator can still copy/edit instead of returning empty
-        variants = [HookVariant(pattern="raw", hook=raw.strip()[:200])]
+    try:
+        raw = await run_cached(
+            db, "gemini", "gemini-3-flash-preview",
+            SYSTEM_MSG, _format_prompt(req),
+            session_id=f"hooks-{req.niche[:20]}-{req.topic[:40]}",
+            tier=3,
+        )
+        variants = _parse_hooks(raw)
+        if variants:
+            return HookResponse(topic=req.topic, niche=req.niche, variants=variants)
+        # parser failed — fall through to deterministic template
+    except HTTPException as e:
+        # 429 / 502 / 503 means every Gemini fallback model also exhausted —
+        # deliver template-based hooks so the operator is never blocked.
+        if e.status_code not in (429, 502, 503):
+            raise
+
+    variants = _deterministic_hooks(req.topic, req.niche, req.count)
     return HookResponse(topic=req.topic, niche=req.niche, variants=variants)
 
 
@@ -131,6 +158,7 @@ class ABTestResponse(BaseModel):
     variants: list[HookVariant]
     job_ids: list[str]
     next_step: str
+    used_fallback: bool = False
 
 
 @router.post("/ab-test", response_model=ABTestResponse)
@@ -150,18 +178,25 @@ async def ab_test_hooks(req: ABTestRequest, db=Depends(get_db)):
 
     # Step 1: generate hooks (reuse the same code path the manual endpoint uses)
     hook_req = HookRequest(topic=req.topic, niche=req.niche, tone=req.tone, count=req.count)
-    raw = await run_cached(
-        db, "gemini", "gemini-3-flash-preview",
-        SYSTEM_MSG, _format_prompt(hook_req),
-        session_id=f"abtest-{req.niche[:20]}-{req.topic[:40]}",
-        tier=3,
-    )
-    variants = _parse_hooks(raw)
-    if not variants:
-        raise HTTPException(
-            status_code=502,
-            detail=f"hook generator returned unparseable output: {raw[:200]}",
+    used_fallback = False
+    try:
+        raw = await run_cached(
+            db, "gemini", "gemini-3-flash-preview",
+            SYSTEM_MSG, _format_prompt(hook_req),
+            session_id=f"abtest-{req.niche[:20]}-{req.topic[:40]}",
+            tier=3,
         )
+        variants = _parse_hooks(raw)
+    except HTTPException as e:
+        if e.status_code not in (429, 502, 503):
+            raise
+        variants = []
+
+    if not variants:
+        # Every Gemini free-tier bucket is exhausted OR the parser failed.
+        # Deliver template-based hooks so the operator's A/B test still ships.
+        variants = _deterministic_hooks(req.topic, req.niche, req.count)
+        used_fallback = True
 
     # Step 2: fire parallel video renders, one per variant
     from services.video import engine as _video_engine
@@ -185,8 +220,13 @@ async def ab_test_hooks(req: ABTestRequest, db=Depends(get_db)):
     return ABTestResponse(
         variants=variants,
         job_ids=job_ids,
+        used_fallback=used_fallback,
         next_step=(
-            f"Poll GET /api/video/jobs/<id> for each of the {len(job_ids)} job_ids. "
+            ("[QUOTA] Gemini free tier exhausted today — hooks generated from "
+             "deterministic templates. Each renders normally; quota resets at "
+             "UTC midnight or supply additional fallback models via "
+             "LLM_GEMINI_FALLBACK_MODELS env. " if used_fallback else "")
+            + f"Poll GET /api/video/jobs/<id> for each of the {len(job_ids)} job_ids. "
             "When all complete, download the MP4s, post each to a separate burner "
             "TikTok/Reels/Shorts account, wait 4h, pick the one with the highest "
             "watch-through, then re-render the full-length version with that hook."

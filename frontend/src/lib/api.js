@@ -204,6 +204,7 @@ export const distillationAPI = {
 export const videoAPI = {
   config: () => api.get("/video/config"),
   voices: () => api.get("/video/voices"),
+  music: () => api.get("/video/music"),
   render: (payload) => api.post("/video/render", payload),
   renderFromScript: (scriptId, voiceId, mode = "faceless", portraitId = null) =>
     api.post("/video/render-from-script", {

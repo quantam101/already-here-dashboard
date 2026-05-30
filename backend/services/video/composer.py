@@ -61,6 +61,9 @@ async def compose(
     output_filename: str,
     width: int = 1080,
     height: int = 1920,
+    music_path: Path | None = None,
+    music_volume: float = 0.15,
+    adaptive_srt_text: str | None = None,
 ) -> Path:
     if not clips:
         raise ValueError("compose() requires at least one clip")
@@ -75,8 +78,8 @@ async def compose(
     concat_path = OUT_DIR / f"{output_filename}.concat.txt"
     concat_path.write_text("\n".join(f"file {shlex.quote(str(c.resolve()))}" for c in clips))
 
-    # Burn in subtitles
-    srt_text = _build_caption_srt(caption_lines, target_seconds)
+    # Burn in subtitles. Prefer adaptive (whisper-aligned) over uniform.
+    srt_text = adaptive_srt_text or _build_caption_srt(caption_lines, target_seconds)
     srt_path = OUT_DIR / f"{output_filename}.srt"
     srt_path.write_text(srt_text or "1\n00:00:00,000 --> 00:00:01,000\n \n")
 
@@ -102,16 +105,40 @@ async def compose(
     if proc.returncode != 0:
         raise RuntimeError(f"concat ffmpeg failed: {err.decode(errors='replace')[:500]}")
 
-    # Second pass: subtitle burn + audio mix
+    # Second pass: subtitle burn + audio mix (with optional bg music)
     subtitle_filter = f"subtitles={shlex.quote(str(srt_path))}:force_style='Fontsize=22,PrimaryColour=&Hffffff&,OutlineColour=&H000000&,Outline=2,Alignment=2,MarginV=120'"
-    proc = await asyncio.create_subprocess_exec(
+
+    ffmpeg_args = [
         "ffmpeg", "-y", "-loglevel", "error",
         "-i", str(pre_path), "-i", str(narration_wav),
-        "-vf", subtitle_filter,
-        "-c:v", "libx264", "-preset", "ultrafast", "-pix_fmt", "yuv420p",
-        "-c:a", "aac", "-b:a", "128k",
-        "-shortest",
-        str(out_path),
+    ]
+    if music_path and music_path.exists():
+        # Three inputs: 0=video, 1=narration, 2=music. Mix music under narration.
+        vol = max(0.0, min(1.0, float(music_volume)))
+        ffmpeg_args += ["-stream_loop", "-1", "-i", str(music_path)]
+        audio_filter = (
+            f"[2:a]volume={vol}[bg];"
+            f"[1:a][bg]amix=inputs=2:duration=first:dropout_transition=0[aout]"
+        )
+        ffmpeg_args += [
+            "-vf", subtitle_filter,
+            "-filter_complex", audio_filter,
+            "-map", "0:v", "-map", "[aout]",
+            "-c:v", "libx264", "-preset", "ultrafast", "-pix_fmt", "yuv420p",
+            "-c:a", "aac", "-b:a", "128k",
+            "-shortest",
+            str(out_path),
+        ]
+    else:
+        ffmpeg_args += [
+            "-vf", subtitle_filter,
+            "-c:v", "libx264", "-preset", "ultrafast", "-pix_fmt", "yuv420p",
+            "-c:a", "aac", "-b:a", "128k",
+            "-shortest",
+            str(out_path),
+        ]
+    proc = await asyncio.create_subprocess_exec(
+        *ffmpeg_args,
         stderr=asyncio.subprocess.PIPE,
     )
     _, err = await proc.communicate()

@@ -140,6 +140,42 @@ def model_id(provider: str, model: str) -> str:
     return cfg["model_template"].format(model=model)
 
 
+# ---------------------------------------------------------------------------
+# Free-tier fallback chain
+# ---------------------------------------------------------------------------
+# Each Gemini model has its OWN per-day free-tier quota bucket. When the
+# primary model (gemini-3-flash-preview = 20/day free) returns 429, cascade
+# through the cheaper-but-still-capable siblings before failing. Each
+# additional bucket buys ~250-1500 free requests/day at $0 cost.
+#
+# Order is intentional: best-quality first, then a chain of progressively
+# more generous free-tier buckets. Order can be overridden via
+# LLM_GEMINI_FALLBACK_MODELS env (comma-separated).
+_DEFAULT_GEMINI_FALLBACKS = [
+    "gemini-2.5-flash",
+    "gemini-2.0-flash",
+    "gemini-2.0-flash-lite",
+    "gemini-1.5-flash",
+    "gemini-1.5-flash-8b",
+]
+
+
+def _quota_exhausted(err_msg: str) -> bool:
+    """True when the upstream error is a hard daily quota / rate-limit hit."""
+    m = err_msg.lower()
+    return (
+        "429" in m or "resource_exhausted" in m or "exceeded your current quota" in m
+        or "rate" in m and "limit" in m
+    )
+
+
+def _gemini_fallbacks() -> list[str]:
+    raw = os.environ.get("LLM_GEMINI_FALLBACK_MODELS", "").strip()
+    if raw:
+        return [m.strip() for m in raw.split(",") if m.strip()]
+    return list(_DEFAULT_GEMINI_FALLBACKS)
+
+
 async def llm_completion(
     *,
     provider: str,
@@ -152,9 +188,13 @@ async def llm_completion(
 ) -> str:
     """Send a one-shot completion. Returns the response text.
 
-    Retries transient upstream errors (503 ServiceUnavailable, 429 Rate Limit,
-    connection resets) up to 3 times with exponential backoff. Permanent
-    errors (auth, 4xx other than 429) bubble up immediately.
+    Resilience strategy (all free):
+      1. Retry transient upstream errors (503, connection resets) with
+         exponential backoff on the SAME model.
+      2. On a 429/quota error from a Gemini model, automatically cascade
+         through the free-tier fallback chain (each model = its own
+         daily bucket).
+      3. Permanent errors (auth, 4xx other than 429) bubble immediately.
     """
     import asyncio
     if _mock_mode_active():
@@ -167,45 +207,79 @@ async def llm_completion(
             f"Set one of: " + ", ".join(_PROVIDER_CONFIG[provider]["env_keys"])
         )
 
-    full_model = model_id(provider, model)
+    # Build the model chain. Only Gemini gets the multi-model cascade — the
+    # other providers don't expose multiple free-tier buckets.
+    is_gemini = provider.lower() in ("gemini", "google")
+    chain: list[str] = [model]
+    if is_gemini:
+        for fb in _gemini_fallbacks():
+            if fb != model and fb not in chain:
+                chain.append(fb)
+
     messages = [
         {"role": "system", "content": system_msg},
         {"role": "user", "content": prompt},
     ]
-    kwargs: dict[str, Any] = {
-        "model": full_model,
-        "messages": messages,
-        "api_key": api_key,
-        "temperature": temperature,
-    }
-    if max_tokens:
-        kwargs["max_tokens"] = max_tokens
-    if session_id:
-        kwargs["metadata"] = {"session_id": session_id}
-
-    logger.debug("llm_adapter call: %s session=%s", full_model, session_id)
     last_err: Exception | None = None
-    for attempt in range(3):
-        try:
-            resp = await litellm.acompletion(**kwargs)
-            return resp["choices"][0]["message"]["content"] or ""
-        except (KeyError, IndexError, TypeError) as e:
-            raise RuntimeError(f"Unexpected litellm response shape: {e}") from e
-        except Exception as e:
-            msg = str(e).lower()
-            transient = (
-                "503" in msg or "unavailable" in msg or "overloaded" in msg
-                or "429" in msg or "rate" in msg
-                or "timeout" in msg or "connection" in msg
+
+    for chain_idx, current_model in enumerate(chain):
+        full_model = model_id(provider, current_model)
+        kwargs: dict[str, Any] = {
+            "model": full_model,
+            "messages": messages,
+            "api_key": api_key,
+            "temperature": temperature,
+        }
+        if max_tokens:
+            kwargs["max_tokens"] = max_tokens
+        if session_id:
+            kwargs["metadata"] = {"session_id": session_id}
+
+        if chain_idx > 0:
+            logger.warning(
+                "llm_adapter: primary quota hit, falling back to %s (chain %d/%d)",
+                full_model, chain_idx + 1, len(chain),
             )
-            if not transient or attempt == 2:
+        else:
+            logger.debug("llm_adapter call: %s session=%s", full_model, session_id)
+
+        for attempt in range(3):
+            try:
+                resp = await litellm.acompletion(**kwargs)
+                return resp["choices"][0]["message"]["content"] or ""
+            except (KeyError, IndexError, TypeError) as e:
+                raise RuntimeError(f"Unexpected litellm response shape: {e}") from e
+            except Exception as e:
+                last_err = e
+                msg = str(e)
+                quota = _quota_exhausted(msg)
+                transient = (
+                    "503" in msg.lower() or "unavailable" in msg.lower()
+                    or "overloaded" in msg.lower() or "timeout" in msg.lower()
+                    or "connection" in msg.lower()
+                )
+                # Quota error on this model → break to try next fallback model.
+                if quota:
+                    logger.warning(
+                        "llm_adapter: model=%s quota exhausted: %s",
+                        full_model, msg[:140],
+                    )
+                    break
+                # Transient → retry same model (1s, 2s).
+                if transient and attempt < 2:
+                    wait = 2 ** attempt
+                    logger.warning(
+                        "llm transient error attempt %d on %s, retrying in %ds: %s",
+                        attempt + 1, full_model, wait, msg[:120],
+                    )
+                    await asyncio.sleep(wait)
+                    continue
+                # Permanent error → bubble.
                 raise
-            last_err = e
-            wait = 2 ** attempt  # 1s, 2s
-            logger.warning("llm transient error attempt %d, retrying in %ds: %s", attempt + 1, wait, str(e)[:120])
-            await asyncio.sleep(wait)
-    # unreachable, but keep mypy happy
-    raise last_err or RuntimeError("llm_completion exhausted retries")
+
+    # All fallbacks exhausted. Caller will catch the quota error and may
+    # apply its own deterministic template fallback (see llm_runner.py).
+    raise last_err or RuntimeError("llm_completion exhausted all fallback models")
 
 
 def any_key_configured() -> bool:

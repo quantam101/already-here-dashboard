@@ -23,7 +23,7 @@ from pydantic import BaseModel, Field
 
 from services import governance_service as gov
 from services.audit_service import log_audit_event
-from services.video import avatar, engine, tts
+from services.video import avatar, captions as _captions, engine, music as _music, tts
 
 router = APIRouter()
 
@@ -49,6 +49,9 @@ class RenderRequest(BaseModel):
     voice_id: str | None = None
     mode: str = "faceless"  # faceless | avatar_lipsync | external_provider
     portrait_id: str | None = None  # for avatar_lipsync — file id from /portraits/upload
+    music_id: str | None = None  # cinematic | upbeat | chill | None
+    music_volume: float = 0.15
+    adaptive_captions: bool = False  # use faster-whisper word-level timing
 
 
 class RenderFromScriptRequest(BaseModel):
@@ -56,6 +59,9 @@ class RenderFromScriptRequest(BaseModel):
     voice_id: str | None = None
     mode: str = "faceless"
     portrait_id: str | None = None
+    music_id: str | None = None
+    music_volume: float = 0.15
+    adaptive_captions: bool = False
 
 
 # ---------------------------------------------------------------------------
@@ -72,6 +78,16 @@ async def voices():
     return {
         "installed": tts.list_installed_voices(),
         "default": os.environ.get("VIDEO_DEFAULT_VOICE", "en_US-amy-medium"),
+    }
+
+
+@router.get("/music")
+async def music():
+    """List bundled royalty-free background music tracks."""
+    return {
+        "available": _music.list_tracks(),
+        "default_volume": 0.15,
+        "note": "Procedurally generated CC0 beds. Mixed under TTS at the supplied volume (0-1).",
     }
 
 
@@ -107,6 +123,8 @@ async def render(req: RenderRequest, http_request: Request, background: Backgrou
     script_dict = req.script.model_dump()
     job = await engine.create_job(
         db, script=script_dict, voice_id=req.voice_id, mode=req.mode, portrait_path=portrait_path,
+        music_id=req.music_id, music_volume=req.music_volume,
+        adaptive_captions=req.adaptive_captions,
     )
     background.add_task(_run_pipeline_task, job["id"])
     await log_audit_event(
@@ -195,6 +213,9 @@ async def render_from_script(
         voice_id=req.voice_id,
         mode=req.mode,
         portrait_id=req.portrait_id,
+        music_id=req.music_id,
+        music_volume=req.music_volume,
+        adaptive_captions=req.adaptive_captions,
     )
     return await render(payload, http_request, background, db)
 

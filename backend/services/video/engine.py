@@ -22,7 +22,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from services.video import avatar, composer, external, stock, tts
+from services.video import avatar, captions, composer, external, music, stock, tts
 
 logger = logging.getLogger("video.engine")
 
@@ -38,7 +38,7 @@ def new_job_id() -> str:
     return f"vid-{uuid.uuid4().hex[:10]}"
 
 
-async def create_job(db, *, script: dict, voice_id: str | None, mode: str = "faceless", portrait_path: str | None = None) -> dict:
+async def create_job(db, *, script: dict, voice_id: str | None, mode: str = "faceless", portrait_path: str | None = None, music_id: str | None = None, music_volume: float = 0.15, adaptive_captions: bool = False) -> dict:
     """Insert a `pending` job row and return it. Operator polls /status."""
     row = {
         "id": new_job_id(),
@@ -52,6 +52,9 @@ async def create_job(db, *, script: dict, voice_id: str | None, mode: str = "fac
         },
         "voice_id": voice_id,
         "portrait_path": portrait_path,
+        "music_id": music_id,
+        "music_volume": float(music_volume),
+        "adaptive_captions": bool(adaptive_captions),
         "progress_pct": 0,
         "message": "queued",
         "output_path": None,
@@ -122,16 +125,30 @@ async def _run_faceless_pipeline(db, job: dict) -> None:
 
         await _update(db, job_id, progress_pct=80, message="composing final MP4")
         caption_lines = _caption_lines(script)
+        adaptive_srt_text: str | None = None
+        if job.get("adaptive_captions"):
+            try:
+                await _update(db, job_id, progress_pct=82, message="transcribing for adaptive captions")
+                adaptive_srt_text = captions.build_adaptive_srt(wav_path)
+            except Exception as ex:
+                logger.warning("adaptive caption transcription failed, falling back to uniform: %s", ex)
+                adaptive_srt_text = None
+        music_path = music.resolve(job.get("music_id"))
         out_mp4 = await composer.compose(
             clips=clip_paths,
             narration_wav=wav_path,
             caption_lines=caption_lines,
             output_filename=job_id,
+            music_path=music_path,
+            music_volume=float(job.get("music_volume") or 0.15),
+            adaptive_srt_text=adaptive_srt_text,
         )
 
         await composer.write_manifest(job_id, {
             "job_id": job_id, "mode": job["mode"], "shots": shots,
             "voice_id": job.get("voice_id"), "clip_count": len(clip_paths),
+            "music_id": job.get("music_id"),
+            "adaptive_captions_used": bool(adaptive_srt_text),
             "size_bytes": out_mp4.stat().st_size, "created_at": _now(),
         })
 
@@ -274,14 +291,18 @@ def capability_report() -> dict[str, Any]:
         except ImportError:
             piper = False
     voices = tts.list_installed_voices()
+    music_tracks = music.list_tracks()
     pexels_key = bool(os.environ.get("PEXELS_API_KEY", "").strip())
     mediapipe_ok = avatar.has_mediapipe()
     wav2lip_ok = avatar.has_wav2lip_onnx()
+    whisper_ok = captions.is_available()
     external_provider_ok = external.is_configured()
     return {
         "ffmpeg_installed": ffmpeg,
         "piper_installed": piper,
         "voices_installed": [v["id"] for v in voices],
+        "music_tracks_available": [t["id"] for t in music_tracks],
+        "adaptive_captions_available": whisper_ok,
         "pexels_api_key_set": pexels_key,
         "mediapipe_installed": mediapipe_ok,
         "wav2lip_onnx_present": wav2lip_ok,

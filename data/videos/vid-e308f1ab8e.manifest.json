@@ -1,0 +1,17 @@
+{
+  "job_id": "vid-e308f1ab8e",
+  "mode": "faceless",
+  "shots": [
+    "Opening",
+    "Main idea",
+    "Detail",
+    "Proof",
+    "Call to action"
+  ],
+  "voice_id": null,
+  "clip_count": 5,
+  "music_id": "cinematic",
+  "adaptive_captions_used": true,
+  "size_bytes": 755063,
+  "created_at": "2026-05-30T00:00:17.020927+00:00"
+}
