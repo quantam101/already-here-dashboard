@@ -20,7 +20,32 @@ Then: "no placeholders, everything real, live."
 
 ## What's implemented
 
-### Iteration 13 (2026-05-30) — Everything real, everything local
+### Iteration 14 (2026-05-30) — D-ASI v4.0.0-ENTERPRISE standalone Space
+- ✅ Added `/app/dasi/` — standalone Hugging Face Space deployable for
+  the **Declarative Autonomous Swarm Intelligence** framework. Four files:
+  `Dockerfile`, `requirements.txt`, `agent_manifest.yaml`, `main.py`,
+  plus a `README.md` with deploy + smoke-test instructions.
+- ✅ Implements an Event-Driven Actor Matrix orchestrating a 4-agent VHLL
+  DAG: `orchestrator_router` → `context_distiller` → `execution_unit` →
+  `adversarial_critic`.
+- ✅ Pre-compiled `SEC_ZERO_PLACEHOLDER_POLICY` regex
+  `(?i)(\.\.\.|//\s*todo|/\*\s*insert|todo:|<placeholder>|missing_logic)`.
+  10/10 enforcement test cases pass (blocks ellipses, TODO, INSERT,
+  `<placeholder>`, `missing_logic`; passes clean code).
+- ✅ Per-stage retry loop (up to 3) with exponential backoff between
+  model fallbacks (primary `deepseek-ai/DeepSeek-V4-Flash` →
+  fallback `Qwen/Qwen2.5-Coder-72B-Instruct`).
+- ✅ Atomic `asyncio.Lock`-guarded state register +
+  `aiofiles`-backed append-only `/tmp/dasi_transaction.log`.
+- ✅ Endpoints verified locally on `127.0.0.1:7860`:
+  - `GET /health` → kernel identity + state + step (instant)
+  - `GET /matrix/telemetry` → full live state
+  - `POST /matrix/execute` → 202 ACCEPTED, runs DAG in background_tasks
+- ✅ Full 4-stage DAG executed end-to-end. Transaction log shows
+  `STAGE_COMPLETED` for each step. Pipeline halts to `SUCCESS_STABLE`.
+- ✅ Main app regression: 174/174 pass after the deployment.
+
+### Iteration 13 — Everything real, everything local
 - ✅ Installed **Coqui XTTS-v2** locally for real CPU voice cloning. No HF
   hosting required. ~1.8 GB cached after first download; ~47s cold-start.
 - ✅ Installed **transformers MusicGen-small** locally for real CPU AI

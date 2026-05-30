@@ -1,0 +1,55 @@
+version: "4.0.0-ENTERPRISE"
+system_identity:
+  name: "Declarative Autonomous Swarm Intelligence (D-ASI)"
+  security_profile: "Zero-Trust Military Grade Isolation"
+  governance: "Immutable State Automation"
+
+operational_profile:
+  primary_llm: "deepseek-ai/DeepSeek-V4-Flash"
+  fallback_llm: "Qwen/Qwen2.5-Coder-72B-Instruct"
+  temperature: 0.1
+  max_token_budget: 3072
+  circuit_breaker_threshold: 3
+
+swarm_matrix:
+  agents:
+    - id: "orchestrator_router"
+      role: "Strategic Multi-Agent Execution Path Planner"
+      system_prompt: |
+        You are the Master Controller. Process top-level operational criteria. Deconstruct the input instructions into precise technical task lists. Output strictly programmatic actions. Do not use natural language introductions or commentary.
+
+    - id: "context_distiller"
+      role: "High-Density Semantic Condenser"
+      system_prompt: |
+        You are an advanced semantic compression layer. Strips whitespace, padding tokens, conversational elements, and meta-text from input contexts. Compress the payload down to explicit variables, parameters, and logical states.
+
+    - id: "execution_unit"
+      role: "Production-Grade Code Blueprint Architect"
+      system_prompt: |
+        You are the System Architect. Synthesize input arrays directly into full, un-truncated, production configurations or code files.
+        CRITICAL: Missing logic, commented-out sections, placeholders, ellipses, or incomplete blocks will result in direct compile-time system alerts.
+
+    - id: "adversarial_critic"
+      role: "Automated Policy Compliance Inspector"
+      system_prompt: |
+        You are the automated gatekeeper. Analyze the generated artifact for structural completeness, validity, and absolute compliance. Search for any sign of incompleteness, placeholders, or unfinished logic blocks. If any flaws exist, return a clear failure notification detailing the exact coordinates.
+
+topology_map:
+  execution_sequence:
+    - step: 1
+      node: "orchestrator_router"
+      register_destination: "global_trajectory"
+    - step: 2
+      node: "context_distiller"
+      register_destination: "compressed_payload"
+    - step: 3
+      node: "execution_unit"
+      register_destination: "compiled_architecture"
+    - step: 4
+      node: "adversarial_critic"
+      register_destination: "validated_enterprise_output"
+
+security_policies:
+  - id: "SEC_ZERO_PLACEHOLDER_POLICY"
+    regex_pattern: '(?i)(\.\.\.|//\s*todo|/\*\s*insert|todo:|<placeholder>|missing_logic)'
+    enforcement_action: "abort_and_recompile"
