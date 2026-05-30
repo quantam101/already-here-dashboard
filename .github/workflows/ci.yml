@@ -360,7 +360,7 @@ jobs:
             # Build and serve updated frontend static bundle
             if [ -d /opt/command-os/frontend ]; then
               cd /opt/command-os/frontend
-              npm ci --quiet --legacy-peer-deps
+              npm install --legacy-peer-deps --prefer-offline 2>/dev/null || npm install --legacy-peer-deps
               npm run build
               sudo docker compose -f /opt/command-os/docker-compose.sqlite.yml restart caddy
             fi
