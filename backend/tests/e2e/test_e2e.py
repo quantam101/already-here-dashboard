@@ -32,17 +32,18 @@ BASE_URL = os.environ.get(
 
 FRONTEND_URL = os.environ.get("FRONTEND_URL", "https://app.alreadyherellc.com")
 
-# How long to wait (total) for the backend to become healthy before E2E tests run
+# How long to wait (total) for the backend to become healthy before each test
 BACKEND_READY_TIMEOUT = 90  # seconds
 
 
 def _wait_for_backend(timeout: int = BACKEND_READY_TIMEOUT) -> None:
     """Poll /api/health/ until it returns healthy or we hit the timeout."""
+    import json
+
     deadline = time.time() + timeout
     while time.time() < deadline:
         try:
             with urllib.request.urlopen(f"{BASE_URL}/api/health/", timeout=5) as r:
-                import json
                 d = json.loads(r.read())
                 if d.get("status") == "healthy":
                     return
@@ -54,9 +55,14 @@ def _wait_for_backend(timeout: int = BACKEND_READY_TIMEOUT) -> None:
 
 # ── Fixtures ───────────────────────────────────────────────────────────────────
 
-@pytest.fixture(scope="session", autouse=True)
+@pytest.fixture(autouse=True)
 def wait_for_backend():
-    """Session-scoped: block until backend is healthy before any E2E test runs."""
+    """Per-test: wait for backend healthy to handle sovereign cycle restarts mid-run.
+
+    Called before every test.  When the backend is up this returns in <1 s.
+    When the sovereign cycle restarts the container (~20 s window) this holds
+    until healthy before the test starts, preventing socket hang-up errors.
+    """
     _wait_for_backend()
 
 
@@ -87,6 +93,15 @@ def page(browser_context):
     p.set_default_timeout(30_000)
     yield p
     p.close()
+
+
+def _new_clean_page(browser_context):
+    """Create a page with the FirstRunWalkthrough overlay suppressed but wizard enabled."""
+    p = browser_context.new_page()
+    # Suppress the z-9999 tour overlay but NOT the quickstart wizard
+    p.add_init_script("localStorage.setItem('pe5_walkthrough_seen', new Date().toISOString());")
+    p.set_default_timeout(30_000)
+    return p
 
 
 # ── Health (API smoke via page.request) ────────────────────────────────────────
@@ -127,10 +142,11 @@ class TestDashboardNavigationE2E:
         page.wait_for_url("**/studio", timeout=15000)
         expect(page).to_have_url(f"{FRONTEND_URL}/studio")
 
-    def test_navigate_to_sovereign(self, page: Page):
+    def test_navigate_to_dasi_matrix(self, page: Page):
+        """D-ASI Matrix is the sovereign/cash-ai hub (nav-d-asi-matrix testid)."""
         page.goto(f"{FRONTEND_URL}/overview", wait_until="networkidle")
-        page.get_by_test_id("nav-cash-ai").click()
-        page.wait_for_url("**/sovereign", timeout=15000)
+        page.get_by_test_id("nav-d-asi-matrix").click()
+        page.wait_for_url("**/dasi-matrix", timeout=15000)
 
     def test_navigate_to_scout(self, page: Page):
         page.goto(f"{FRONTEND_URL}/overview", wait_until="networkidle")
@@ -139,27 +155,27 @@ class TestDashboardNavigationE2E:
 
 
 # ── Quickstart Wizard ─────────────────────────────────────────────────────────
+# NOTE: The wizard no longer auto-opens on first visit (auto-open was removed
+# in favour of FirstRunWalkthrough as the primary first-run experience).
+# All wizard tests open it via the sidebar-quickstart-trigger button.
 
 class TestQuickstartWizardE2E:
-    def test_wizard_appears_on_first_visit(self, browser_context):
-        """Open a fresh page with cleared localStorage to trigger first-run wizard."""
-        page = browser_context.new_page()
-        # Clear wizard completion flag
+    def test_wizard_opens_via_sidebar_trigger(self, browser_context):
+        """Wizard dialog opens when sidebar Re-open Quickstart button is clicked."""
+        page = _new_clean_page(browser_context)
         page.goto(f"{FRONTEND_URL}/overview", wait_until="networkidle")
-        page.evaluate("window.localStorage.removeItem('ah_quickstart_completed_v1')")
-        page.reload(wait_until="networkidle")
 
-        # Wizard dialog should open
-        wizard = page.get_by_test_id("quickstart-wizard")
-        expect(wizard).to_be_visible(timeout=30000)
+        page.get_by_test_id("sidebar-quickstart-trigger").click()
+        expect(page.get_by_test_id("quickstart-wizard")).to_be_visible(timeout=15000)
         page.close()
 
     def test_wizard_skip_button_dismisses(self, browser_context):
-        page = browser_context.new_page()
+        page = _new_clean_page(browser_context)
         page.goto(f"{FRONTEND_URL}/overview", wait_until="networkidle")
-        page.evaluate("window.localStorage.removeItem('ah_quickstart_completed_v1')")
-        page.reload(wait_until="networkidle")
-        page.wait_for_selector('[data-testid="quickstart-wizard"]', timeout=30000)
+
+        # Open wizard via sidebar trigger
+        page.get_by_test_id("sidebar-quickstart-trigger").click()
+        page.wait_for_selector('[data-testid="quickstart-wizard"]', timeout=15000)
 
         # Click Skip
         page.get_by_test_id("quickstart-skip").click()
@@ -169,25 +185,23 @@ class TestQuickstartWizardE2E:
         page.close()
 
     def test_wizard_next_button_advances_step(self, browser_context):
-        page = browser_context.new_page()
-        page.goto(f"{FRONTEND_URL}/overview")
-        page.evaluate("window.localStorage.removeItem('ah_quickstart_completed_v1')")
-        page.reload()
+        page = _new_clean_page(browser_context)
+        page.goto(f"{FRONTEND_URL}/overview", wait_until="networkidle")
+
+        # Open wizard via sidebar trigger
+        page.get_by_test_id("sidebar-quickstart-trigger").click()
         page.wait_for_selector('[data-testid="quickstart-wizard"]', timeout=15000)
 
-        # Click Next from step 1
+        # Click Next from step 1 (Welcome)
         page.get_by_test_id("quickstart-next").click()
 
-        # Step 2 content should appear (Operator access)
-        expect(page.locator("text=Operator access")).to_be_visible(timeout=5000)
+        # Step 2 title contains "Operator access"
+        expect(page.locator("text=Operator access")).to_be_visible(timeout=10000)
         page.close()
 
     def test_sidebar_quickstart_trigger_reopens_wizard(self, browser_context):
-        page = browser_context.new_page()
-        page.goto(f"{FRONTEND_URL}/overview")
-        # Dismiss wizard first
-        page.evaluate("window.localStorage.setItem('ah_quickstart_completed_v1', '2024-01-01')")
-        page.reload()
+        page = _new_clean_page(browser_context)
+        page.goto(f"{FRONTEND_URL}/overview", wait_until="networkidle")
 
         # Re-open via sidebar button
         page.get_by_test_id("sidebar-quickstart-trigger").click()
@@ -249,6 +263,8 @@ class TestStudioE2E:
         assert len(connectors) >= 7
 
     def test_create_idea_via_api(self, page: Page):
+        import json
+
         payload = {
             "title": "E2E Test Idea — Playwright",
             "description": "Created by Playwright E2E test",
@@ -258,7 +274,7 @@ class TestStudioE2E:
         }
         response = page.request.post(
             f"{BASE_URL}/api/studio/ideas/",
-            data=str(payload).replace("'", '"'),
+            data=json.dumps(payload),
             headers={"Content-Type": "application/json"},
         )
         # Accept 200 or 201
@@ -270,6 +286,7 @@ class TestStudioE2E:
     def test_export_pack_for_created_idea(self, page: Page):
         """Create an idea, then get its export pack."""
         import json
+
         payload = {
             "title": "E2E Export Pack Test",
             "description": "Testing export pack via Playwright",
