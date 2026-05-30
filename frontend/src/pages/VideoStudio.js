@@ -1,11 +1,12 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Film, Loader2, Download, Trash2, Play, AlertTriangle, CheckCircle2, Mic, Sparkles } from "lucide-react";
+import { Film, Loader2, Download, Trash2, Play, AlertTriangle, CheckCircle2, Mic, Sparkles, Wand2, Music2, Image as ImageIcon, UploadCloud } from "lucide-react";
 import { videoAPI, hooksAPI } from "../lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
+import { GenerativeSuite } from "../components/GenerativeSuite";
 
 // Faceless Video Studio — render vertical TikTok/Shorts/Reels MP4s from a script.
 // Backed by: Piper TTS (free) + Pexels stock (free tier) + ffmpeg compose.
@@ -163,7 +164,7 @@ function CapPill({ label, ok, note }) {
   );
 }
 
-function RenderForm({ voices, capability, music, onSubmit, isSubmitting }) {
+function RenderForm({ voices, capability, music, voiceRefId, aiMusicPrompt, onSubmit, isSubmitting }) {
   const [hook, setHook] = useState("Stop scrolling — this changes how you think about money.");
   const [body, setBody] = useState("Most people work for money. Smart people build systems that pay them while they sleep.");
   const [cta, setCta] = useState("Follow for daily money tactics.");
@@ -218,6 +219,8 @@ function RenderForm({ voices, capability, music, onSubmit, isSubmitting }) {
       portrait_id: mode === "avatar_lipsync" ? portraitId : undefined,
       music_id: musicId || undefined,
       adaptive_captions: adaptiveCaptions,
+      voice_ref_id: voiceRefId || undefined,
+      ai_music_prompt: aiMusicPrompt || undefined,
     });
   };
 
@@ -564,6 +567,8 @@ function ABTestButton({ topic, scriptBody, cta, shotList, voiceId }) {
 
 export default function VideoStudio() {
   const queryClient = useQueryClient();
+  const [voiceRefId, setVoiceRefId] = useState("");
+  const [aiMusicPrompt, setAiMusicPrompt] = useState("");
 
   const { data: config } = useQuery({
     queryKey: ["video-config"],
@@ -617,10 +622,19 @@ export default function VideoStudio() {
         </p>
       </div>
       <CapabilityCard data={config} />
+      <GenerativeSuite
+        capability={config}
+        voiceRefId={voiceRefId}
+        setVoiceRefId={setVoiceRefId}
+        aiMusicPrompt={aiMusicPrompt}
+        setAiMusicPrompt={setAiMusicPrompt}
+      />
       <RenderForm
         voices={voices}
         capability={config}
         music={music}
+        voiceRefId={voiceRefId}
+        aiMusicPrompt={aiMusicPrompt}
         onSubmit={(payload) => render.mutate(payload)}
         isSubmitting={render.isPending}
       />

@@ -23,7 +23,7 @@ from pydantic import BaseModel, Field
 
 from services import governance_service as gov
 from services.audit_service import log_audit_event
-from services.video import avatar, captions as _captions, engine, music as _music, tts
+from services.video import avatar, captions as _captions, engine, gen_assets, music as _music, tts
 
 router = APIRouter()
 
@@ -52,6 +52,8 @@ class RenderRequest(BaseModel):
     music_id: str | None = None  # cinematic | upbeat | chill | None
     music_volume: float = 0.15
     adaptive_captions: bool = False  # use faster-whisper word-level timing
+    voice_ref_id: str | None = None  # XTTS-v2 voice clone source
+    ai_music_prompt: str | None = None  # if set, MusicGen overrides bundled bed
 
 
 class RenderFromScriptRequest(BaseModel):
@@ -62,6 +64,8 @@ class RenderFromScriptRequest(BaseModel):
     music_id: str | None = None
     music_volume: float = 0.15
     adaptive_captions: bool = False
+    voice_ref_id: str | None = None
+    ai_music_prompt: str | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -88,6 +92,103 @@ async def music():
         "available": _music.list_tracks(),
         "default_volume": 0.15,
         "note": "Procedurally generated CC0 beds. Mixed under TTS at the supplied volume (0-1).",
+    }
+
+
+@router.get("/free-providers")
+async def free_providers():
+    """Status of the keyless/free-tier AI providers wired into the engine."""
+    from services.free_apis import huggingface as _hf, pollinations as _poll
+    return {
+        "pollinations": {
+            "available": _poll.is_available(),
+            "keyless": True,
+            "capabilities": ["image", "text", "audio"],
+            "endpoint": "https://pollinations.ai",
+        },
+        "huggingface": {
+            "configured": _hf.is_configured(),
+            "capabilities": [
+                "image (FLUX.1-schnell)",
+                "voice_clone (XTTS-v2)",
+                "music (MusicGen)",
+                "text_to_video (AnimateDiff / text-to-video-ms)",
+            ],
+            "models": {
+                "image": _hf.DEFAULT_IMAGE_MODEL,
+                "tts": _hf.DEFAULT_TTS_MODEL,
+                "music": _hf.DEFAULT_MUSIC_MODEL,
+                "video": _hf.DEFAULT_VIDEO_MODEL,
+            },
+            "note": "Free tier — set HUGGINGFACE_API_KEY env (https://huggingface.co/settings/tokens).",
+        },
+    }
+
+
+@router.get("/voice-refs")
+async def list_voice_refs_endpoint():
+    """List uploaded voice-reference clips for XTTS-v2 cloning."""
+    return gen_assets.list_voice_refs()
+
+
+@router.post("/voice-refs/upload")
+async def upload_voice_ref(file: UploadFile = File(...)):
+    """Upload a voice reference for XTTS-v2 cloning (6-30s of clean speech)."""
+    allowed = {
+        "audio/wav", "audio/x-wav", "audio/mpeg", "audio/mp3",
+        "audio/x-m4a", "audio/mp4", "audio/ogg",
+    }
+    if file.content_type not in allowed:
+        raise HTTPException(status_code=400, detail=f"unsupported content type: {file.content_type}")
+    data = await file.read()
+    if len(data) > 8 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="voice reference must be < 8 MB")
+    if len(data) < 1024:
+        raise HTTPException(status_code=400, detail="voice reference suspiciously tiny (< 1 KB)")
+    voice_ref_id = gen_assets.save_voice_ref(data, file.content_type)
+    return {
+        "voice_ref_id": voice_ref_id,
+        "size_bytes": len(data),
+        "next": "use this voice_ref_id in POST /api/video/render with `voice_ref_id`",
+    }
+
+
+@router.delete("/voice-refs/{voice_ref_id}")
+async def delete_voice_ref(voice_ref_id: str):
+    p = gen_assets.voice_ref_path(voice_ref_id)
+    if p and p.exists():
+        p.unlink()
+        return {"deleted": True}
+    return {"deleted": False}
+
+
+class GenerativeImageRequest(BaseModel):
+    prompt: str = Field(..., min_length=2, max_length=600)
+    provider: str = "pollinations"  # pollinations | huggingface
+    width: int = 1080
+    height: int = 1920
+
+
+@router.post("/generative/image")
+async def generative_image_preview(req: GenerativeImageRequest):
+    """One-off prompt → image, for the Generative Suite preview tile."""
+    from services.free_apis import huggingface as _hf, pollinations as _poll
+    import base64
+    try:
+        if req.provider == "huggingface":
+            if not _hf.is_configured():
+                raise HTTPException(status_code=503, detail="HUGGINGFACE_API_KEY not set")
+            data = await _hf.generate_image(req.prompt, width=req.width, height=req.height)
+        else:
+            data = await _poll.generate_image(req.prompt, width=req.width, height=req.height)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"image generation failed: {e}") from e
+    return {
+        "provider": req.provider,
+        "size_bytes": len(data),
+        "data_url": "data:image/jpeg;base64," + base64.b64encode(data).decode(),
     }
 
 
@@ -125,6 +226,8 @@ async def render(req: RenderRequest, http_request: Request, background: Backgrou
         db, script=script_dict, voice_id=req.voice_id, mode=req.mode, portrait_path=portrait_path,
         music_id=req.music_id, music_volume=req.music_volume,
         adaptive_captions=req.adaptive_captions,
+        voice_ref_id=req.voice_ref_id,
+        ai_music_prompt=req.ai_music_prompt,
     )
     background.add_task(_run_pipeline_task, job["id"])
     await log_audit_event(
@@ -216,6 +319,8 @@ async def render_from_script(
         music_id=req.music_id,
         music_volume=req.music_volume,
         adaptive_captions=req.adaptive_captions,
+        voice_ref_id=req.voice_ref_id,
+        ai_music_prompt=req.ai_music_prompt,
     )
     return await render(payload, http_request, background, db)
 

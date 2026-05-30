@@ -205,6 +205,17 @@ export const videoAPI = {
   config: () => api.get("/video/config"),
   voices: () => api.get("/video/voices"),
   music: () => api.get("/video/music"),
+  freeProviders: () => api.get("/video/free-providers"),
+  generativeImage: (payload) => api.post("/video/generative/image", payload),
+  voiceRefs: () => api.get("/video/voice-refs"),
+  uploadVoiceRef: (file) => {
+    const fd = new FormData();
+    fd.append("file", file);
+    return api.post("/video/voice-refs/upload", fd, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+  },
+  deleteVoiceRef: (id) => api.delete(`/video/voice-refs/${id}`),
   render: (payload) => api.post("/video/render", payload),
   renderFromScript: (scriptId, voiceId, mode = "faceless", portraitId = null) =>
     api.post("/video/render-from-script", {

@@ -154,9 +154,8 @@ def model_id(provider: str, model: str) -> str:
 _DEFAULT_GEMINI_FALLBACKS = [
     "gemini-2.5-flash",
     "gemini-2.0-flash",
+    "gemini-2.5-flash-lite",
     "gemini-2.0-flash-lite",
-    "gemini-1.5-flash",
-    "gemini-1.5-flash-8b",
 ]
 
 
@@ -165,8 +164,20 @@ def _quota_exhausted(err_msg: str) -> bool:
     m = err_msg.lower()
     return (
         "429" in m or "resource_exhausted" in m or "exceeded your current quota" in m
-        or "rate" in m and "limit" in m
+        or ("rate" in m and "limit" in m)
     )
+
+
+def _model_unavailable(err_msg: str) -> bool:
+    """True when the model is deprecated / unrecognised by upstream (404).
+
+    We treat this exactly like a quota hit: skip to the next fallback so
+    operators aren't blocked by Google deprecating a model in our chain.
+    """
+    m = err_msg.lower()
+    return (
+        "404" in m and ("not_found" in m or "is not found" in m or "not found" in m)
+    ) or "is not supported for generatecontent" in m
 
 
 def _gemini_fallbacks() -> list[str]:
@@ -253,16 +264,18 @@ async def llm_completion(
                 last_err = e
                 msg = str(e)
                 quota = _quota_exhausted(msg)
+                unavailable = _model_unavailable(msg)
                 transient = (
                     "503" in msg.lower() or "unavailable" in msg.lower()
                     or "overloaded" in msg.lower() or "timeout" in msg.lower()
                     or "connection" in msg.lower()
                 )
-                # Quota error on this model → break to try next fallback model.
-                if quota:
+                # Quota OR deprecated model → break to try next fallback model.
+                if quota or unavailable:
+                    reason = "quota exhausted" if quota else "model deprecated/404"
                     logger.warning(
-                        "llm_adapter: model=%s quota exhausted: %s",
-                        full_model, msg[:140],
+                        "llm_adapter: model=%s %s: %s",
+                        full_model, reason, msg[:140],
                     )
                     break
                 # Transient → retry same model (1s, 2s).
