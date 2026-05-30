@@ -58,16 +58,20 @@ def load_manifest(path: str = DEFAULT_MANIFEST_PATH) -> dict:
         return _MANIFEST_CACHE
     p = Path(path)
     if not p.exists():
-        # Fail-soft: missing manifest means "wide-open" L5 but a loud warning.
-        logger.warning("governance manifest missing at %s — defaulting to L5", path)
-        _MANIFEST_CACHE = {"system": {"autonomy_level": "L5"}, "hitl_gates": [], "route_gates": {}}
+        # Fail-closed: missing manifest → most restrictive level (L0 / advisory).
+        # An absent governance file is never a reason to grant more autonomy.
+        logger.error(
+            "governance manifest missing at %s — defaulting to L0 (most restrictive). "
+            "Mount governance.yaml into the container or set GOVERNANCE_MANIFEST.", path
+        )
+        _MANIFEST_CACHE = {"system": {"autonomy_level": "L0"}, "hitl_gates": [], "route_gates": {}}
         return _MANIFEST_CACHE
     try:
         with p.open("r") as f:
             data = yaml.safe_load(f) or {}
     except Exception as e:
-        logger.error("governance manifest parse failed: %s", e)
-        data = {"system": {"autonomy_level": "L5"}, "hitl_gates": [], "route_gates": {}}
+        logger.error("governance manifest parse failed: %s — defaulting to L0", e)
+        data = {"system": {"autonomy_level": "L0"}, "hitl_gates": [], "route_gates": {}}
     _MANIFEST_CACHE = data
     return _MANIFEST_CACHE
 

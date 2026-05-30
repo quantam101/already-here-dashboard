@@ -195,10 +195,10 @@ async def render_animated_portrait(
         # Retry without the mouth-region overlay if the filter graph failed
         if bbox is not None and "Error" in msg:
             logger.warning("animated-portrait filter failed, falling back to Ken-Burns only: %s", msg[:120])
-            return await render_animated_portrait(
-                portrait=portrait, narration_wav=narration_wav, output_mp4=output_mp4,
-                caption_srt=caption_srt, width=width, height=height, watermark=watermark,
-            ) if False else await _ken_burns_only(portrait, narration_wav, output_mp4, duration, caption_srt, watermark, width, height)
+            return await _ken_burns_only(
+                portrait, narration_wav, output_mp4, duration,
+                caption_srt, watermark, width, height,
+            )
         raise RuntimeError(f"animated portrait ffmpeg failed: {msg[:500]}")
 
     return output_mp4

@@ -85,11 +85,12 @@ async def _compute_variables(db) -> dict:
 
     # --- P_M: Profit Margin (net/gross from ledger) ---
     ledger_rows = await db.revenue_ledger.find(
-        {"created_at": {"$gte": cutoff_30}}, {"_id": 0, "gross": 1, "net": 1},
+        {"created_at": {"$gte": cutoff_30}},
+        {"_id": 0, "gross_amount": 1, "net_amount": 1},
     ).to_list(5000)
     if ledger_rows:
-        g_total = sum(float(r.get("gross") or 0) for r in ledger_rows)
-        n_total = sum(float(r.get("net") or 0) for r in ledger_rows)
+        g_total = sum(float(r.get("gross_amount") or 0) for r in ledger_rows)
+        n_total = sum(float(r.get("net_amount") or 0) for r in ledger_rows)
         P_M = _safe(n_total, g_total, default=0.0)
     else:
         P_M = 0.0

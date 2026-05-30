@@ -46,7 +46,7 @@ apt-get install -y -qq curl ca-certificates git
 #   OPERATOR_EMAIL   - email that locks dashboard access (allowlist)
 #   OPERATOR_TOKEN   - long random string for local auth (openssl rand -hex 32)
 export LLM_API_KEY=""
-export STRIPE_API_KEY="sk_test_placeholder"
+export STRIPE_API_KEY=""  # Set to sk_live_... after SSHing in; empty = Stripe mock mode
 export OPERATOR_EMAIL=""
 export OPERATOR_TOKEN=""
 export AUTONOMY_LEVEL="L3"

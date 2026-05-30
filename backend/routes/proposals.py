@@ -197,7 +197,7 @@ async def draft_proposal(req: ProposalDraftRequest, http_request: Request, db=De
     )
 
     response = await run_cached(
-        db, "gemini", "gemini-3-flash-preview",
+        db, "gemini", "gemini-2.5-flash",
         DEFAULT_SYSTEM_MESSAGE, _build_prompt(req),
         session_id=f"prop_{uuid.uuid4().hex[:8]}",
     )

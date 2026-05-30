@@ -117,7 +117,7 @@ async def generate_script_from_idea(idea: dict, db=None) -> ContentScript:
     if db is None:
         try:
             response = await llm_completion(
-                provider="gemini", model="gemini-3-flash-preview",
+                provider="gemini", model="gemini-2.5-flash",
                 system_msg=system_msg, prompt=prompt,
                 session_id=f"script_gen_{idea['id']}",
             )
@@ -126,7 +126,7 @@ async def generate_script_from_idea(idea: dict, db=None) -> ContentScript:
     else:
         try:
             response = await run_cached(
-                db, "gemini", "gemini-3-flash-preview",
+                db, "gemini", "gemini-2.5-flash",
                 system_msg, prompt,
                 session_id=f"script_gen_{idea['id']}",
             )

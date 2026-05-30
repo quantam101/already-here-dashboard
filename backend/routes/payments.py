@@ -544,7 +544,7 @@ async def generate_share_link(
     utm_source: str = "reddit",
     utm_medium: str = "post",
     utm_campaign: str = "launch",
-    origin_url: str = "https://alreadyherellc.com",
+    origin_url: str = "",
 ):
     """Generate a pre-tagged share URL the operator can drop in DMs / posts.
 
@@ -554,6 +554,13 @@ async def generate_share_link(
     if package_id not in PACKAGES:
         raise HTTPException(status_code=400, detail=f"Unknown package: {package_id}")
     from urllib.parse import urlencode
+    # Resolve origin: query param > REACT_APP_BACKEND_URL env > APP_PUBLIC_URL env
+    resolved_origin = (
+        origin_url.rstrip("/")
+        or os.environ.get("APP_PUBLIC_URL", "").rstrip("/")
+        or os.environ.get("REACT_APP_BACKEND_URL", "").rstrip("/")
+        or "https://app.alreadyherellc.com"
+    )
     qs = urlencode({
         "pkg": package_id,
         "utm_source": utm_source,
@@ -561,7 +568,7 @@ async def generate_share_link(
         "utm_campaign": utm_campaign,
     })
     return {
-        "share_url": f"{origin_url.rstrip('/')}/pricing?{qs}",
+        "share_url": f"{resolved_origin}/pricing?{qs}",
         "package_id": package_id,
         "amount": PACKAGES[package_id]["amount"],
     }
@@ -621,13 +628,22 @@ async def rotate_stripe_keys(
     )
 
     # Approval cleared — write the stage file. Never the live .env.
-    proposed_path = "/app/backend/.env.proposed"
+    proposed_path = os.environ.get("ENV_PROPOSED_PATH", "/app/backend/.env.proposed")
     lines = [f"STRIPE_API_KEY={new_key}"]
     if body.stripe_webhook_secret:
         lines.append(f"STRIPE_WEBHOOK_SECRET={body.stripe_webhook_secret.strip()}")
     lines.append(f"# proposed {datetime.now(timezone.utc).isoformat()} via /api/payments/keys/rotate")
-    with open(proposed_path, "w") as f:
-        f.write("\n".join(lines) + "\n")
+    try:
+        import pathlib
+        pathlib.Path(proposed_path).parent.mkdir(parents=True, exist_ok=True)
+        with open(proposed_path, "w") as f:
+            f.write("\n".join(lines) + "\n")
+    except OSError as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Could not write staged credentials to {proposed_path}: {e}. "
+                   "Set ENV_PROPOSED_PATH to a writable path inside the container.",
+        ) from e
 
     await log_audit_event(
         db, "stripe.keys.proposed", "operator", "rotate",

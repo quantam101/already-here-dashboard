@@ -33,8 +33,8 @@ token_distillation:
   daily_token_cap_env: "LLM_DAILY_TOKEN_CAP"
   tiered_routing:
     low: "local_python_runtime"
-    mid: "gemini-3-flash-preview"
-    high: "claude-sonnet-4-5-20250929"
+    mid: "gemini-2.5-flash"
+    high: "claude-sonnet-4-5"
 
 # Master Revenue Equation variables (blueprint §2)
 revenue_equation:

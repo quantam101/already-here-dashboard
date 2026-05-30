@@ -32,7 +32,7 @@ Keywords to include: {', '.join(request.keywords) if request.keywords else 'None
     try:
         return await llm_completion(
             provider="gemini",
-            model="gemini-3-flash-preview",
+            model="gemini-2.5-flash",
             system_msg=(
                 "You are an expert content creator specializing in business and "
                 "revenue-focused content. Create high-quality, engaging content "

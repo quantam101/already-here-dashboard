@@ -119,7 +119,7 @@ async def generate_hooks(req: HookRequest, db=Depends(get_db)):
         raise HTTPException(status_code=400, detail="topic is required")
     try:
         raw = await run_cached(
-            db, "gemini", "gemini-3-flash-preview",
+            db, "gemini", "gemini-2.5-flash",
             SYSTEM_MSG, _format_prompt(req),
             session_id=f"hooks-{req.niche[:20]}-{req.topic[:40]}",
             tier=3,
@@ -181,7 +181,7 @@ async def ab_test_hooks(req: ABTestRequest, db=Depends(get_db)):
     used_fallback = False
     try:
         raw = await run_cached(
-            db, "gemini", "gemini-3-flash-preview",
+            db, "gemini", "gemini-2.5-flash",
             SYSTEM_MSG, _format_prompt(hook_req),
             session_id=f"abtest-{req.niche[:20]}-{req.topic[:40]}",
             tier=3,

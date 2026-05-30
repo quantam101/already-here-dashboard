@@ -21,7 +21,7 @@ services:
       DB_NAME: ${DB_NAME:-command_os}
       CORS_ORIGINS: ${CORS_ORIGINS:-*}
       LLM_API_KEY: ${LLM_API_KEY:-${EMERGENT_LLM_KEY:-}}
-      STRIPE_API_KEY: ${STRIPE_API_KEY:-sk_test_placeholder}
+      STRIPE_API_KEY: ${STRIPE_API_KEY:-}
       STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
       OPERATOR_EMAIL: ${OPERATOR_EMAIL:-}
       OPERATOR_TOKEN: ${OPERATOR_TOKEN:-}
@@ -34,7 +34,8 @@ services:
       ZERO_SPEND_MODE: "true"
       AUTO_CYCLE_ENABLED: "true"
       # Memory-conservative uvicorn settings (1 worker, no reload)
-      MONGO_URL: unused   # kept only so legacy code reading os.environ['MONGO_URL'] doesn't crash; SQLite path is taken
+      # MONGO_URL intentionally unset — server.py only reads it when STORAGE_BACKEND=mongodb (default).
+      # With STORAGE_BACKEND=sqlite the MongoDB client is never initialised.
     networks:
       - command-os-net
     ports:

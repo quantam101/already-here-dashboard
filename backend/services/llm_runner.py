@@ -231,12 +231,12 @@ def _tier_model(tier: str) -> tuple[str, str]:
     if tier == TIER_HIGH:
         return (
             os.environ.get("LLM_TIER_HIGH_PROVIDER", "anthropic"),
-            os.environ.get("LLM_TIER_HIGH_MODEL", "claude-sonnet-4-5-20250929"),
+            os.environ.get("LLM_TIER_HIGH_MODEL", "claude-sonnet-4-5"),
         )
     # default mid
     return (
         os.environ.get("LLM_TIER_MID_PROVIDER", "gemini"),
-        os.environ.get("LLM_TIER_MID_MODEL", "gemini-3-flash-preview"),
+        os.environ.get("LLM_TIER_MID_MODEL", "gemini-2.5-flash"),
     )
 
 

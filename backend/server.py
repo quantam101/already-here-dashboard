@@ -24,10 +24,16 @@ if STORAGE_BACKEND == "sqlite":
     logging.info(f"Using SQLite backend at {sqlite_path}")
 else:
     from motor.motor_asyncio import AsyncIOMotorClient
-    mongo_url = os.environ['MONGO_URL']
+    mongo_url = os.environ.get("MONGO_URL")
+    db_name = os.environ.get("DB_NAME", "command_os_prod")
+    if not mongo_url:
+        raise RuntimeError(
+            "MONGO_URL environment variable is required when STORAGE_BACKEND=mongodb. "
+            "Set it in .env or docker-compose.yml, or use STORAGE_BACKEND=sqlite."
+        )
     client = AsyncIOMotorClient(mongo_url)
-    db = client[os.environ['DB_NAME']]
-    logging.info("Using MongoDB backend")
+    db = client[db_name]
+    logging.info("Using MongoDB backend at %s / %s", mongo_url.split("@")[-1], db_name)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):

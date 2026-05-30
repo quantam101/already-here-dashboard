@@ -149,13 +149,18 @@ def _parse_outline(raw: str, fallback_count: int) -> list[dict]:
     return [{"number": i + 1, "title": f"Chapter {i+1}"} for i in range(fallback_count)]
 
 
-@router.post("/", response_model=Book, status_code=201)
-async def create_book(req: BookCreateRequest, http_request: Request, db=Depends(get_db)):
-    """Generate a full book chapter-by-chapter. Returns the complete Book document.
+@router.post("/", status_code=202)
+async def create_book(
+    req: BookCreateRequest,
+    http_request: Request,
+    background: BackgroundTasks,
+    db=Depends(get_db),
+):
+    """Queue book generation and return immediately (HTTP 202) with the book ID.
 
-    NOTE: This is synchronous (waits for full generation). For a 6-chapter book
-    expect ~30-60 seconds. Use small chapter_count + small word_target for fast
-    iteration; scale up once you're happy with the outline.
+    Generation runs as a background task (6 chapters × ~10s each = 60–90s).
+    Poll GET /api/books/{id} until status is "complete" or "failed".
+    Each chapter is written to DB as it completes, so progress is visible.
 
     Gated on `compliance_content` (HITL required below L4).
     """
@@ -174,61 +179,81 @@ async def create_book(req: BookCreateRequest, http_request: Request, db=Depends(
         title=req.title.strip(), book_type=req.book_type, audience=req.audience,
         tone=req.tone, metadata={"word_target": req.word_target_per_chapter},
     )
-    # Save the "drafting" row early so the operator can see progress in the UI
     await db.books.insert_one(book.model_dump())
 
-    session = f"book_{book.id}"
+    background.add_task(_generate_book_task, db, book.id, req)
+
+    return {"id": book.id, "status": "drafting", "poll_url": f"/api/books/{book.id}"}
+
+
+async def _generate_book_task(db, book_id: str, req: BookCreateRequest) -> None:
+    """Background worker: generate outline + chapters and persist progress to DB."""
+    import logging as _logging
+    logger = _logging.getLogger("books")
+    session = f"book_{book_id}"
     try:
-        # 1) outline — cached on (title, type, audience, tone, chapter_count, hints)
+        # 1) Generate outline
         outline_raw = await run_cached(
-            db, "gemini", "gemini-3-flash-preview",
+            db, "gemini", "gemini-2.5-flash",
             BOOK_SYSTEM_MSG, _build_outline_prompt(req),
             session_id=f"{session}_outline",
         )
         outline = _parse_outline(outline_raw, req.chapter_count)[:req.chapter_count]
 
-        # 2) chapters — each chapter cached independently (so regenerating one
-        #    book with a tweaked outline only re-bills the changed chapters)
+        # 2) Generate each chapter; persist after every chapter so the poll
+        #    endpoint shows real-time progress.
         chapters: list[BookChapter] = []
         prev_titles: list[str] = []
         for entry in outline:
             body = await run_cached(
-                db, "gemini", "gemini-3-flash-preview",
+                db, "gemini", "gemini-2.5-flash",
                 BOOK_SYSTEM_MSG,
                 _build_chapter_prompt(req, entry, prev_titles),
                 session_id=f"{session}_c{entry['number']}",
             )
             word_count = len(body.split())
-            chapters.append(BookChapter(number=entry["number"], title=entry["title"], content=body, word_count=word_count))
+            chapters.append(
+                BookChapter(
+                    number=entry["number"], title=entry["title"],
+                    content=body, word_count=word_count,
+                )
+            )
             prev_titles.append(entry["title"])
+            # Write progress so operators can poll without waiting for all chapters
+            await db.books.update_one(
+                {"id": book_id},
+                {"$set": {
+                    "chapters": [c.model_dump() for c in chapters],
+                    "updated_at": datetime.now(timezone.utc).isoformat(),
+                }},
+            )
 
         total_words = sum(c.word_count for c in chapters)
-        finalised = {
-            "chapters": [c.model_dump() for c in chapters],
-            "status": "complete",
-            "total_word_count": total_words,
-            "updated_at": datetime.now(timezone.utc).isoformat(),
-        }
-        await db.books.update_one({"id": book.id}, {"$set": finalised})
-        book = book.model_copy(update={
-            "chapters": chapters, "status": "complete", "total_word_count": total_words,
-            "updated_at": finalised["updated_at"],
-        })
+        await db.books.update_one(
+            {"id": book_id},
+            {"$set": {
+                "chapters": [c.model_dump() for c in chapters],
+                "status": "complete",
+                "total_word_count": total_words,
+                "updated_at": datetime.now(timezone.utc).isoformat(),
+            }},
+        )
         await log_audit_event(
             db, "book.generated", "books_agent", "create",
-            "book", book.id,
+            "book", book_id,
             metadata={"chapters": len(chapters), "words": total_words, "type": req.book_type},
         )
-        return book
-    except HTTPException:
-        raise
+        logger.info("book %s complete: %d chapters, %d words", book_id, len(chapters), total_words)
     except Exception as e:
+        logger.exception("book generation failed for %s: %s", book_id, e)
         await db.books.update_one(
-            {"id": book.id},
-            {"$set": {"status": "failed", "metadata.error": str(e)[:500],
-                      "updated_at": datetime.now(timezone.utc).isoformat()}},
+            {"id": book_id},
+            {"$set": {
+                "status": "failed",
+                "metadata.error": str(e)[:500],
+                "updated_at": datetime.now(timezone.utc).isoformat(),
+            }},
         )
-        raise HTTPException(status_code=502, detail=f"book generation failed: {e}") from e
 
 
 @router.get("/", response_model=list[Book])
