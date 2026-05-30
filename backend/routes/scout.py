@@ -143,7 +143,7 @@ async def scout_viral(
             timeout=VIRAL_ENDPOINT_TIMEOUT,
         )
         items = list(reddit_items) + list(hn_items)
-    except asyncio.TimeoutError:
+    except TimeoutError:
         items = [Opportunity(
             id="viral-timeout", title="Scout timed out — upstream APIs slow, try again",
             source="scout", kind="viral", url="", metadata={"timeout": VIRAL_ENDPOINT_TIMEOUT},
