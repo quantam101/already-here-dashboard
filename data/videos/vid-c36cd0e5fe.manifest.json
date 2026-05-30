@@ -1,0 +1,14 @@
+{
+  "job_id": "vid-c36cd0e5fe",
+  "mode": "faceless",
+  "shots": [
+    "scene a",
+    "scene b"
+  ],
+  "voice_id": null,
+  "clip_count": 2,
+  "music_id": null,
+  "adaptive_captions_used": false,
+  "size_bytes": 404974,
+  "created_at": "2026-05-30T03:09:31.781789+00:00"
+}

@@ -271,11 +271,18 @@ async def _run_avatar_pipeline(db, job: dict) -> None:
 
 
 async def _run_external_pipeline(db, job: dict) -> None:
-    """Phase-3: external generative-AI bridge (Sora 2 / Veo). Operator pays per render."""
+    """Phase-3: external generative-AI bridge.
+
+    Today the free HF text-to-video models (AnimateDiff, text-to-video-ms,
+    CogVideoX) are paid-provider-only on the new router.huggingface.co
+    routing. They reliably 400 on the free hf-inference tier. When that
+    happens we transparently fall back to the faceless pipeline so the
+    operator still ships a video instead of a 'failed' row.
+    """
     job_id = job["id"]
     if not external.is_configured():
         await _update(db, job_id, status="failed",
-                      error="external provider not configured (set OPENAI_VIDEO_KEY)")
+                      error="external provider not configured (set OPENAI_VIDEO_KEY or HUGGINGFACE_API_KEY)")
         return
     try:
         await _update(db, job_id, status="running", progress_pct=10,
@@ -283,19 +290,28 @@ async def _run_external_pipeline(db, job: dict) -> None:
         prompt = " ".join([
             job["script"].get("hook", ""), job["script"].get("script_body", ""),
         ]).strip()
-        # This raises NotImplementedError today — the bridge is wired,
-        # the upstream Sora 2 SDK is still in limited beta.
         result = await external.render_text_to_video(prompt)
         await _update(db, job_id, status="complete", progress_pct=100,
                       message="external render complete",
                       output_path=result.get("output_path"))
-    except NotImplementedError as e:
-        await _update(db, job_id, status="failed", error=str(e)[:500],
-                      message="external provider sdk in beta")
-    except Exception as e:
-        logger.exception("external pipeline failed: %s", e)
-        await _update(db, job["id"], status="failed", error=str(e)[:500],
-                      message="external render failed")
+    except (NotImplementedError, RuntimeError, Exception) as e:
+        # Anything from a 400 'Model not supported by provider hf-inference'
+        # to a NotImplementedError on the Sora bridge — fall back to faceless
+        # so the operator never sees an empty 'failed' job.
+        msg = str(e)[:300]
+        logger.warning(
+            "external pipeline failed (%s) — falling back to faceless mode",
+            msg,
+        )
+        await _update(
+            db, job_id, status="running", progress_pct=12,
+            message=f"external provider unavailable ({msg[:120]}) — falling back to faceless",
+        )
+        # Mutate the in-memory job dict and re-dispatch to faceless. Persist
+        # the mode swap so /jobs/{id} reports it accurately.
+        job["mode"] = "faceless"
+        await _update(db, job_id, mode="faceless")
+        return await _run_faceless_pipeline(db, job)
 
 
 def _caption_lines(script: dict) -> list[str]:

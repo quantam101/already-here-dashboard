@@ -187,7 +187,14 @@ async def generate_video(
     model: str = DEFAULT_VIDEO_MODEL,
     num_frames: int = 16,
 ) -> bytes:
-    """Short text-to-video clip. Returns MP4 bytes."""
+    """Short text-to-video clip. Returns MP4 bytes.
+
+    NOTE (Feb 2026): the free hf-inference provider tier does NOT host any
+    text-to-video model. Calls reliably return HTTP 400 'Model not
+    supported by provider hf-inference'. This bridge stays wired for the
+    day HF or another router (Fal / Replicate) starts serving these models
+    again on the free tier.
+    """
     payload = {
         "inputs": prompt[:300],
         "parameters": {"num_frames": int(num_frames)},

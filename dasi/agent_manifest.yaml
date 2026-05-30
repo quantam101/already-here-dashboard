@@ -5,8 +5,8 @@ system_identity:
   governance: "Immutable State Automation"
 
 operational_profile:
-  primary_llm: "deepseek-ai/DeepSeek-V4-Flash"
-  fallback_llm: "Qwen/Qwen2.5-Coder-72B-Instruct"
+  primary_llm: "deepseek-ai/DeepSeek-V3-0324"
+  fallback_llm: "Qwen/Qwen2.5-7B-Instruct"
   temperature: 0.1
   max_token_budget: 3072
   circuit_breaker_threshold: 3

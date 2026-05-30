@@ -2,7 +2,7 @@
 title: D-ASI Kernel v4.0.0-ENTERPRISE
 emoji: 🛰️
 colorFrom: indigo
-colorTo: black
+colorTo: gray
 sdk: docker
 app_port: 7860
 pinned: true

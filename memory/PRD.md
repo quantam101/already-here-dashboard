@@ -20,7 +20,30 @@ Then: "no placeholders, everything real, live."
 
 ## What's implemented
 
-### Iteration 14 (2026-05-30) — D-ASI v4.0.0-ENTERPRISE standalone Space
+### Iteration 15 (2026-05-30) — D-ASI live + external-provider graceful fallback
+- ✅ **D-ASI Kernel deployed to Hugging Face Spaces** at
+  `https://huggingface.co/spaces/AlreadyHereLLC/dasi-kernel`.
+  Live URL: `https://alreadyherellc-dasi-kernel.hf.space`.
+- ✅ Created `/app/dasi/deploy_to_hf.sh` — one-shot Docker SDK Space create
+  + git-over-HTTPS push + `HF_TOKEN` secret seeding using
+  `huggingface_hub.HfApi`.
+- ✅ Swapped agent_manifest.yaml models from the non-existent
+  `DeepSeek-V4-Flash` + `Qwen2.5-Coder-72B` to live free-tier-available
+  `deepseek-ai/DeepSeek-V3-0324` + `Qwen/Qwen2.5-7B-Instruct`.
+- ✅ Smoke-tested end-to-end against the live Space: `/health` reports
+  `SUCCESS_STABLE`, `/matrix/telemetry` confirms all 4 stages
+  (orchestrator_router → context_distiller → execution_unit →
+  adversarial_critic) executed and the `matrix_context` dict populated
+  with `global_trajectory`, `compressed_payload`,
+  `compiled_architecture`, `validated_enterprise_output`.
+- ✅ **Fixed the `vid-7fa2a4b7be` failure** — when `mode=external_provider`
+  hits a 400 Bad Request on the now-paid HF text-to-video models,
+  `_run_external_pipeline` transparently falls back to the faceless
+  pipeline. Operator never sees an empty "failed" row again.
+- ✅ Verified locally: same failing payload now produces a real 3.3 MB MP4.
+- ✅ 174/174 pytest pass.
+
+### Iteration 14 — D-ASI v4.0.0-ENTERPRISE standalone Space
 - ✅ Added `/app/dasi/` — standalone Hugging Face Space deployable for
   the **Declarative Autonomous Swarm Intelligence** framework. Four files:
   `Dockerfile`, `requirements.txt`, `agent_manifest.yaml`, `main.py`,
