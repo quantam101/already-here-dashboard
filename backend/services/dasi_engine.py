@@ -206,8 +206,21 @@ async def _append_audit(db, job_id: str, event: dict) -> None:
 # Inference client + backoff
 # ---------------------------------------------------------------------------
 
-def _get_inference_client():
-    """Lazily import and build the AsyncInferenceClient."""
+def _get_openai_client(base_url: str, api_key: str = "ollama"):
+    """Build an async OpenAI-compatible client pointed at the given base_url.
+
+    Used for local Ollama inference (http://localhost:11434/v1) and any other
+    OpenAI-compatible endpoint.
+    """
+    try:
+        from openai import AsyncOpenAI
+    except ImportError as exc:
+        raise ImportError("openai>=1.0 is required for Ollama inference.") from exc
+    return AsyncOpenAI(base_url=base_url, api_key=api_key)
+
+
+def _get_hf_client():
+    """Build the HuggingFace AsyncInferenceClient for remote HF inference."""
     try:
         from huggingface_hub import AsyncInferenceClient
     except ImportError as exc:
@@ -216,6 +229,18 @@ def _get_inference_client():
         ) from exc
     token = os.environ.get("HF_TOKEN") or os.environ.get("HUGGINGFACE_API_KEY")
     return AsyncInferenceClient(token=token)
+
+
+def _is_ollama_model(model: str) -> bool:
+    """Return True if the model string looks like a local Ollama model.
+
+    Heuristic: Ollama models use short names like 'qwen2.5-coder:7b',
+    'llama3.2:latest', 'gemma4:e4b'. HF models always contain a '/'.
+    Also supports explicit 'ollama:model_name' prefix.
+    """
+    if model.startswith("ollama:"):
+        return True
+    return "/" not in model
 
 
 async def _dispatch_with_backoff(
@@ -233,43 +258,66 @@ async def _dispatch_with_backoff(
     Delay formula per attempt k (0-indexed):
         delay = base^k + Uniform(0, jitter_max)
 
-    This prevents simultaneous retry storms ("thundering herd") when multiple
-    concurrent jobs all hit a rate-limit at the same clock tick.
+    Provider selection (per model):
+      - Model name contains no '/' (e.g. 'qwen2.5-coder:7b') → Ollama local
+      - Model name starts with 'ollama:' → Ollama local (prefix stripped)
+      - Anything else (e.g. 'deepseek-ai/DeepSeek-V3') → HF Inference
+
+    OLLAMA_BASE_URL env var overrides the default http://localhost:11434/v1.
     """
     ops = manifest.get("operational_profile", {})
-    primary = ops.get("primary_llm", "Qwen/Qwen2.5-72B-Instruct")
-    fallback = ops.get("fallback_llm", "Qwen/Qwen2.5-72B-Instruct")
+    primary = ops.get("primary_llm", "qwen2.5-coder:7b")
+    fallback = ops.get("fallback_llm", "llama3.2:latest")
     threshold = int(ops.get("circuit_breaker_threshold", 3))
     base = float(ops.get("backoff_base", 2.0))
     jitter_max = float(ops.get("backoff_jitter_max", 1.0))
+    ollama_url = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434/v1")
 
-    client = _get_inference_client()
-    model_chain = [primary, fallback] + [fallback] * max(0, threshold - 2)
-    model_chain = model_chain[:threshold]
+    model_chain = ([primary, fallback] + [fallback] * max(0, threshold - 2))[:threshold]
 
     last_err: Exception | None = None
     for attempt, model in enumerate(model_chain):
+        # Strip optional 'ollama:' prefix
+        resolved_model = model.removeprefix("ollama:")
+        use_ollama = _is_ollama_model(model)
+
         try:
             logger.info(
-                "dasi: job=%s stage=%s model=%s attempt=%d",
-                job_id, stage_label, model, attempt + 1,
+                "dasi: job=%s stage=%s model=%s provider=%s attempt=%d",
+                job_id, stage_label, resolved_model,
+                "ollama" if use_ollama else "hf", attempt + 1,
             )
-            resp = await client.chat.completions.create(
-                model=model,
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user",   "content": user_prompt},
-                ],
-                temperature=float(ops.get("temperature", 0.1)),
-                max_tokens=int(ops.get("max_token_budget", 3072)),
-            )
+
+            if use_ollama:
+                client = _get_openai_client(ollama_url)
+                resp = await client.chat.completions.create(
+                    model=resolved_model,
+                    messages=[
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user",   "content": user_prompt},
+                    ],
+                    temperature=float(ops.get("temperature", 0.1)),
+                    max_tokens=int(ops.get("max_token_budget", 3072)),
+                )
+            else:
+                hf_client = _get_hf_client()
+                resp = await hf_client.chat.completions.create(
+                    model=resolved_model,
+                    messages=[
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user",   "content": user_prompt},
+                    ],
+                    temperature=float(ops.get("temperature", 0.1)),
+                    max_tokens=int(ops.get("max_token_budget", 3072)),
+                )
+
             return resp.choices[0].message.content or ""
 
         except Exception as exc:
             last_err = exc
             logger.warning(
                 "dasi: inference failed job=%s stage=%s model=%s: %s",
-                job_id, stage_label, model, exc,
+                job_id, stage_label, resolved_model, exc,
             )
             if attempt < len(model_chain) - 1:
                 delay = (base ** attempt) + random.uniform(0, jitter_max)

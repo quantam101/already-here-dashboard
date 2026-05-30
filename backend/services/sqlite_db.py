@@ -9,12 +9,12 @@ Supported subset (matches what the codebase actually uses — audited via grep):
   Methods:        find_one, find, insert_one, insert_many, update_one,
                   delete_one, delete_many, count_documents, aggregate
   Filter ops:     equality, $gte, $gt, $lte, $lt, $ne, $in, $nin, $exists
-  Update ops:     $set, $inc, $max
+  Update ops:     $set (including dotted-path notation), $inc, $max, $push
   Cursor:         .sort(field, direction), .limit(n), .to_list(n)
   Aggregate:      $group (with $sum, $max), $sort, $limit
 
 Unsupported by design — fail loud:
-  $unset, $push, $pull, $addToSet (codebase doesn't use them)
+  $unset, $pull, $addToSet (codebase doesn't use them)
 
 Gate via env: set STORAGE_BACKEND=sqlite to use this; default 'mongodb' keeps
 motor in the dev/preview environment unchanged.
@@ -77,7 +77,19 @@ def _matches(doc: dict, filter_: Optional[dict]) -> bool:
 def _apply_update(doc: dict, update: dict) -> None:
     for op, payload in update.items():
         if op == "$set":
-            doc.update(payload)
+            for k, v in payload.items():
+                if "." in k:
+                    # Dotted path: resolve nested dict, creating intermediate
+                    # dicts as needed (mirrors MongoDB behaviour).
+                    parts = k.split(".")
+                    target = doc
+                    for part in parts[:-1]:
+                        if part not in target or not isinstance(target[part], dict):
+                            target[part] = {}
+                        target = target[part]
+                    target[parts[-1]] = v
+                else:
+                    doc[k] = v
         elif op == "$inc":
             for k, delta in payload.items():
                 doc[k] = (doc.get(k) or 0) + delta
@@ -86,6 +98,12 @@ def _apply_update(doc: dict, update: dict) -> None:
                 cur = doc.get(k)
                 if cur is None or candidate > cur:
                     doc[k] = candidate
+        elif op == "$push":
+            # Append a single value to an array field, creating it if absent.
+            for k, val in payload.items():
+                if not isinstance(doc.get(k), list):
+                    doc[k] = []
+                doc[k].append(val)
         else:
             raise NotImplementedError(f"SQLite shim: update op {op!r} not supported")
 

@@ -6,10 +6,14 @@ system_identity:
   governance: "Immutable State Automation"
 
 operational_profile:
-  # Primary: DeepSeek-V3 (production-grade, 64K context, available on HF Inference API)
-  # Fallback: Qwen2.5-72B-Instruct (128K context, strong instruction-following)
-  primary_llm: "deepseek-ai/DeepSeek-V3"
-  fallback_llm: "Qwen/Qwen2.5-72B-Instruct"
+  # Local Ollama inference — zero cost, no API quota, fully offline.
+  # qwen2.5-coder:7b  → ideal for code/config generation (primary task)
+  # gemma4:e4b        → strong general-purpose fallback (8B Gemma 4)
+  # llama3.2:latest   → lightweight tertiary fallback (3.2B)
+  # Models are identified as Ollama by absence of '/' in the name.
+  # Set OLLAMA_BASE_URL env var to override http://localhost:11434/v1.
+  primary_llm: "qwen2.5-coder:7b"
+  fallback_llm: "gemma4:e4b"
   temperature: 0.1
   max_token_budget: 3072
   # Number of model attempts (primary + fallback chain) before hard failure
