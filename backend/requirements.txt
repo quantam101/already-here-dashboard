@@ -87,7 +87,8 @@ MarkupSafe==3.0.3
 matplotlib==3.10.9
 mccabe==0.7.0
 mdurl==0.1.2
-mediapipe==0.10.18
+# mediapipe removed: optional dep; 0.10.18 requires protobuf<5 which conflicts with grpcio-status
+# The avatar service falls back to center-of-image heuristic when mediapipe is absent.
 ml_dtypes==0.5.4
 monotonic-alignment-search==0.2.1
 more-itertools==11.1.0
