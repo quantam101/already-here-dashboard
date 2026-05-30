@@ -77,6 +77,33 @@ async def dispatch_inference_stream(system_prompt: str, user_prompt: str, manife
             # Exponential backoff mechanism with linear incremental delay tracking
             await asyncio.sleep((2.0 ** attempt) + 0.5)
 
+    # Ultimate $0 fallback: Pollinations.ai OpenAI-compatible keyless endpoint.
+    # Kicks in when (a) HF monthly credits are depleted (HTTP 402), (b) the
+    # pinned models aren't on any enabled provider, or (c) network failure.
+    # Keeps the kernel productive even on zero-budget months.
+    try:
+        import httpx
+        async with httpx.AsyncClient(timeout=60.0, follow_redirects=True) as client:
+            r = await client.post(
+                "https://text.pollinations.ai/openai",
+                json={
+                    "messages": [
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_prompt},
+                    ],
+                    "max_tokens": int(ops.get("max_token_budget", 3072)),
+                    "temperature": float(ops.get("temperature", 0.1)),
+                },
+            )
+            r.raise_for_status()
+            data = r.json()
+            txt = (data.get("choices") or [{}])[0].get("message", {}).get("content", "").strip()
+            if txt:
+                logger.warning("HF inference exhausted — recovered via Pollinations keyless fallback.")
+                return txt
+    except Exception as fe:
+        logger.error(f"Pollinations fallback also failed: {fe}")
+
     return "CRITICAL_SYSTEM_ERROR: Base LLM abstraction tier unresponsive."
 
 async def process_matrix_trajectory(input_directive: str):

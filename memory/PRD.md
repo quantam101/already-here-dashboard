@@ -20,6 +20,38 @@ Then: "no placeholders, everything real, live."
 
 ## What's implemented
 
+### Iteration 16 (2026-05-30) — First-Run Walkthrough + live D-ASI fire-test
+- ✅ Built `/app/frontend/src/components/FirstRunWalkthrough.js` — 10-step
+  interactive tutorial overlay (Welcome → Command Center → Video Studio →
+  Books → Proposals → A/B Tester → Governance → Distillation → D-ASI →
+  Daily flow). Auto-launches on first visit (gated on
+  `localStorage.pe5_walkthrough_seen`); replayable via the
+  `<TakeTourButton />` mounted in the sidebar.
+- ✅ Each step `route` auto-navigates the dashboard to the matching live
+  page so the operator sees the real subsystem behind the modal.
+- ✅ Keyboard nav (Esc / ←/→), progress bar, dot indicators, backdrop click
+  to dismiss. All elements `data-testid`'d for E2E.
+- ✅ Mounted in `/app/frontend/src/App.js` inside `<AuthGate>` so it
+  triggers exactly once after first-visit auth resolution.
+- ✅ **Root-cause-fixed orphan Radix Dialog z-index collision**: the
+  legacy `QuickstartWizard` was auto-opening on first visit, stranding
+  a `DialogOverlay` portal that intercepted pointer events on the new
+  walkthrough's Next button. Disabled its auto-open; rewired the
+  sidebar "Re-open Quickstart" trigger to call
+  `window.ahOpenQuickstart()` directly. Confirmed 0 orphan dialogs
+  after the fix.
+- ✅ End-to-end Playwright verification: step 1 auto-opens, Next clicks
+  advance the modal, step 3 routes to `/video-studio`, step 9 shows
+  the live D-ASI Space curl recipe, close persists the seen flag, the
+  "Take the tour" sidebar button replays it.
+- ✅ **Fired live `POST https://alreadyherellc-dasi-kernel.hf.space/matrix/execute`**
+  with `{"directive":"Output 3 zero-trust API rules…"}`. Space accepted
+  `TRANSACTION_ACCEPTED`; after ~45s `/health` reported
+  `engine_state=SUCCESS_STABLE, matrix_step=4` — full 4-stage VHLL DAG
+  (orchestrator_router → context_distiller → execution_unit →
+  adversarial_critic) executed cleanly on DeepSeek-V3 / Qwen2.5-7B with
+  zero placeholder violations.
+
 ### Iteration 15 (2026-05-30) — D-ASI live + external-provider graceful fallback
 - ✅ **D-ASI Kernel deployed to Hugging Face Spaces** at
   `https://huggingface.co/spaces/AlreadyHereLLC/dasi-kernel`.
@@ -122,6 +154,9 @@ OCI one-shot deploy script.
 - **User verification** — render with cloned voice + local MusicGen prompt
   to see the real local stack in action.
 - **Rotate the leaked HF token** the user pasted in chat earlier.
+- **OCI Always-Free deploy execution** — push to GitHub, bootstrap on the
+  Always Free VM, point DNS, confirm the entire stack (Coqui XTTS-v2 +
+  MusicGen pre-warm + walkthrough + D-ASI link) runs in production.
 
 ### P1
 - OCI deploy execution (push to GitHub → bootstrap on Always Free VM).

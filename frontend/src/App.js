@@ -20,6 +20,7 @@ import PaymentSuccess from "./pages/PaymentSuccess";
 import Books from "./pages/Books";
 import Secrets from "./pages/Secrets";
 import AuthGate from "./components/AuthGate";
+import { FirstRunWalkthrough } from "./components/FirstRunWalkthrough";
 import { Toaster } from "sonner";
 
 function App() {
@@ -27,6 +28,7 @@ function App() {
     <div className="App">
       <BrowserRouter>
         <AuthGate>
+          <FirstRunWalkthrough />
           <Routes>
             <Route path="/" element={<DashboardLayout />}>
               <Route index element={<Navigate to="/overview" replace />} />

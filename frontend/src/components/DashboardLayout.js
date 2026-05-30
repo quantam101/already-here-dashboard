@@ -3,6 +3,7 @@ import { useMemo, useState } from "react";
 import QuickstartWizard from "./QuickstartWizard";
 import CatchAndCorrectPanel from "./CatchAndCorrectPanel";
 import GovernanceStatusBadges from "./GovernanceStatusBadges";
+import { TakeTourButton } from "./FirstRunWalkthrough";
 import {
   LayoutDashboard,
   DollarSign,
@@ -126,13 +127,17 @@ export default function DashboardLayout() {
             <button
               onClick={() => {
                 window.localStorage.removeItem("ah_quickstart_completed_v1");
-                setWizardKey((k) => k + 1);
+                if (window.ahOpenQuickstart) window.ahOpenQuickstart();
+                else setWizardKey((k) => k + 1);
               }}
               className="mt-3 w-full text-xs text-green-300 hover:text-green-200 border border-green-500/20 rounded px-2 py-1.5 hover:bg-green-500/10 transition-colors"
               data-testid="sidebar-quickstart-trigger"
             >
               Re-open Quickstart
             </button>
+            <div className="mt-2 flex justify-center">
+              <TakeTourButton />
+            </div>
           </div>
         </div>
       </aside>

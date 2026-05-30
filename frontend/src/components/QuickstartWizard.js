@@ -39,10 +39,12 @@ export default function QuickstartWizard() {
     enabled: open,
   });
 
+  // Auto-open disabled — FirstRunWalkthrough is now the primary first-run experience.
+  // QuickstartWizard remains available as a secondary system-check via the sidebar trigger.
   useEffect(() => {
     if (typeof window === "undefined") return;
-    const done = window.localStorage.getItem(STORAGE_KEY);
-    if (!done) setOpen(true);
+    window.ahOpenQuickstart = () => { setStep(0); setOpen(true); };
+    return () => { delete window.ahOpenQuickstart; };
   }, []);
 
   const dismiss = () => {
