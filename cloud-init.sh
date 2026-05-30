@@ -41,12 +41,16 @@ apt-get install -y -qq curl ca-certificates git
 
 # These are intentionally EMPTY at first boot. After the stack is live,
 # the operator SSHs in and edits /opt/command-os/backend/.env to add them:
-#   EMERGENT_LLM_KEY  - get from Emergent → Profile → Universal Key
-#   STRIPE_API_KEY    - sk_test_... or sk_live_... from dashboard.stripe.com
-#   OPERATOR_EMAIL    - Google email that locks dashboard access
-export EMERGENT_LLM_KEY=""
-export STRIPE_API_KEY="sk_test_emergent"
+#   LLM_API_KEY      - Google AI Studio / Anthropic / OpenAI key (routed via litellm)
+#   STRIPE_API_KEY   - sk_test_... or sk_live_... from dashboard.stripe.com
+#   OPERATOR_EMAIL   - email that locks dashboard access (allowlist)
+#   OPERATOR_TOKEN   - long random string for local auth (openssl rand -hex 32)
+export LLM_API_KEY=""
+export STRIPE_API_KEY=""  # Set to sk_live_... after SSHing in; empty = Stripe mock mode
 export OPERATOR_EMAIL=""
+export OPERATOR_TOKEN=""
+export AUTONOMY_LEVEL="L3"
+export DUAL_ACTOR_APPROVAL="false"
 
 # Fetch + run the real bootstrap. RAM auto-detect picks SQLite mode for <1500MB hosts.
 curl -fsSL https://raw.githubusercontent.com/Quantam101/already-here-dashboard/main/scripts/oci-bootstrap.sh -o /tmp/bs.sh
@@ -63,8 +67,9 @@ echo ""
 echo "Next steps (do these via SSH once instance is reachable):"
 echo "  1. ssh -i ~/.ssh/<your-key> ubuntu@<this-instance-ip>"
 echo "  2. sudo nano /opt/command-os/backend/.env"
-echo "     - Set EMERGENT_LLM_KEY=sk-emergent-..."
+echo "     - Set LLM_API_KEY=<your provider key>"
 echo "     - Set OPERATOR_EMAIL=your@email.com"
+echo "     - Set OPERATOR_TOKEN=\$(openssl rand -hex 32)"
 echo "     - Optionally STRIPE_API_KEY=sk_live_..."
 echo "  3. cd /opt/command-os"
 echo "     sudo docker compose -f docker-compose.sqlite.yml restart backend"

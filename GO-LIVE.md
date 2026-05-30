@@ -108,7 +108,7 @@ Browser → `https://alreadyherellc.com/analytics` → the top card is **Data Di
 ## You're done
 
 The app is now:
-- ✅ Live at `https://alreadyherellc.com` on a $0/month OCI host
+- ✅ Live at `https://alreadyher ellc.com`on a $0/month OCI host
 - ✅ Collecting real Stripe revenue
 - ✅ Auto-refunding smoke-test charges so you can re-verify any time
 - ✅ Backed up nightly to host disk (14-day retention)

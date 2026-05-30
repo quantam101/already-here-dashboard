@@ -147,12 +147,13 @@ export const booksAPI = {
   stats: () => api.get("/books/stats/overview"),
   downloadMd: (id) => `${API}/books/${id}/download.md`,
   downloadTxt: (id) => `${API}/books/${id}/download.txt`,
+  downloadMp3: (id, voiceId) => `${API}/books/${id}/audio.mp3${voiceId ? `?voice_id=${encodeURIComponent(voiceId)}` : ""}`,
 };
 
 export const authAPI = {
   config: () => api.get("/auth/config"),
   me: () => api.get("/auth/me"),
-  session: (sessionId) => api.post("/auth/session", { session_id: sessionId }),
+  login: (body) => api.post("/auth/login", body),
   logout: () => api.post("/auth/logout"),
 };
 
@@ -173,11 +174,54 @@ export const distillationAPI = {
   clear: () => api.post("/distillation/clear"),
 };
 
-// ── Sovereign Governance API (new in v2.0) ────────────────────
-export const sovereignAPI = {
-  status: () => api.get("/sovereign/status"),
-  history: (limit = 20) => api.get(`/sovereign/history?limit=${limit}`),
-  trigger: () => api.post("/sovereign/trigger"),
-  agents: () => api.get("/sovereign/agents"),
-  clearCache: () => api.delete("/sovereign/cache"),
+
+// Faceless Video Engine
+export const videoAPI = {
+  config: () => api.get("/video/config"),
+  voices: () => api.get("/video/voices"),
+  music: () => api.get("/video/music"),
+  render: (payload) => api.post("/video/render", payload),
+  renderFromScript: (scriptId, voiceId, mode = "faceless", portraitId = null) =>
+    api.post("/video/render-from-script", {
+      script_id: scriptId, voice_id: voiceId, mode, portrait_id: portraitId,
+    }),
+  jobs: (limit = 30) => api.get(`/video/jobs?limit=${limit}`),
+  job: (id) => api.get(`/video/jobs/${id}`),
+  downloadUrl: (id) => `${BACKEND_URL}/api/video/jobs/${id}/download`,
+  deleteJob: (id) => api.delete(`/video/jobs/${id}`),
+  uploadPortrait: (file) => {
+    const fd = new FormData();
+    fd.append("file", file);
+    return api.post("/video/portraits/upload", fd, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+  },
+  listPortraits: () => api.get("/video/portraits"),
+  deletePortrait: (id) => api.delete(`/video/portraits/${id}`),
+};
+
+export const hooksAPI = {
+  generate: (payload) => api.post("/hooks/", payload),
+  abTest: (payload) => api.post("/hooks/ab-test", payload),
+};
+
+// Governance (L0-L5 + HITL approval queue)
+export const governanceAPI = {
+  status: () => api.get("/governance/status"),
+  manifest: () => api.get("/governance/manifest"),
+  reload: () => api.post("/governance/manifest/reload"),
+  approvals: (status) => api.get("/governance/approvals" + (status ? `?status=${status}` : "")),
+  approve: (id, note = "", actor = "operator") => api.post(`/governance/approvals/${id}/approve`, { note, actor }),
+  reject: (id, note = "", actor = "operator") => api.post(`/governance/approvals/${id}/reject`, { note, actor }),
+};
+
+// Master Revenue Equation tracker (Q_D × C_R × A_OV × P_F × F_C × P_M)
+export const revenueEquationAPI = {
+  equation: () => api.get("/revenue-equation/equation"),
+  bottleneck: () => api.get("/revenue-equation/bottleneck"),
+};
+
+// Lifelong Catch and Correct telemetry
+export const lcacAPI = {
+  scan: () => api.get("/lifelong-catch-correct/"),
 };

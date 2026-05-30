@@ -22,7 +22,7 @@ echo "✓ Required tools installed"
 # Check env file exists
 if [ ! -f /app/backend/.env ]; then
   echo "✗ Missing /app/backend/.env"
-  echo "  Required: MONGO_URL, DB_NAME, EMERGENT_LLM_KEY"
+  echo "  Required: MONGO_URL, DB_NAME, LLM_API_KEY"
   exit 1
 fi
 
@@ -59,7 +59,7 @@ fi
 echo "✓ Disk space: $AVAILABLE_GB GB available"
 
 # Validate that no paid APIs are configured
-if grep -E "(OPENAI|ANTHROPIC|STRIPE|TWILIO|SENDGRID).*KEY" /app/backend/.env | grep -v "^#" | grep -v "^EMERGENT_LLM_KEY" > /dev/null 2>&1; then
+if grep -E "(OPENAI|ANTHROPIC|STRIPE|TWILIO|SENDGRID).*KEY" /app/backend/.env | grep -v "^#" | grep -v "^LLM_API_KEY" > /dev/null 2>&1; then
   echo "⚠ Warning: Paid API keys detected in .env"
   echo "  Make sure Cost Guard blocks all paid actions"
 fi

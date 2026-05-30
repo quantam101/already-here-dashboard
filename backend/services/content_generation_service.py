@@ -1,10 +1,9 @@
 from content_models import ContentScript
-from emergentintegrations.llm.chat import LlmChat, UserMessage  # noqa: F401
-import os  # noqa: F401 (kept for backward-compat with callers)
 import logging
 
 from services.distillation_service import distill_text, to_yaml_payload
-from services.llm_runner import run_cached, llm_complete
+from services.llm_runner import run_cached
+from services.llm_adapter import llm_completion, LLMProviderError
 
 logger = logging.getLogger(__name__)
 
@@ -100,7 +99,7 @@ def create_fallback_script(idea: dict, error: str) -> ContentScript:
 async def generate_script_from_idea(idea: dict, db=None) -> ContentScript:
     """
     Generate a content script from an idea using AI.
-    Uses Emergent LLM key with Gemini for zero-cost generation.
+    Uses litellm with the configured LLM provider key (Gemini 3 Flash by default).
 
     Runs through the unified llm_runner so:
       - Identical idea prompts hit the cache and skip the LLM call
@@ -113,17 +112,27 @@ async def generate_script_from_idea(idea: dict, db=None) -> ContentScript:
         "and long-form content. Create engaging, high-converting scripts."
     )
 
-    # Use the failover chain (Groq first) regardless of whether a db is available
-    try:
-        response = await llm_complete(
-            system=system_msg,
-            user=prompt,
-            max_tokens=1000,
-            session_id=f"script_gen_{idea['id']}",
-        )
-    except Exception as e:
-        logger.warning("script gen via llm_complete failed: %s", e)
-        return create_fallback_script(idea, str(e))
+    # `db` is optional for legacy callers. If absent we fall back to the
+    # direct-call path (no caching, no budget tracking).
+    if db is None:
+        try:
+            response = await llm_completion(
+                provider="gemini", model="gemini-2.5-flash",
+                system_msg=system_msg, prompt=prompt,
+                session_id=f"script_gen_{idea['id']}",
+            )
+        except (LLMProviderError, Exception) as e:
+            return create_fallback_script(idea, str(e))
+    else:
+        try:
+            response = await run_cached(
+                db, "gemini", "gemini-2.5-flash",
+                system_msg, prompt,
+                session_id=f"script_gen_{idea['id']}",
+            )
+        except Exception as e:
+            logger.warning("script gen via runner failed: %s", e)
+            return create_fallback_script(idea, str(e))
 
     parsed = parse_script_response(response)
     return ContentScript(

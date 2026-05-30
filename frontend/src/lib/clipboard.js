@@ -1,4 +1,4 @@
-// Clipboard utility that works in restricted iframes (like Emergent preview).
+// Clipboard utility that works in restricted iframes (preview environments).
 //
 // The native navigator.clipboard.writeText() requires the "clipboard-write"
 // permissions policy, which iframes often block. This helper:

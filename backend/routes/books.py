@@ -4,22 +4,22 @@ Books & Long-Form Agent - Generates books, ebooks, manuals, journals, workbooks.
 Output formats: markdown (downloadable), plain text (for browser audiobook playback
 via Web Speech API SpeechSynthesis - $0 cost, runs on operator's device).
 
-Generation: chapter-by-chapter via Emergent LLM (Gemini 3 Flash, $0).
+Generation: chapter-by-chapter via litellm (Gemini 3 Flash by default, $0-cheap, BYO key).
 Stored in MongoDB `books` collection; downloadable from frontend.
 
 Adds a new revenue stream: rev-books.
 """
-from fastapi import APIRouter, HTTPException, Depends
-from fastapi.responses import PlainTextResponse, Response
+from fastapi import APIRouter, HTTPException, Depends, Request, BackgroundTasks
+from fastapi.responses import PlainTextResponse, Response, FileResponse
 from pydantic import BaseModel, Field
 from typing import Optional
 from datetime import datetime, timezone
 import os
 import uuid
 
-from emergentintegrations.llm.chat import LlmChat, UserMessage  # noqa: F401 (kept for downstream imports/tests)
 from services.audit_service import log_audit_event
-from services.llm_runner import run_cached, llm_complete
+from services.llm_runner import run_cached
+from services import governance_service as gov
 
 router = APIRouter()
 
@@ -149,17 +149,29 @@ def _parse_outline(raw: str, fallback_count: int) -> list[dict]:
     return [{"number": i + 1, "title": f"Chapter {i+1}"} for i in range(fallback_count)]
 
 
-@router.post("/", response_model=Book, status_code=201)
-async def create_book(req: BookCreateRequest, db=Depends(get_db)):
-    """Generate a full book chapter-by-chapter. Returns the complete Book document.
+@router.post("/", status_code=202)
+async def create_book(
+    req: BookCreateRequest,
+    http_request: Request,
+    background: BackgroundTasks,
+    db=Depends(get_db),
+):
+    """Queue book generation and return immediately (HTTP 202) with the book ID.
 
-    NOTE: This is synchronous (waits for full generation). For a 6-chapter book
-    expect ~30-60 seconds. Use small chapter_count + small word_target for fast
-    iteration; scale up once you're happy with the outline.
+    Generation runs as a background task (6 chapters × ~10s each = 60–90s).
+    Poll GET /api/books/{id} until status is "complete" or "failed".
+    Each chapter is written to DB as it completes, so progress is visible.
+
+    Gated on `compliance_content` (HITL required below L4).
     """
     _validate_book_type(req.book_type)
     if req.chapter_count < 1 or req.chapter_count > MAX_CHAPTER_COUNT:
         raise HTTPException(status_code=400, detail=f"chapter_count must be 1..{MAX_CHAPTER_COUNT}")
+
+    await gov.enforce(
+        db=db, request=http_request, action_id="compliance_content",
+        context={"route": "books/", "book_type": req.book_type, "title": req.title[:120], "chapters": req.chapter_count},
+    )
 
     await _ensure_books_stream(db)
 
@@ -167,61 +179,81 @@ async def create_book(req: BookCreateRequest, db=Depends(get_db)):
         title=req.title.strip(), book_type=req.book_type, audience=req.audience,
         tone=req.tone, metadata={"word_target": req.word_target_per_chapter},
     )
-    # Save the "drafting" row early so the operator can see progress in the UI
     await db.books.insert_one(book.model_dump())
 
-    session = f"book_{book.id}"
+    background.add_task(_generate_book_task, db, book.id, req)
+
+    return {"id": book.id, "status": "drafting", "poll_url": f"/api/books/{book.id}"}
+
+
+async def _generate_book_task(db, book_id: str, req: BookCreateRequest) -> None:
+    """Background worker: generate outline + chapters and persist progress to DB."""
+    import logging as _logging
+    logger = _logging.getLogger("books")
+    session = f"book_{book_id}"
     try:
-        # 1) outline — uses failover chain (Groq first, falls back to Gemini etc.)
-        outline_raw = await llm_complete(
-            system=BOOK_SYSTEM_MSG,
-            user=_build_outline_prompt(req),
-            max_tokens=600,
+        # 1) Generate outline
+        outline_raw = await run_cached(
+            db, "gemini", "gemini-2.5-flash",
+            BOOK_SYSTEM_MSG, _build_outline_prompt(req),
             session_id=f"{session}_outline",
         )
         outline = _parse_outline(outline_raw, req.chapter_count)[:req.chapter_count]
 
-        # 2) chapters — each chapter generated via failover chain
+        # 2) Generate each chapter; persist after every chapter so the poll
+        #    endpoint shows real-time progress.
         chapters: list[BookChapter] = []
         prev_titles: list[str] = []
         for entry in outline:
-            body = await llm_complete(
-                system=BOOK_SYSTEM_MSG,
-                user=_build_chapter_prompt(req, entry, prev_titles),
-                max_tokens=1200,
+            body = await run_cached(
+                db, "gemini", "gemini-2.5-flash",
+                BOOK_SYSTEM_MSG,
+                _build_chapter_prompt(req, entry, prev_titles),
                 session_id=f"{session}_c{entry['number']}",
             )
             word_count = len(body.split())
-            chapters.append(BookChapter(number=entry["number"], title=entry["title"], content=body, word_count=word_count))
+            chapters.append(
+                BookChapter(
+                    number=entry["number"], title=entry["title"],
+                    content=body, word_count=word_count,
+                )
+            )
             prev_titles.append(entry["title"])
+            # Write progress so operators can poll without waiting for all chapters
+            await db.books.update_one(
+                {"id": book_id},
+                {"$set": {
+                    "chapters": [c.model_dump() for c in chapters],
+                    "updated_at": datetime.now(timezone.utc).isoformat(),
+                }},
+            )
 
         total_words = sum(c.word_count for c in chapters)
-        finalised = {
-            "chapters": [c.model_dump() for c in chapters],
-            "status": "complete",
-            "total_word_count": total_words,
-            "updated_at": datetime.now(timezone.utc).isoformat(),
-        }
-        await db.books.update_one({"id": book.id}, {"$set": finalised})
-        book = book.model_copy(update={
-            "chapters": chapters, "status": "complete", "total_word_count": total_words,
-            "updated_at": finalised["updated_at"],
-        })
+        await db.books.update_one(
+            {"id": book_id},
+            {"$set": {
+                "chapters": [c.model_dump() for c in chapters],
+                "status": "complete",
+                "total_word_count": total_words,
+                "updated_at": datetime.now(timezone.utc).isoformat(),
+            }},
+        )
         await log_audit_event(
             db, "book.generated", "books_agent", "create",
-            "book", book.id,
+            "book", book_id,
             metadata={"chapters": len(chapters), "words": total_words, "type": req.book_type},
         )
-        return book
-    except HTTPException:
-        raise
+        logger.info("book %s complete: %d chapters, %d words", book_id, len(chapters), total_words)
     except Exception as e:
+        logger.exception("book generation failed for %s: %s", book_id, e)
         await db.books.update_one(
-            {"id": book.id},
-            {"$set": {"status": "failed", "metadata.error": str(e)[:500],
-                      "updated_at": datetime.now(timezone.utc).isoformat()}},
+            {"id": book_id},
+            {"$set": {
+                "status": "failed",
+                "metadata.error": str(e)[:500],
+                "updated_at": datetime.now(timezone.utc).isoformat(),
+            }},
         )
-        raise HTTPException(status_code=502, detail=f"book generation failed: {e}") from e
 
 
 @router.get("/", response_model=list[Book])
@@ -286,6 +318,124 @@ async def download_plain(book_id: str, db=Depends(get_db)):
         raise HTTPException(status_code=404, detail="Book not found")
     await db.books.update_one({"id": book_id}, {"$inc": {"download_count": 1}})
     return _render_plain(doc)
+
+
+@router.post("/{book_id}/audio/generate")
+async def generate_audiobook(book_id: str, background: BackgroundTasks, voice_id: str | None = None, db=Depends(get_db)):
+    """Kick off audiobook synthesis as a background task and return immediately.
+
+    The proxy in front of FastAPI in many deployments times out at 60s. Books
+    longer than ~600 words take longer than that through Piper TTS on CPU,
+    so we run the render in the background and let the client poll for the
+    MP3 via GET /audio.mp3 (returns 202 until ready, 200 + file when ready).
+    """
+    from pathlib import Path
+
+    doc = await db.books.find_one({"id": book_id}, {"_id": 0})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Book not found")
+
+    AUDIO_DIR = Path(os.environ.get("BOOKS_AUDIO_DIR", "/app/data/audiobooks"))
+    AUDIO_DIR.mkdir(parents=True, exist_ok=True)
+    cache_key = f"{book_id}-{voice_id or 'default'}.mp3"
+    out_mp3 = AUDIO_DIR / cache_key
+    lock_file = AUDIO_DIR / f"{cache_key}.lock"
+
+    if out_mp3.exists() and out_mp3.stat().st_size > 1024:
+        return {"status": "ready", "mp3_url": f"/api/books/{book_id}/audio.mp3", "cached": True}
+    if lock_file.exists():
+        return {"status": "rendering", "mp3_url": f"/api/books/{book_id}/audio.mp3"}
+
+    text = _render_plain(doc)
+    if not text.strip():
+        raise HTTPException(status_code=400, detail="Book has no text content")
+
+    background.add_task(_render_audiobook_task, str(out_mp3), str(lock_file), text, voice_id)
+    return {"status": "queued", "mp3_url": f"/api/books/{book_id}/audio.mp3"}
+
+
+async def _render_audiobook_task(out_mp3: str, lock_file: str, text: str, voice_id: str | None) -> None:
+    """Background worker that synthesises the audiobook + encodes to MP3."""
+    import asyncio
+    import logging
+    import shutil
+    from pathlib import Path
+
+    logger = logging.getLogger("audiobook")
+    out_path = Path(out_mp3)
+    lock_path = Path(lock_file)
+    lock_path.write_text("")
+    try:
+        from services.video import tts as _tts
+        wav_path = out_path.with_suffix(".wav")
+        await _tts.synthesize(text, wav_path, voice_id=voice_id)
+        if not shutil.which("ffmpeg"):
+            raise RuntimeError("ffmpeg not installed — cannot encode MP3")
+        proc = await asyncio.create_subprocess_exec(
+            "ffmpeg", "-y", "-loglevel", "error", "-i", str(wav_path),
+            "-codec:a", "libmp3lame", "-qscale:a", "4", str(out_path),
+            stderr=asyncio.subprocess.PIPE,
+        )
+        _, err = await proc.communicate()
+        if proc.returncode != 0:
+            raise RuntimeError(f"mp3 encode failed: {err.decode(errors='replace')[:300]}")
+        try:
+            wav_path.unlink()
+        except OSError:
+            pass
+        logger.info("audiobook MP3 cached: %s (%d bytes)", out_path.name, out_path.stat().st_size)
+    except Exception as e:
+        logger.exception("audiobook render failed: %s", e)
+    finally:
+        try:
+            lock_path.unlink()
+        except OSError:
+            pass
+
+
+@router.get("/{book_id}/audio.mp3")
+async def download_audiobook(book_id: str, voice_id: str | None = None, db=Depends(get_db)):
+    """Stream the cached audiobook MP3 if it exists, else return 202 + job hint.
+
+    Idempotent: the first GET kicks off the background render and returns
+    202 so the client polls. Subsequent GETs stream the file when ready.
+    """
+    from pathlib import Path
+
+    doc = await db.books.find_one({"id": book_id}, {"_id": 0})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Book not found")
+
+    AUDIO_DIR = Path(os.environ.get("BOOKS_AUDIO_DIR", "/app/data/audiobooks"))
+    AUDIO_DIR.mkdir(parents=True, exist_ok=True)
+    cache_key = f"{book_id}-{voice_id or 'default'}.mp3"
+    out_mp3 = AUDIO_DIR / cache_key
+    lock_file = AUDIO_DIR / f"{cache_key}.lock"
+
+    if out_mp3.exists() and out_mp3.stat().st_size > 1024:
+        await db.books.update_one({"id": book_id}, {"$inc": {"download_count": 1}})
+        filename = (doc.get("title", "book").replace(" ", "_")[:60] + ".mp3")
+        return FileResponse(
+            out_mp3, media_type="audio/mpeg",
+            filename=filename,
+            headers={"Content-Disposition": f'inline; filename="{filename}"'},
+        )
+
+    # Not ready yet — kick off a background render if we haven't already
+    if not lock_file.exists():
+        text = _render_plain(doc)
+        if text.strip():
+            import asyncio
+            asyncio.create_task(_render_audiobook_task(str(out_mp3), str(lock_file), text, voice_id))
+
+    raise HTTPException(
+        status_code=202,
+        detail={
+            "status": "rendering",
+            "message": "audiobook is being synthesised — poll this same URL until status=200",
+            "estimated_seconds": max(int(len(_render_plain(doc).split()) / 25), 5),
+        },
+    )
 
 
 @router.delete("/{book_id}")

@@ -1,32 +1,79 @@
 import { useEffect, useState } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useLocation } from "react-router-dom";
 import { authAPI } from "../lib/api";
+import { toast } from "sonner";
 
-// REMINDER: DO NOT HARDCODE THE URL, OR ADD ANY FALLBACKS OR REDIRECT URLS, THIS BREAKS THE AUTH
-const EMERGENT_AUTH_URL = "https://auth.emergentagent.com/";
+function LoginScreen({ onSuccess }) {
+  const [token, setToken] = useState("");
+  const [name, setName] = useState("");
+  const [submitting, setSubmitting] = useState(false);
 
-function LoginScreen() {
-  // REMINDER: DO NOT HARDCODE THE URL, OR ADD ANY FALLBACKS OR REDIRECT URLS, THIS BREAKS THE AUTH
-  const handleLogin = () => {
-    const redirectUrl = window.location.origin + "/overview";
-    window.location.href = `${EMERGENT_AUTH_URL}?redirect=${encodeURIComponent(redirectUrl)}`;
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!token.trim()) {
+      toast.error("Operator token required");
+      return;
+    }
+    setSubmitting(true);
+    try {
+      await authAPI.login({ operator_token: token.trim(), name: name.trim() || undefined });
+      toast.success("Welcome back, operator");
+      onSuccess?.();
+    } catch (err) {
+      toast.error(err?.response?.data?.detail || "Invalid operator token");
+      setSubmitting(false);
+    }
   };
+
   return (
     <div className="min-h-screen bg-[#0a0e1a] flex items-center justify-center p-6">
-      <div className="enterprise-card max-w-md w-full text-center">
-        <h1 className="text-3xl font-bold text-white mb-2">Already Here Command OS</h1>
-        <p className="text-gray-400 mb-6 text-sm">Operator access required.</p>
+      <form onSubmit={handleSubmit} className="enterprise-card max-w-md w-full">
+        <h1 className="text-3xl font-bold text-white mb-2">Command OS</h1>
+        <p className="text-gray-400 mb-6 text-sm">
+          Operator access required. Enter the OPERATOR_TOKEN from your{" "}
+          <code className="text-amber-300">backend/.env</code> file.
+        </p>
+
+        <label className="block text-xs uppercase tracking-wider text-gray-400 mb-1">
+          Operator token
+        </label>
+        <input
+          type="password"
+          value={token}
+          onChange={(e) => setToken(e.target.value)}
+          autoComplete="current-password"
+          placeholder="Paste OPERATOR_TOKEN"
+          className="w-full bg-[#0a0e1a] border border-gray-700 rounded-lg px-3 py-2 text-white text-sm mb-3 focus:border-emerald-500 outline-none"
+          data-testid="operator-token-input"
+        />
+
+        <label className="block text-xs uppercase tracking-wider text-gray-400 mb-1">
+          Display name <span className="text-gray-600">(optional)</span>
+        </label>
+        <input
+          type="text"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="Operator"
+          className="w-full bg-[#0a0e1a] border border-gray-700 rounded-lg px-3 py-2 text-white text-sm mb-4 focus:border-emerald-500 outline-none"
+          data-testid="operator-name-input"
+        />
+
         <button
-          onClick={handleLogin}
-          className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-3 rounded-lg transition-colors"
+          type="submit"
+          disabled={submitting}
+          className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 text-white font-semibold py-3 rounded-lg transition-colors"
           data-testid="login-button"
         >
-          Continue with Google
+          {submitting ? "Authenticating…" : "Sign in"}
         </button>
-        <p className="text-xs text-gray-500 mt-4">
-          Only the configured operator email can access the dashboard.
+
+        <p className="text-[11px] text-gray-500 mt-4 leading-snug">
+          Lost your token? Run <code className="text-amber-300">openssl rand -hex 32</code>{" "}
+          on the server, paste the output into <code>OPERATOR_TOKEN</code> in{" "}
+          <code>backend/.env</code>, restart, and use that.
         </p>
-      </div>
+      </form>
     </div>
   );
 }
@@ -34,20 +81,34 @@ function LoginScreen() {
 export default function AuthGate({ children }) {
   const [state, setState] = useState({ checked: false, required: false, authed: false });
   const location = useLocation();
-  const navigate = useNavigate();
+
+  const refresh = async () => {
+    try {
+      const cfg = await authAPI.config().then((r) => r.data);
+      if (!cfg.required) {
+        setState({ checked: true, required: false, authed: true });
+        return;
+      }
+      try {
+        await authAPI.me();
+        setState({ checked: true, required: true, authed: true });
+      } catch {
+        setState({ checked: true, required: true, authed: false });
+      }
+    } catch {
+      // If the auth config endpoint itself errors, fall open
+      setState({ checked: true, required: false, authed: true });
+    }
+  };
 
   useEffect(() => {
-    // CRITICAL: If returning from OAuth callback, skip the /me check.
-    // The session_id fragment is handled below.
-    if (window.location.hash?.includes("session_id=")) {
-      return;
-    }
     let cancelled = false;
     (async () => {
       try {
         const cfg = await authAPI.config().then((r) => r.data);
+        if (cancelled) return;
         if (!cfg.required) {
-          if (!cancelled) setState({ checked: true, required: false, authed: true });
+          setState({ checked: true, required: false, authed: true });
           return;
         }
         try {
@@ -57,31 +118,11 @@ export default function AuthGate({ children }) {
           if (!cancelled) setState({ checked: true, required: true, authed: false });
         }
       } catch {
-        // If the auth config endpoint itself errors, fall open (legacy behavior).
         if (!cancelled) setState({ checked: true, required: false, authed: true });
       }
     })();
     return () => { cancelled = true; };
   }, [location.pathname]);
-
-  // Handle OAuth callback hash
-  useEffect(() => {
-    if (!window.location.hash?.includes("session_id=")) return;
-    const m = window.location.hash.match(/session_id=([^&]+)/);
-    const sid = m?.[1];
-    if (!sid) return;
-    (async () => {
-      try {
-        await authAPI.session(sid);
-        // Strip the fragment and re-route cleanly
-        window.history.replaceState({}, "", window.location.pathname);
-        setState({ checked: true, required: true, authed: true });
-        navigate("/overview", { replace: true });
-      } catch (e) {
-        setState({ checked: true, required: true, authed: false });
-      }
-    })();
-  }, [navigate]);
 
   if (!state.checked) {
     return (
@@ -91,7 +132,7 @@ export default function AuthGate({ children }) {
     );
   }
   if (state.required && !state.authed) {
-    return <LoginScreen />;
+    return <LoginScreen onSuccess={refresh} />;
   }
   return children;
 }

@@ -33,7 +33,9 @@ from datetime import datetime, timezone
 from typing import Any
 
 from fastapi import HTTPException
-from emergentintegrations.llm.chat import LlmChat, UserMessage
+from services.llm_adapter import (
+    LLMProviderError, any_key_configured, llm_completion,
+)
 
 from services.distillation_service import (
     cache_lookup, cache_store, distill_text, estimate_tokens,
@@ -166,16 +168,22 @@ async def run_cached(
     Returns the raw LLM response string. Caller is responsible for parsing it.
     On cache hit, no LLM call is made and the budget is not charged.
     """
-    api_key = os.environ.get("EMERGENT_LLM_KEY") or os.environ.get("GROQ_API_KEY") or ""
-    if not api_key:
-        raise HTTPException(status_code=503, detail="No LLM key configured (set EMERGENT_LLM_KEY or GROQ_API_KEY)")
+    api_key_present = any_key_configured()
+    if not api_key_present:
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "No LLM provider key configured. Set one of: OPENAI_API_KEY, "
+                "ANTHROPIC_API_KEY, GEMINI_API_KEY, or LLM_API_KEY."
+            ),
+        )
 
-    model_id = f"{provider}/{model}"
+    model_id_str = f"{provider}/{model}"
     distilled_prompt = distill_text(prompt)
 
     # 1) Cache lookup — free hits
     try:
-        hit = await cache_lookup(db, model_id, system_msg, distilled_prompt)
+        hit = await cache_lookup(db, model_id_str, system_msg, distilled_prompt)
     except Exception:
         hit = None
     if hit and hit.get("response"):
@@ -188,10 +196,14 @@ async def run_cached(
     await check_daily_budget(db, expected_tokens=estimated)
 
     # 3) Make the call
-    chat = LlmChat(api_key=api_key, session_id=session_id, system_message=system_msg)
-    chat.with_model(provider, model)
     try:
-        response = await chat.send_message(UserMessage(text=distilled_prompt))
+        response = await llm_completion(
+            provider=provider, model=model,
+            system_msg=system_msg, prompt=distilled_prompt,
+            session_id=session_id,
+        )
+    except LLMProviderError as e:
+        raise HTTPException(status_code=503, detail=str(e)) from e
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"LLM call failed: {e}") from e
 
@@ -203,11 +215,81 @@ async def run_cached(
         cache_hit=False,
     )
     try:
-        await cache_store(db, model_id, system_msg, distilled_prompt, response, tier=tier)
+        await cache_store(db, model_id_str, system_msg, distilled_prompt, response, tier=tier)
     except Exception:
         pass
 
     return response
+
+
+# ---------------------------------------------------------------------------
+# Tier-aware routing (blueprint §3.5)
+# ---------------------------------------------------------------------------
+
+# Mapping of tier label → (provider, model). Operators can override via env.
+TIER_LOW = "low"   # zero-LLM — caller MUST pass `local_fn`
+TIER_MID = "mid"   # gemini-3-flash (fast, cheap)
+TIER_HIGH = "high" # claude-sonnet (high reasoning)
+
+
+def _tier_model(tier: str) -> tuple[str, str]:
+    tier = (tier or TIER_MID).lower()
+    if tier == TIER_HIGH:
+        return (
+            os.environ.get("LLM_TIER_HIGH_PROVIDER", "anthropic"),
+            os.environ.get("LLM_TIER_HIGH_MODEL", "claude-sonnet-4-5"),
+        )
+    # default mid
+    return (
+        os.environ.get("LLM_TIER_MID_PROVIDER", "gemini"),
+        os.environ.get("LLM_TIER_MID_MODEL", "gemini-2.5-flash"),
+    )
+
+
+async def run_tiered(
+    db,
+    tier: str,
+    system_msg: str,
+    prompt: str,
+    *,
+    session_id: str,
+    local_fn=None,
+):
+    """Tier-aware wrapper around run_cached().
+
+    Tier 1 (low):  skip the LLM entirely. `local_fn(prompt)` must be supplied
+                   and is expected to be a pure Python deterministic transform.
+                   Records a "tier_1_local" call in the budget counter for
+                   visibility but never bills tokens.
+    Tier 2 (mid):  Gemini 3 Flash via run_cached().
+    Tier 3 (high): Claude Sonnet 4.5 via run_cached().
+    """
+    tier = (tier or TIER_MID).lower()
+
+    if tier == TIER_LOW:
+        if local_fn is None:
+            raise HTTPException(
+                status_code=500,
+                detail="run_tiered(tier='low') requires a local_fn callable",
+            )
+        result = local_fn(prompt)
+        try:
+            await _record_call(db, tokens_in=0, tokens_out=0, cache_hit=False)
+            # tag this as a tier-1 local routing event in the cache for stats
+            await cache_store(
+                db, "local/python", system_msg, distill_text(prompt),
+                str(result), tier=1,
+            )
+        except Exception:
+            pass
+        return result
+
+    provider, model = _tier_model(tier)
+    tier_num = 3 if tier == TIER_HIGH else 2
+    return await run_cached(
+        db, provider, model, system_msg, prompt,
+        session_id=session_id, tier=tier_num,
+    )
 
 
 async def daily_usage_history(db, days: int = 14) -> list[dict]:

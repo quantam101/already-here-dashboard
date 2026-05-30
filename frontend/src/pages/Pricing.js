@@ -116,8 +116,8 @@ export default function Pricing() {
       <div className="enterprise-card">
         <h3 className="text-base font-semibold text-white mb-2">Stripe Test Mode Notice</h3>
         <p className="text-sm text-gray-400 leading-relaxed">
-          The dashboard is currently using Stripe <span className="text-yellow-400">test keys</span>{" "}
-          (configured by Emergent). To accept real money, replace{" "}
+          The dashboard is currently using Stripe <span className="text-yellow-400">test keys</span>.
+          To accept real money, replace{" "}
           <code className="text-green-400 bg-black/40 px-1.5 py-0.5 rounded">STRIPE_API_KEY</code> in
           backend <code className="text-green-400 bg-black/40 px-1.5 py-0.5 rounded">.env</code>{" "}
           with your live Stripe secret key from{" "}

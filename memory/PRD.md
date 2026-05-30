@@ -1,290 +1,115 @@
-# Already Here Command OS - PRD
+# Already Here Command OS — Product Requirements Document
 
-## Original Problem Statement
-Build a complete enterprise-grade, governed multi-agent operating system consolidating ProfitEngine, GMAOS, EAOS, TradeGate, VHLL, and all Already Here builds into one unified, ASI-aligned, zero-spend-first platform with revenue automation, CapCut-style content factory, scheduler, omni-publisher, agent runtime, audit log, approval gates, and Bitwarden-compatible secret management - all running at $0/month on Oracle Cloud Always Free.
+## Original problem statement
+Build the "Already Here Command OS" — a global, enterprise-grade governed
+AI ecosystem and dashboard with absolute $0/month operating cost target
+(Oracle Cloud Always Free), local-first execution, a CapCut-style Content
+Factory, multi-agent management, Cost Guard, and Bitwarden integration.
+The application must be completely stripped of Emergent platform
+dependencies so it can be deployed autonomously and freely anywhere.
 
-## User Personas
-- **Solo Operator (Primary)**: Manages all builds, revenue streams, content from single dashboard
-- **Federal Procurement Bidder**: Uses H&M proof for SBA/federal contracting proposals
-- **Content Creator**: Generates multi-platform content with manual export fallback when APIs unavailable
+Recently the user requested an AI Video Generator (Faceless, Avatars,
+Deepfakes, Generative Video) at $0 cost.
 
-## Core Requirements (Static)
-- Zero-spend mode by default (Cost Guard Agent enforced)
-- Bitwarden-compatible secret management
-- Immutable audit log
-- Approval gates for risky actions
-- Multi-stream revenue tracking (10 streams live)
-- AI content generation via Emergent LLM (Gemini 3 Flash - FREE)
-- Platform connectors with explicit cost classifications
-- Manual export packs when APIs unavailable/paid
-- 10 production agents
-- Oracle Cloud Always Free deployment ready + local laptop deployment fallback
-- MongoDB local-first persistence
+## Personas
+- **Operator (you)** — single-tenant power user. Has the Operator Token,
+  approves HITL gates, owns the LLM provider key.
+- **Audience** — TikTok/Reels/Shorts viewers who consume the videos the
+  operator publishes.
+- **Optional buyers** — operators who clone the repo, point it at their
+  own LLM key, and run the same dashboard $0/mo on Oracle.
 
-## What's Been Implemented (2026-05-26)
+## Core requirements (static)
+1. **$0/mo** — no recurring fees. Every paid integration is opt-in and
+   gated.
+2. **Local-first** — every CPU-bound task (TTS, captions, ffmpeg) runs on
+   the same OCI VM. No external worker queues, no SaaS dependencies.
+3. **Dual database** — MongoDB for the dashboard, SQLite for portable
+   offline export.
+4. **Governance** — L0-L5 with dual-actor HITL approval gates on
+   high-risk autonomous actions (capital_allocation, mass_outreach).
+5. **Distillation cache** — every LLM call goes through semantic
+   compression + cache lookup before hitting the provider.
+6. **No Emergent dependencies** — pure litellm + standard SDKs.
 
-### Iteration 15 - Live-Mode Smoke Runner + Cache Hit Rate Chart + Final Go-Live Runbook (latest)
-**Operator can now verify live Stripe keys with a self-refunding $0.50 charge. 116/116 pytest.**
-- **Auto-refunding Stripe smoke test** (`routes/payments.py`):
-  - `POST /api/payments/smoke-test/create` — creates a $0.50 live-mode checkout session tagged `package_id=smoke_test`, `metadata.smoke_test=true`. Refuses to run in test mode or without webhook secret.
-  - `GET /api/payments/smoke-test/status/{session_id}` — operator polls this; flips `verified_live_pipeline=true` once the refund lands.
-  - `GET /api/payments/smoke-test/recent` — list last N smoke runs.
-  - **Webhook handler extended**: smoke-test sessions trigger an immediate full refund via the official `stripe` SDK (`stripe.Refund.create(payment_intent=...)`) instead of recording to ledger. Operator pays $0.50 with a real card, sees the refund within ~10s, knows the full live pipeline (keys + webhook secret + signature verification + refund flow) is wired correctly **before** routing any real customers through it.
-- **Cache hit rate line chart** added to the Distillation card on `/analytics`:
-  - Pulls `GET /api/distillation/budget/history?days=14`
-  - Renders a 90px Recharts line chart (0-100% Y-axis, daily X-axis), with rolling average displayed top-right.
-  - Visualizes the compounding savings: every time you regenerate the same proposal/book chapter, the hit-rate line climbs.
-- **`GO-LIVE.md`** — single 3-phase final runbook tying together deploy + Stripe live + backup cron. Each phase ends with a copy-paste curl verification.
-- **4 new pytest tests** for smoke-test endpoints (refuses in test mode, recent shape, status 404). Total **116/116 PASSING** (was 113).
+## What's implemented (current state — May 2026)
 
-### Iteration 14 - Unified LLM Runner + Daily Budget Cap + Backup Cron + Analytics UI (latest)
-**Every LLM call now cached + budget-tracked. Operator-visible Cost Guard. 113/113 pytest.**
-- **`services/llm_runner.py`** — single chokepoint for all LLM calls:
-  - `run_cached(db, provider, model, system_msg, prompt, *, session_id)` — distill → cache lookup → daily-budget pre-check → LLM call → cache store → token-counter bump. One call replaces ~20 lines of boilerplate.
-  - `get_today_usage(db)` + `daily_usage_history(db, days)` — operator telemetry.
-  - `check_daily_budget(db, expected_tokens)` — raises HTTP 429 when `LLM_DAILY_TOKEN_CAP` env (default 0 = unlimited) would be exceeded.
-- **All LLM consumers refactored** to use the runner:
-  - `routes/books.py` — outline + every chapter now cached independently. Regenerating a book with one tweaked outline only re-bills the changed chapter.
-  - `routes/proposals.py` — identical grant/contract drafts hit cache.
-  - `routes/advisor.py` — identical dashboard snapshots within TTL skip the LLM.
-  - `services/content_generation_service.py` — script generation runs through the runner when `db` is passed (which the route always does).
-- **New endpoints:**
-  - `GET /api/distillation/budget` — today's tokens in/out/total, cap, remaining, over_cap flag.
-  - `GET /api/distillation/budget/history?days=14` — last N days of usage rows.
-- **Frontend `<DistillationCard />` on `/analytics`** — top-of-page Cost Guard card showing tokens saved, $ saved (est), cache rows, cache hits, today's usage vs cap with a color-coded progress bar. Auto-refreshes every 60s. Hooked into `distillationAPI` in `lib/api.js`.
-- **Backup automation:**
-  - `scripts/backup-sqlite.sh` — atomic SQLite snapshot via `sqlite3 .backup`, 14-day retention, tars + exports.
-  - `scripts/install-backup-cron.sh` — one-shot installer that writes a systemd timer firing nightly at 03:00 UTC (1h jitter), enables it, runs one backup immediately. Pure $0 host-disk backups, no S3 dependency.
-- **6 new pytest tests** (TestDistillation budget shape, budget history, plus 4 from iteration 13). Total **113/113 PASSING** (was 104 pre-iteration-13).
+### Iteration 10 (2026-05-29) — Free upgrade pack
+- ✅ Multi-model Gemini fallback chain in `services/llm_adapter.py`:
+  primary `gemini-3-flash-preview` → `gemini-2.5-flash` →
+  `gemini-2.0-flash` → `gemini-2.0-flash-lite` → `gemini-1.5-flash` →
+  `gemini-1.5-flash-8b`. Each fallback bucket has its own free-tier
+  daily quota so the operator gets ~3500+ free requests/day combined.
+- ✅ Deterministic template fallback for hook generation when every
+  Gemini bucket is exhausted (`routes/hooks._deterministic_hooks`).
+- ✅ Three bundled CC0 royalty-free music beds at `/app/data/music/`
+  (cinematic / upbeat / chill), procedurally synthesized via ffmpeg
+  `aevalsrc`. Mixed under TTS via a 3-input ffmpeg filter graph.
+- ✅ Adaptive captions via `faster-whisper` (tiny.en, int8 CPU). Real
+  word-aligned SRT replaces uniform per-line timing.
+- ✅ Per-shot voice override (already supported in engine, surfaced in
+  UI via Voice select).
+- ✅ Video Studio UI: music dropdown, adaptive-captions toggle, expanded
+  CapabilityCard with 8 pills.
+- ✅ New tests: `tests/test_llm_fallback.py` (6) + `tests/test_video_extras.py` (4).
+- ✅ **158/158 pytest PASS. All API + frontend regression PASS.**
 
-### Iteration 13 - Data Distillation + Stripe Live-Mode Gate + Final OCI Deploy (latest)
-**Token-cheap LLM pipeline, live-key safety net, single-command deploy. 111/111 pytest.**
-- **`services/distillation_service.py`** — pure utility module:
-  - `distill_text()` — semantic compression (filler-word stripping, whitespace collapse). Demo: 53.9% char reduction on test input.
-  - `to_yaml_payload()` — YAML formatting for structured data (~25-40% fewer tokens than equivalent JSON for nested-dict payloads).
-  - `estimate_tokens()` — chars/4 heuristic for budget telemetry.
-  - `fingerprint(model, system, prompt)` — sha256-based cache key (32 hex chars).
-  - `cache_lookup/store/stats/clear` — db-backed prompt-response cache in `llm_cache` collection, dual-DB compatible (works on Mongo + SQLite wrapper), 30-day TTL configurable via `LLM_CACHE_TTL_SECONDS`.
-- **`routes/distillation.py`** — operator telemetry + utility API:
-  - `GET /api/distillation/stats` — cache rows, hits, tokens-saved, $ saved (heuristic via `TOKEN_COST_PER_1K` env).
-  - `GET /api/distillation/config` — TTL, cost-per-1k, tier descriptions.
-  - `POST /api/distillation/preview` — show before/after for any text + YAML-vs-JSON for any payload (operator tuning tool).
-  - `POST /api/distillation/clear` — wipe cache.
-- **Tiered LLM pipeline** baked into existing services:
-  - `content_generation_service.create_script_prompt()` now emits YAML idea payload + distilled wrapper text.
-  - `content_generation_service.generate_script_from_idea(idea, db=db)` does cache lookup BEFORE every LLM call; on miss, stores response under the fingerprint. Cache-hit responses tagged `metadata.cache_hit=True`.
-  - `advisor.get_recommendation()` now sends YAML context (not JSON) + cache-checks on identical snapshots.
-- **Stripe live-mode safety gate** (`routes/payments.py`):
-  - `_stripe_mode()` + `_readiness()` helpers.
-  - `GET /api/payments/mode` — lightweight `{mode: "test|live|missing|unknown"}` probe for frontend banners.
-  - `GET /api/payments/readiness` — full operator checklist + go_live_ready flag + issues list.
-  - **Safety gate inside `create_checkout()`**: if `sk_live_*` key is set but `STRIPE_WEBHOOK_SECRET` is missing, the endpoint returns HTTP 503 — preventing silent revenue loss while operator is mid-setup.
-- **`LIVE_MODE_CHECKLIST.md`** — step-by-step Stripe test→live transition (8 steps, includes rollback + common-mistakes table).
-- **`DEPLOY-FINAL.md`** — final single-command OCI deploy runbook (cloud-init two-liner, idempotent resume, DNS, env, verify, daily ops).
-- **7 new pytest tests** (TestDistillation × 5 + TestPayments mode/readiness × 2). Total **111/111 PASSING** (was 104). Zero regressions on existing 104.
+### Iteration 9 — Video Engine
+- Phase 1 faceless: ffmpeg + Piper TTS + Pexels stock + burned-in
+  captions, vertical 1080×1920 MP4.
+- Phase 2 avatar lipsync: mediapipe + ffmpeg zoompan + audio meter.
+- Phase 2.5 Wav2Lip opt-in (ONNX model auto-detected).
+- Phase 3 external generative bridge wired (Sora 2 SDK pending GA).
+- Viral hook generator (`POST /api/hooks/` + `/api/hooks/ab-test`).
 
-### Iteration 12 - Free-Only Build Directive: SQLite Backend + Two-Node Health + LCAC (latest)
-**Honors operator's architecture directive. 104/104 pytest on BOTH backends. 200 MB RSS.**
-- **`services/sqlite_db.py`** — Motor-API-compatible shim over aiosqlite (363 lines). Each "collection" maps to one SQLite table `(id TEXT PRIMARY KEY, doc TEXT JSON)`. Supports every Mongo op the codebase actually uses (audited via grep): `find_one`, `find().sort().to_list()`, `insert_one/many`, `update_one` with `$set/$inc/$max`, `delete_one/many`, `count_documents`, `aggregate` with `$group/$sort/$limit`. Filter ops: equality, `$gte/$gt/$lte/$lt/$ne/$in/$nin/$exists`. Unsupported ops raise `NotImplementedError` (fail-loud)
-- **Env-gated backend switch** — `STORAGE_BACKEND=sqlite` flips engines without touching route code. Default stays MongoDB so preview/dev unaffected
-- **`docker-compose.sqlite.yml`** — 2-container stack for 1GB-RAM micro: backend (400 MB limit) + Caddy (100 MB limit, serves pre-built React static bundle from `frontend/build`). No MongoDB. No Node runtime
-- **`Caddyfile.sqlite`** — static frontend + `/api/*` reverse-proxy
-- **`oci-bootstrap.sh` v2** — auto-detects RAM via `/proc/meminfo`. `<1500 MB` → SQLite mode (compiles React bundle on host, no Node container in prod). `>=1500 MB` → MongoDB mode. New flags: `-b sqlite|mongodb` (force), `-w WORKER_URL` (link to profitengine-server)
-- **`GET /api/health/nodes`** — two-node health report (`DashboardAlways Free` + `profitengine-server`), polls worker if `WORKER_BASE_URL` env is set
-- **`GET /api/cost/status`** + **`/api/cost/policy`** — Free-Only enforcement: connector cost classifications, paid_blocked, unknown_blocked, requires_secret, optional_missing_secrets. Static policy doc lists 9 approved free integrations
-- **`GET /api/lifelong-catch-correct/`** — read-only anomaly scanner. Surfaces: missing OPERATOR_EMAIL, Stripe live without webhook, no EMERGENT_LLM_KEY, no ledger entries in 30d, agents with >25% failure rate, audit gaps, empty build registry
-- **`docs/COMMAND_OS_FREE_ONLY_FINAL_BUILD_DIRECTIVE.md`** — operator's directive committed as architectural source of truth + migration roadmap
-- **`seed_data.py`** — backend-agnostic, honors `STORAGE_BACKEND` env var
-- **`scripts/preflight.sh` v2** — now validates both compose variants; current state: **24 PASS · 0 FAIL**
-- **4 new pytest tests** for cost/status, cost/policy, health/nodes, lifelong-catch-correct. Total **104/104 PASSING** on Mongo, **104/104** on SQLite
+### Earlier iterations
+- Books / audiobooks (Piper TTS for audio).
+- Proposals generator.
+- Master Revenue Equation tracker.
+- Data Distillation Framework (semantic compression + cache).
+- L5 dual-actor HITL governance.
+- Stripe payments (test key).
+- Complete Emergent scrub.
+- One-shot OCI deploy script (`scripts/one-shot-oci-deploy.sh`).
 
-**Memory verified on SQLite stack:** backend process = 200 MB RSS · SQLite DB file = 200 KB after seed+tests · Caddy ~30 MB · **Total ~230 MB**, well under the 700 MB directive target.
+## Roadmap
 
-### Iteration 11 - Bitwarden CLI + Copy+Open Platform + Deploy Preflight
-**Real secrets vault, one-click posting, deploy gate. 100/100 pytest.**
-- **Real Bitwarden CLI integration** (replaces 45-line mock) — `services/bitwarden_service.py` async-wraps `bw` binary via `asyncio.create_subprocess_exec`. Endpoints: `GET /api/secrets/status` (installed/unlocked/server/user) + `GET /api/secrets/items` (metadata only, **no password values ever cross the wire**). Backend code calls `get_bitwarden_service().get_secret("NAME")` which falls back to env when vault is offline → existing code paths unchanged
-- **`/secrets` page** — sidebar nav under SYSTEM. Status banner + setup instructions (Bitwarden cloud OR self-hosted Vaultwarden Docker $0). Vault item browser with username + URI + has_password badge (read-only)
-- **`bw` CLI auto-installed in `oci-bootstrap.sh`** (step 3b) — fails gracefully on ARM-mismatch, doesn't block deploy. `BW_SESSION` passed through `docker-compose.yml` env
-- **"Copy + Open Platform" buttons** in `IdeaDetailDialog` — each script's target_platform gets a button (Reddit/LinkedIn/X open the platform's post composer pre-filled with script; TikTok/IG/YouTube copy + open the upload page). `lib/platformShare.js` builds the URLs per-platform
-- **`scripts/preflight.sh`** — 23-check pre-deploy validator: artifacts exist, scripts have valid bash syntax, Python imports clean, pytest passes, frontend env present, git state. Run `bash scripts/preflight.sh` BEFORE oci-bootstrap to fail-fast. Currently: **20 PASS · 0 FAIL · 3 expected warnings**
-- **4 new pytest tests** for secrets endpoints (shape, empty when uninstalled, no-leak verification, system status block). Total **100/100 PASSING** (was 96)
+### P0 (next)
+- **User verification** — operator confirms A/B test + music + adaptive
+  captions work in the UI after this fix lands.
 
-### Iteration 10 - Read/Copy/Post Content Flow + Agents UX Polish
-**Fixes the "I can't access my generated content" pain. 96/96 pytest.**
-- **`GET /api/studio/scripts/`** + **`GET /api/studio/ideas/{id}/scripts`** — operator can now read every script Gemini generated (was previously written to DB with no surfaced UI)
-- **`<IdeaDetailDialog>`** — clicking an idea card opens a 3xl dialog showing description, target platforms, inspiration source URL, and **all generated scripts** (newest first). Each script section (Hook / Script Body / CTA / Shot List) has its own `copy` button, plus a top-level "Copy Full Script" that bundles everything in CapCut-import-ready format. "Generate Another" button inside the dialog calls Gemini-3-Flash and refreshes the list
-- **`<ContentDetailDialog>`** — Content Library cards are now clickable; opens a 2xl dialog with full body in a `<pre>` block, Copy button, keywords, "Open published URL" if present, and a clear "How to post" instruction line linking to `/proof-of-work` Log Post
-- **Agents page UX rewrite** — replaced scary "Fails: N" red columns with prominent **Success Rate %** (green ✓ if ≥90%, yellow ⚠ otherwise) and a "Fleet Success Rate" header stat (currently 98% across 3,190 historical runs). Agents with 0 fails show **"Status: ✓ Clean"** instead of red "0". Execute button now toasts the agent name and refetches
-- **3 new pytest tests** for studio scripts (list all, list-for-idea, empty-for-nonexistent). Total **96/96 PASSING** (was 93)
+### P1
+- OCI deploy execution — user pushes to GitHub + runs the bootstrap.
+- Per-shot voice overrides surfaced in the UI (engine supports it).
+- Per-route LLM cost breakdown in `/api/distillation/stats`.
 
-### Iteration 9 - Quickstart Wizard + UTM Channel Attribution + Deploy Guide
-**First-run operator onboarding + live channel-of-sale attribution. 93/93 pytest.**
-- **`/api/system/status` route** — operator-facing config snapshot: `operator_email_set`, `stripe_mode` (live/test/missing), `stripe_webhook_secret_set`, `emergent_llm_key_set`, `daily_cycle_hour_utc`, collection counts (revenue_streams/agents/builds/ledger_entries/books/payment_transactions), `is_seeded`. Never leaks secret values — only set/unset flags + masked operator email
-- **QuickstartWizard component** — auto-opens on first visit (gated by `localStorage` key `ah_quickstart_completed_v1`), 5 steps: Welcome → Operator Access → Stripe Mode → Seed Data & LLM → Test Auto-Cycle (one-click `POST /api/cycle/run`). Each step shows live ✓/⚠ from `/api/system/status`. Re-openable from sidebar's "Re-open Quickstart" button
-- **Channel Attribution (UTM) card on `/analytics`** — reads `/api/payments/stats.by_utm_source` and renders a sortable Source / Clicks / Paid / Revenue / CVR table. Auto-refreshes every 60s. Empty-state when no transactions
-- **UTM share-link tracking already complete in earlier batch** (forwarded into Stripe metadata + ledger entries + `/api/payments/share-link` generator on `/pricing`)
-- **`/app/DEPLOY-TO-OCI.md`** — complete 7-step deployment guide for `alreadyherellc.com`: OCI Always Free provisioning → GoDaddy A-records → SSH bootstrap → Stripe webhook → PWA install on phone → daily-ops cheat sheet → rollback/test-mode toggle
-- **3 new pytest tests** for `/api/system/status` (shape, no-secrets-leaked, seeded). Total **93/93 PASSING** (was 87)
+### P2
+- Sidebar "Cost Guard fired N times today" badge.
+- Buffer/Hootsuite fallback share chips.
+- Switch unbounded `find().to_list()` queries to MongoDB aggregations.
+- Royalty-free music: ingest a wider library (Pixabay/FreePD API)
+  instead of bundled procedural beds.
+- Multi-voice scripts: per-shot voice_id override surfaced in UI.
 
-### Iteration 8 - Books / Audiobooks Agent + Auth Gate + OCI Bootstrap
-**New revenue stream: rev-books. Auth wired (gated by env). OCI fully scripted.**
-- **`/api/books/` route** — full book/manual/journal/workbook/guide/memoir generation via Emergent LLM Gemini 3 Flash, chapter-by-chapter; types validated; chapter count 1..20; outline auto-parsed (JSON-array tolerant); `.md` and `.txt` download endpoints; `download_count` tracked; new `rev-books` revenue stream auto-created on first book (idempotent)
-- **Audiobook playback** — frontend `Books.js` uses browser `window.speechSynthesis` API → **truly $0**, no third-party TTS dependency
-- **`/api/auth/` route** — Emergent-managed Google Auth, single-operator allowlist via `OPERATOR_EMAIL` env. When env unset, falls OPEN (legacy behavior, tests stay green). Endpoints: `/config`, `/session`, `/me`, `/logout`
-- **`<AuthGate>` component** — wraps all routes in App.js; checks `/api/auth/config` then `/api/auth/me`; redirects to Emergent Google OAuth when required; handles `#session_id=...` callback fragment
-- **`/app/scripts/oci-bootstrap.sh`** — one-command sudo installer for OCI Always Free: installs Docker + Compose, opens firewall, clones repo, writes `.env` files, generates Caddyfile with auto-HTTPS, runs `docker compose up -d`
-- **`docker-compose.yml`** updated with `STRIPE_API_KEY` + `OPERATOR_EMAIL` passthrough
-- All shell scripts chmod +x and validated (`bash -n` clean)
-- **87/87 pytest** passing (67 regression + 10 TestBooks E2E + 4 TestAuth + tooling)
+## Tech stack
+- **Backend** — FastAPI + Motor (MongoDB) + SQLite fallback.
+- **Frontend** — React + Vite + Tailwind + Shadcn UI + react-query.
+- **LLM** — `litellm` over BYO key (default chain: Gemini 3 Flash w/
+  6-model free-tier fallback).
+- **TTS** — Piper TTS local (`pip install piper-tts`).
+- **Video** — ffmpeg + Pexels free tier (200 req/hr) + mediapipe + faster-whisper.
+- **Music** — 3 bundled CC0 procedural beds (1.9 MB each).
+- **Payments** — Stripe (opt-in, test key).
+- **Auth** — Operator token (L5), no public auth surface.
 
-### Iteration 7 - Stripe Payments + Analytics + AI Advisor + Auto-Cycle
-**Real money receiving, real analytics, real intelligence:**
-- **`/api/payments/` route** (Stripe via emergentintegrations) — 3 fixed packages: starter $49 one-time, pro $99/mo, enterprise $499/mo. Successful checkouts auto-write a ledger entry to `rev-saas` stream so the $25K Proof-of-Work meter ticks on REAL money. Webhook handler at `/api/payments/webhook` for Stripe events. Idempotent recording (no double-credit).
-- **`/api/analytics/` route** — 6 endpoints: funnel, posting-times, stream-roi, platform-mix, viral-themes, momentum + combined `/dashboard` payload. All data live from ledger + publishing_log + content_ideas (zero seeded analytics)
-- **`/api/advisor/` route** (Claude Sonnet 4-5 via Emergent LLM) — reads live dashboard JSON snapshot, returns ONE prioritized next-action with headline/rationale/confidence
-- **`services/scheduler_service.py`** — asyncio in-process daily auto-cycle at 7am UTC (configurable via `DAILY_CYCLE_HOUR_UTC`, disabled in `SYSTEM_MODE=test`)
-- **Frontend `/analytics`** — AI Advisor card + 6 visualization cards (Recharts, dark theme, empty-state guards)
-- **Frontend `/pricing`** — 3 PriceCards with Stripe Checkout integration + test card instructions + live-keys swap guidance
-- **Frontend `/payment-success`** — Polling with hard-fail on 4xx, paid/error/expired/processing states
-- 67/67 pytest pass (added 9 new tests: payments, analytics, advisor)
-- All polish items from iteration_7 testing report fixed (Stripe 404 handling, polling stop on 4xx, Recharts empty-data guard)
-
-### Iteration 6 - Code Quality Fixes
-- Extracted module-level constants: `SECTIONS_BY_TYPE` + `DEFAULT_COMPANY` in `proposals.py` (cut `_build_prompt` complexity 11→6)
-- Extracted helpers: `_format_bullet_list` (proposals), `_coerce_amount` + `_parse_csv_row` (ledger), `_make_idea_doc` + `_make_publishing_draft` (cycle) — reduces complexity across the board
-- Extracted `CONTENT_TYPE_OPTIONS`, `TONE_OPTIONS`, `LENGTH_OPTIONS` in ContentGenerateDialog (eliminates inline array re-render anti-pattern)
-- Explicit `opps: list = []` init in `cycle.py:run_cycle` (silences UnboundLocal linter false-positive)
-- Created `/app/pytest.ini` registering `timeout` mark (zero warnings)
-- All other "react hook dependency" / "is vs ==" warnings verified as false positives by ESLint + Python's own `SyntaxWarning` (skipped)
-- 50/50 pytest pass, Python ruff clean, JS eslint clean, zero warnings
-
-### Iteration 5 - Scout + Procurement Engine + Cycle + PWA
-**Real scrapers, real writers, real pipeline:**
-- New `/api/scout/` route — Reddit, HackerNews, Grants.gov, SAM.gov, Google News (all FREE, no auth) → returns Opportunity[] with id/title/source/kind/url/score
-- New `/api/proposals/` route — grant_proposal, contract_proposal, rfp_response, capability_statement, cover_letter, invoice. AI-generated via Emergent LLM Gemini 3 Flash ($0)
-- New `/api/cycle/run` route — one-click pipeline: scout viral → content ideas → publishing drafts (operator confirms then publishes manually)
-- New `/api/ledger/import-csv` — multipart CSV upload, bulk-creates ledger entries (Amazon Associates, Etsy, AdSense exports)
-- **Facebook + Reddit** platform connectors added (manual_free / free_external)
-- **Procurement Scout Agent** (agent-011) — 11 agents total
-- **Frontend Scout page** with 4 tabs (Viral, Grants, Contracts, News), live data, Draft button on grants/contracts
-- **Frontend Proposals page** with stat tiles + New Draft + New Invoice dialogs
-- **Run Cycle button on Command Center** — operator-driven pipeline
-- **PWA manifest** + apple-mobile-web-app meta tags → installable on iOS/Android home screen
-- **50/50 pytest** passing (added 13 new tests)
-
-### Iteration 4 - Proof of Work System
-**Real live data, not seeded:**
-- New `/api/ledger/` route: immutable revenue ledger for real net earnings
-  - POST/GET, validation (net ≤ gross, stream must exist)
-  - `GET /api/ledger/stats/profit-progress` - $25K goal tracker
-  - `GET /api/ledger/stats/by-stream` - aggregated per-stream totals
-- New `/api/publishing/` route: immutable publishing log
-  - status lifecycle: drafted → exported → posted → verified
-  - auto-stamps `posted_at` / `verified_at` on transition
-  - `GET /api/publishing/stats/overview` - counts by status + platform
-- Revenue `monthly_actual` now computed LIVE from ledger entries dated in current month (single source of truth)
-- Seeded `monthly_actual` reset to $0 (true clean start from real proof-of-work)
-- **Frontend Proof of Work page** (`/proof-of-work`): ledger table, publishing table, $25K profit meter, stats tiles
-- **ProfitMeter** on Command Center: $25K progress, total net, this month, remaining, entry count
-- **RecordEarningsDialog**: form to log net earnings with date/source/proof URL, validates net ≤ gross
-- **LogPostDialog**: form to log publishing events with platform/URL/status
-- "Record Earnings" button on every revenue stream card
-- Sidebar nav: new "Proof of Work" entry under Revenue
-- **35/35 pytest** (was 19), all frontend flows verified by testing agent
-- a11y: DialogDescription added to all new dialogs
-
-### Iteration 3 - Production Wire-up + Dark Theme
-- Expanded seed: 10 revenue streams (AI Blog Network, Faceless Videos, Print-on-Demand A/B, Affiliate Links, Social Automation, SEO Content Farm, Federal Contracting, Service Automation, Newsletter Sponsorships)
-- Expanded agents: 5 → 10 (added SEO Scout, Faceless Video, POD Designer, Affiliate Link, Health Oracle)
-- Command Center fixed: ProfitEngine v5 status `degraded`/`fail` → `live`/`pass`
-- Efficiency Layer fixed: VHLL Distillation Engine `draft` → `live` (94/100 gate score)
-- OCI deployments fixed: all 4 deployments show `success`, added local-laptop deployment record
-- Created `/app/scripts/deploy-local.sh` — laptop/terminal deployment fallback (Docker + native modes)
-- Dark enterprise theme applied to Revenue, Agents, Builds, Deployments, Content, Approvals, Audit pages
-- Fixed Revenue page CSS overlap (added page-header, stat-card, metric-card, content-badge classes)
-- 19/19 pytest pass, 8/8 frontend routes pass
-
-### Backend (FastAPI + MongoDB)
-- 9 route modules with `/api/*` prefix, async patterns
-- 19/19 pytest tests passing
-- ContentIdeaCreate Pydantic schema for validation
-- Builder functions (`make_agent`, `make_connector`) reduce repetition
-- Audit logging on every action
-- Bitwarden service scaffold
-- Cost Guard enforcement
-
-### Frontend (React + Recharts)
-- 9 dashboard pages, all load with 0 JS errors, all in dark enterprise theme
-- Enterprise dark theme (#0a0e1a + green accents) — now consistent across ALL pages
-- 13 extracted sub-components
-- useMemo for navigation groups and expensive computations
-- All magic numbers extracted to chartConfig.js constants
-- All array index keys replaced with stable IDs
-
-### Content Factory (CapCut-style)
-- Idea bank with multi-platform selection
-- AI script generation via Gemini 3 Flash (free)
-- Platform connector registry: free_local 1, free_external 1, manual_free 4, paid_blocked 1
-- Export pack generation with platform-specific instructions
-
-### OCI + Local Deployment
-- `/app/docker-compose.yml` - Multi-service deployment
-- `/app/Caddyfile` - Free HTTPS via Let's Encrypt
-- `/app/scripts/backup.sh`, `restore.sh`, `healthcheck.sh`, `validate-oci.sh`
-- `/app/scripts/deploy-local.sh` - **NEW** laptop/terminal deployment
-
-## Prioritized Backlog
-
-### P0 - Critical (COMPLETE)
-- [x] Core dashboard with revenue tracking (10 streams wired)
-- [x] Agent management (10 agents)
-- [x] Build registry with production gates (all 5 builds healthy)
-- [x] Audit log with immutable events
-- [x] Content Factory backend + frontend
-- [x] Platform connector registry with cost classifications
-- [x] Cost compliance system
-- [x] OCI deployment scripts
-- [x] Local laptop deployment script
-- [x] Dark theme across all pages
-- [x] Revenue page CSS overlap fix
-
-### P1 - Important (Future)
-- [ ] FFmpeg video rendering integration (Dockerfile ready)
-- [ ] Bitwarden CLI full integration
-- [ ] OAuth2 flows for platforms when approved
-- [ ] GitHub Actions CI workflow
-- [ ] Scheduler calendar view
-- [ ] AI Operations Advisor panel (Claude Sonnet)
-- [ ] Per-stream-card data-testid for stable Playwright targeting
-
-### P2 - Nice to Have
-- [ ] Split seed_data.py into seed_data/ package modules
-- [ ] Hide zero-state Builds tiles (DEGRADED/DRAFT when 0)
-- [ ] Analytics ingestion (CSV import from platforms)
-- [ ] VHLL/AAF Pipeline visualization
-- [ ] Mobile PWA install prompt
-- [ ] Webhook handlers for platform callbacks
-- [ ] H&M proof-to-proposal generator
-
-## Cost Compliance
-- Target: $0/month
-- Current: $0/month
-- Free connectors: 2 (Website Blog, Medium)
-- Manual export: 4 (TikTok, YouTube, Instagram, LinkedIn)
-- Paid blocked: 1 (Twitter/X - $100/mo blocked by Cost Guard)
-
-## Test Coverage
-- Backend pytest: **35/35 PASSING** (100%)
-- Frontend smoke tests: 9/9 routes (100%, 0 errors)
-- Lint: Backend ruff PASS, Frontend eslint PASS
-
-## Live URL
-https://gmaos-control.preview.emergentagent.com
-
-## Proof-of-Work Workflow (Operator Loop)
-1. Operator uses Content Factory → generates a ready-to-post pack
-2. Operator manually publishes to platform (or via approved API)
-3. Operator clicks **Log Post** in dashboard → records platform, title, URL, status='posted'
-4. When platform pays out (Amazon Associates, AdSense, Etsy, etc.), operator clicks **Record Earnings**
-5. Live ledger updates Revenue stats, Profit Meter, and per-stream actuals immediately
-6. Once cumulative net ≥ $25,000 → meter shows **UNLOCKED** → commercialization green light
+## API endpoints (key)
+- `GET /api/video/config` — full capability self-report
+- `GET /api/video/music` — bundled music catalogue
+- `GET /api/video/voices` — installed Piper voices
+- `POST /api/video/render` — kick off a render (script + voice + music + captions + portrait + mode)
+- `POST /api/video/portraits/upload` — upload avatar portrait
+- `POST /api/hooks/` — generate 5 hook variants (with fallback chain)
+- `POST /api/hooks/ab-test` — generate N hooks + fire N parallel renders
+- `POST /api/books/{id}/audio/generate` — Piper-driven audiobook
+- `GET /api/distillation/stats` — cache + cost breakdown
+- `GET /api/governance/manifest` — L0-L5 governance manifest

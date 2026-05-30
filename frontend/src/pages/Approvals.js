@@ -3,6 +3,7 @@ import { CheckCircle2, Clock, AlertTriangle } from "lucide-react";
 import { approvalsAPI } from "../lib/api";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
+import GovernanceApprovals from "../components/GovernanceApprovals";
 
 const PRIORITY_COLORS = {
   critical: "bg-red-500/15 text-red-300 border border-red-500/20",
@@ -170,6 +171,8 @@ export default function Approvals() {
           </div>
         )}
       </div>
+
+      <GovernanceApprovals />
     </div>
   );
 }

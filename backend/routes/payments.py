@@ -17,12 +17,13 @@ from datetime import datetime, timezone
 import os
 import uuid
 
-from emergentintegrations.payments.stripe.checkout import (
-    StripeCheckout,
+from services.stripe_adapter import (
+    StripeAdapter,
     CheckoutSessionRequest,
 )
 import stripe as stripe_sdk
 from services.audit_service import log_audit_event
+from services import governance_service as gov
 
 router = APIRouter()
 
@@ -89,13 +90,13 @@ async def get_db():
     return db
 
 
-def _get_stripe(http_request: Request) -> StripeCheckout:
+def _get_stripe(http_request: Request) -> StripeAdapter:
     api_key = os.environ.get("STRIPE_API_KEY")
     if not api_key:
         raise HTTPException(status_code=503, detail="STRIPE_API_KEY not configured")
     host_url = str(http_request.base_url).rstrip("/")
     webhook_url = f"{host_url}/api/payments/webhook"
-    return StripeCheckout(api_key=api_key, webhook_url=webhook_url)
+    return StripeAdapter(api_key=api_key, webhook_url=webhook_url)
 
 
 def _stripe_mode() -> str:
@@ -103,7 +104,7 @@ def _stripe_mode() -> str:
     key = os.environ.get("STRIPE_API_KEY", "") or ""
     if key.startswith("sk_live_"):
         return "live"
-    if key.startswith("sk_test_") or key == "sk_test_emergent":
+    if key.startswith("sk_test_"):
         return "test"
     if not key:
         return "missing"
@@ -418,6 +419,8 @@ async def smoke_test_create(http_request: Request, db=Depends(get_db)):
     webhook handler fires a full refund within seconds — confirming end-to-end
     that live keys + webhook secret + signature verification all work BEFORE
     routing real customers through the same path.
+
+    Governance gate: capital_allocation (HITL required below L5).
     """
     mode = _stripe_mode()
     if mode != "live":
@@ -430,6 +433,13 @@ async def smoke_test_create(http_request: Request, db=Depends(get_db)):
             status_code=400,
             detail="smoke-test requires STRIPE_WEBHOOK_SECRET (otherwise the auto-refund webhook never fires).",
         )
+
+    # Governance gate (after cheap pre-checks so config errors fail fast first)
+    from services import governance_service as gov
+    await gov.enforce(
+        db=db, request=http_request, action_id="capital_allocation",
+        context={"route": "smoke-test/create", "amount_usd": SMOKE_TEST_AMOUNT_USD},
+    )
 
     origin = str(http_request.base_url).rstrip("/")
     success_url = f"{origin}/payment-success?session_id={{CHECKOUT_SESSION_ID}}&smoke=1"
@@ -547,7 +557,7 @@ async def generate_share_link(
     utm_source: str = "reddit",
     utm_medium: str = "post",
     utm_campaign: str = "launch",
-    origin_url: str = "https://alreadyherellc.com",
+    origin_url: str = "",
 ):
     """Generate a pre-tagged share URL the operator can drop in DMs / posts.
 
@@ -557,6 +567,13 @@ async def generate_share_link(
     if package_id not in PACKAGES:
         raise HTTPException(status_code=400, detail=f"Unknown package: {package_id}")
     from urllib.parse import urlencode
+    # Resolve origin: query param > REACT_APP_BACKEND_URL env > APP_PUBLIC_URL env
+    resolved_origin = (
+        origin_url.rstrip("/")
+        or os.environ.get("APP_PUBLIC_URL", "").rstrip("/")
+        or os.environ.get("REACT_APP_BACKEND_URL", "").rstrip("/")
+        or "https://app.alreadyherellc.com"
+    )
     qs = urlencode({
         "pkg": package_id,
         "utm_source": utm_source,
@@ -564,7 +581,103 @@ async def generate_share_link(
         "utm_campaign": utm_campaign,
     })
     return {
-        "share_url": f"{origin_url.rstrip('/')}/pricing?{qs}",
+        "share_url": f"{resolved_origin}/pricing?{qs}",
         "package_id": package_id,
         "amount": PACKAGES[package_id]["amount"],
     }
+
+
+# ---------------------------------------------------------------------------
+# Stripe key rotation — payment_modification gate (HITL required below L5)
+# ---------------------------------------------------------------------------
+
+class StripeKeyRotation(BaseModel):
+    stripe_api_key: str
+    stripe_webhook_secret: Optional[str] = None
+    note: Optional[str] = None
+
+
+def _validate_stripe_key_shape(key: str) -> str:
+    """Cheap structural check — refuses obvious garbage before any gate fires."""
+    k = (key or "").strip()
+    if not k:
+        raise HTTPException(status_code=400, detail="stripe_api_key is required")
+    if not (k.startswith("sk_test_") or k.startswith("sk_live_") or k.startswith("rk_live_") or k.startswith("rk_test_")):
+        raise HTTPException(
+            status_code=400,
+            detail="stripe_api_key must start with sk_test_, sk_live_, rk_test_, or rk_live_",
+        )
+    if len(k) < 20:
+        raise HTTPException(status_code=400, detail="stripe_api_key looks too short to be valid")
+    return k
+
+
+@router.post("/keys/rotate")
+async def rotate_stripe_keys(
+    body: StripeKeyRotation,
+    http_request: Request,
+    db=Depends(get_db),
+):
+    """Stage a Stripe API key + webhook secret rotation for operator review.
+
+    HITL-gated on `payment_modification` (requires L5 / approval below).
+
+    The endpoint NEVER overwrites the live `backend/.env`. Instead, it writes
+    the proposed credentials to `backend/.env.proposed` so the operator can
+    diff, copy, and restart on their own terms. This guarantees you can never
+    silently brick live payments by hitting the wrong button in the UI.
+    """
+    new_key = _validate_stripe_key_shape(body.stripe_api_key)
+
+    await gov.enforce(
+        db=db, request=http_request, action_id="payment_modification",
+        context={
+            "route": "payments/keys/rotate",
+            "new_key_mode": "live" if new_key.startswith("sk_live_") else "test",
+            "new_key_suffix": new_key[-4:],
+            "webhook_secret_provided": bool(body.stripe_webhook_secret),
+            "note": (body.note or "")[:240],
+        },
+    )
+
+    # Approval cleared — write the stage file. Never the live .env.
+    proposed_path = os.environ.get("ENV_PROPOSED_PATH", "/app/backend/.env.proposed")
+    lines = [f"STRIPE_API_KEY={new_key}"]
+    if body.stripe_webhook_secret:
+        lines.append(f"STRIPE_WEBHOOK_SECRET={body.stripe_webhook_secret.strip()}")
+    lines.append(f"# proposed {datetime.now(timezone.utc).isoformat()} via /api/payments/keys/rotate")
+    try:
+        import pathlib
+        pathlib.Path(proposed_path).parent.mkdir(parents=True, exist_ok=True)
+        with open(proposed_path, "w") as f:
+            f.write("\n".join(lines) + "\n")
+    except OSError as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Could not write staged credentials to {proposed_path}: {e}. "
+                   "Set ENV_PROPOSED_PATH to a writable path inside the container.",
+        ) from e
+
+    await log_audit_event(
+        db, "stripe.keys.proposed", "operator", "rotate",
+        "stripe_credentials", new_key[-4:],
+        metadata={
+            "mode": "live" if new_key.startswith("sk_live_") else "test",
+            "webhook_secret_proposed": bool(body.stripe_webhook_secret),
+            "proposed_path": proposed_path,
+        },
+    )
+
+    return {
+        "staged": True,
+        "proposed_path": proposed_path,
+        "new_key_mode": "live" if new_key.startswith("sk_live_") else "test",
+        "new_key_suffix": new_key[-4:],
+        "webhook_secret_staged": bool(body.stripe_webhook_secret),
+        "next_step": (
+            "Operator: review `cat /app/backend/.env.proposed`, then on the host run "
+            "`cp /app/backend/.env.proposed /app/backend/.env && sudo supervisorctl restart backend` "
+            "to apply. The live `.env` is intentionally NOT touched by this endpoint."
+        ),
+    }
+

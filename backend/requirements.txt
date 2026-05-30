@@ -19,7 +19,6 @@ distro==1.9.0
 dnspython==2.8.0
 ecdsa==0.19.2
 email-validator==2.3.0
-# emergentintegrations — replaced by local shim at backend/emergentintegrations/
 fastapi==0.110.1
 fastuuid==0.14.0
 filelock==3.29.0
@@ -53,7 +52,7 @@ jq==1.11.0
 jsonschema==4.26.0
 jsonschema-specifications==2025.9.1
 librt==0.11.0
-# litellm (private build) removed — not used by shim; openai==1.99.9 provides the same interface
+litellm==1.80.0
 markdown-it-py==4.2.0
 MarkupSafe==3.0.3
 mccabe==0.7.0
@@ -123,3 +122,6 @@ websockets==16.0
 yarl==1.24.2
 zipp==4.1.0
 aiosqlite==0.22.1
+piper-tts==1.4.2
+onnxruntime==1.26.0
+mediapipe==0.10.18

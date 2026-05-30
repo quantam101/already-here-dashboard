@@ -20,7 +20,7 @@ def _stripe_mode() -> str:
     key = os.environ.get("STRIPE_API_KEY", "") or ""
     if key.startswith("sk_live_"):
         return "live"
-    if key.startswith("sk_test_") or key == "sk_test_emergent":
+    if key.startswith("sk_test_"):
         return "test"
     if not key:
         return "missing"
@@ -33,8 +33,11 @@ async def system_status(db=Depends(get_db)):
 
     Returns a JSON-safe summary of what's configured. No secret values returned.
     """
+    from services.llm_adapter import any_key_configured, configured_providers
+
     operator_email = os.environ.get("OPERATOR_EMAIL", "") or ""
-    emergent_llm_key_set = bool(os.environ.get("EMERGENT_LLM_KEY"))
+    operator_token_set = bool(os.environ.get("OPERATOR_TOKEN"))
+    llm_key_set = any_key_configured()
     stripe_webhook_secret_set = bool(os.environ.get("STRIPE_WEBHOOK_SECRET"))
 
     # Counts of seeded entities — used by wizard to know if seed_data ran
@@ -53,15 +56,24 @@ async def system_status(db=Depends(get_db)):
 
     bw = await get_bitwarden_service().status()
 
+    # LLM mock-mode is the silent killer of "books not working" / "scripts coming
+    # out as placeholder text". Surface it explicitly so the UI can warn the
+    # operator instead of letting them generate gibberish for free.
+    from services.llm_adapter import _mock_mode_active
+    llm_mock = _mock_mode_active()
+
     return {
         "operator_email_set": bool(operator_email),
         "operator_email_masked": (
             operator_email[0] + "***@" + operator_email.split("@", 1)[1]
             if operator_email and "@" in operator_email else None
         ),
+        "operator_token_set": operator_token_set,
         "stripe_mode": _stripe_mode(),
         "stripe_webhook_secret_set": stripe_webhook_secret_set,
-        "emergent_llm_key_set": emergent_llm_key_set,
+        "llm_key_set": llm_key_set,
+        "llm_mock_mode": llm_mock,
+        "llm_providers_configured": configured_providers(),
         "daily_cycle_hour_utc": daily_cycle_hour,
         "counts": counts,
         "is_seeded": counts["revenue_streams"] >= 3 and counts["agents"] >= 3,

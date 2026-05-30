@@ -143,9 +143,9 @@ export default function QuickstartWizard() {
       body: status ? (
         <div className="space-y-3">
           <Row
-            ok={status.emergent_llm_key_set}
-            label={status.emergent_llm_key_set ? "EMERGENT_LLM_KEY active" : "EMERGENT_LLM_KEY missing"}
-            hint="Powers proposals, books, advisor, scout parsing — all $0 via Emergent Universal Key."
+            ok={status.llm_key_set}
+            label={status.llm_key_set ? "LLM provider key active" : "LLM provider key missing"}
+            hint="Powers proposals, books, advisor, scout parsing — vendor-neutral via litellm."
           />
           <Row
             ok={status.is_seeded}
@@ -296,7 +296,7 @@ export default function QuickstartWizard() {
             </div>
           </div>
           <p className="text-xs text-gray-500">
-            Check live connector status: <code className="text-green-400 bg-black/30 px-1 rounded">/api/cycle/connectors</code>
+            Deployment guide: <span className="text-blue-400">/app/DEPLOY-NOW.md</span> (also in your repo).
           </p>
         </div>
       ),

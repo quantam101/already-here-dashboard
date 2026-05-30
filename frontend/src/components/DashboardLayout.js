@@ -3,32 +3,50 @@ import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { motion } from "framer-motion";
 import QuickstartWizard from "./QuickstartWizard";
-import { sovereignAPI, ledgerAPI } from "../lib/api";
+import CatchAndCorrectPanel from "./CatchAndCorrectPanel";
+import GovernanceStatusBadges from "./GovernanceStatusBadges";
 import {
-  LayoutDashboard, DollarSign, FileText, Bot, Package, Rocket,
-  Shield, TrendingUp, Link as LinkIcon, Sparkles, Trophy, Radar,
-  ScrollText, BookOpen, BarChart3, CreditCard, Brain,
-  Menu, X, Zap,
+  LayoutDashboard,
+  DollarSign,
+  FileText,
+  Bot,
+  Package,
+  Rocket,
+  Shield,
+  TrendingUp,
+  Link as LinkIcon,
+  Sparkles,
+  Trophy,
+  Radar,
+  ScrollText,
+  BookOpen,
+  BarChart3,
+  CreditCard,
+  Shield as ShieldIcon,
+  Menu,
+  X,
+  Film,
 } from "lucide-react";
 
 const NAVIGATION = [
-  { name: "Command Center",  path: "/overview",      icon: LayoutDashboard, section: "operations" },
-  { name: "Analytics",       path: "/analytics",     icon: BarChart3,       section: "operations" },
-  { name: "Income Streams",  path: "/revenue",       icon: DollarSign,      section: "operations" },
-  { name: "AI Agents",       path: "/agents",        icon: Bot,             section: "operations" },
-  { name: "Content Factory", path: "/studio",        icon: Sparkles,        section: "operations" },
-  { name: "Scout",           path: "/scout",         icon: Radar,           section: "operations" },
-  { name: "Cash AI",         path: "/sovereign",     icon: Brain,           section: "operations", highlight: true },
-  { name: "Proof of Work",   path: "/proof-of-work", icon: Trophy,          section: "revenue" },
-  { name: "Pricing & Pay In",path: "/pricing",       icon: CreditCard,      section: "revenue" },
-  { name: "Proposals",       path: "/proposals",     icon: ScrollText,      section: "revenue" },
-  { name: "Books & Audio",   path: "/books",         icon: BookOpen,        section: "revenue" },
-  { name: "Content Library", path: "/content",       icon: FileText,        section: "revenue" },
-  { name: "Build Registry",  path: "/builds",        icon: TrendingUp,      section: "revenue" },
-  { name: "Deployments",     path: "/deployments",   icon: Package,         section: "revenue" },
-  { name: "Approval Queue",  path: "/approvals",     icon: LinkIcon,        section: "revenue" },
-  { name: "Audit Log",       path: "/audit",         icon: Rocket,          section: "system" },
-  { name: "Secrets Vault",   path: "/secrets",       icon: Shield,          section: "system" },
+  { name: "Command Center", path: "/overview", icon: LayoutDashboard, section: "operations" },
+  { name: "Analytics", path: "/analytics", icon: BarChart3, section: "operations" },
+  { name: "Income Streams", path: "/revenue", icon: DollarSign, section: "operations" },
+  { name: "AI Agents", path: "/agents", icon: Bot, section: "operations" },
+  { name: "Content Factory", path: "/studio", icon: Sparkles, section: "operations" },
+  { name: "Video Engine", path: "/video-studio", icon: Film, section: "operations" },
+  { name: "Scout", path: "/scout", icon: Radar, section: "operations" },
+  { name: "Proof of Work", path: "/proof-of-work", icon: Trophy, section: "revenue" },
+  { name: "Pricing & Pay In", path: "/pricing", icon: CreditCard, section: "revenue" },
+  { name: "Proposals", path: "/proposals", icon: ScrollText, section: "revenue" },
+  { name: "Books & Audiobooks", path: "/books", icon: BookOpen, section: "revenue" },
+  { name: "Content Library", path: "/content", icon: FileText, section: "revenue" },
+  { name: "Build Registry", path: "/builds", icon: TrendingUp, section: "revenue" },
+  { name: "Deployments", path: "/deployments", icon: Package, section: "revenue" },
+  { name: "Approval Queue", path: "/approvals", icon: LinkIcon, section: "revenue" },
+  { name: "Audit Log", path: "/audit", icon: Rocket, section: "system" },
+  { name: "Secrets Vault", path: "/secrets", icon: ShieldIcon, section: "system" },
+  { name: "LGAC Monitor", path: "/audit", icon: Shield, section: "system" },
 ];
 
 const SECTIONS = ["operations", "revenue", "system"];
@@ -168,14 +186,26 @@ export default function DashboardLayout() {
 
         <SidebarFooter />
 
-        <div className="px-4 pb-4 mt-3">
-          <button
-            onClick={() => { window.localStorage.removeItem("ah_quickstart_completed_v1"); setWizardKey((k) => k + 1); }}
-            className="w-full text-xs text-green-400 border border-green-500/15 rounded-lg px-2 py-1.5 hover:bg-green-500/08 transition-colors"
-            data-testid="sidebar-quickstart-trigger"
-          >
-            Re-open Quickstart
-          </button>
+        <div className="mt-auto pt-6" data-testid="sidebar-info">
+          <div className="p-3 border border-gray-700 rounded-lg" style={{ background: 'rgba(31, 41, 55, 0.5)' }}>
+            <div className="flex items-center gap-2 mb-2">
+              <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+              <span className="text-xs font-semibold text-gray-300">System Status</span>
+            </div>
+            <div className="text-xs text-gray-400">All services operational</div>
+            <div className="text-xs text-green-400 mt-1">$0/month cost</div>
+            <GovernanceStatusBadges />
+            <button
+              onClick={() => {
+                window.localStorage.removeItem("ah_quickstart_completed_v1");
+                setWizardKey((k) => k + 1);
+              }}
+              className="mt-3 w-full text-xs text-green-300 hover:text-green-200 border border-green-500/20 rounded px-2 py-1.5 hover:bg-green-500/10 transition-colors"
+              data-testid="sidebar-quickstart-trigger"
+            >
+              Re-open Quickstart
+            </button>
+          </div>
         </div>
       </aside>
 
@@ -213,6 +243,7 @@ export default function DashboardLayout() {
         <Outlet />
       </main>
       <QuickstartWizard key={wizardKey} />
+      <CatchAndCorrectPanel />
     </div>
   );
 }

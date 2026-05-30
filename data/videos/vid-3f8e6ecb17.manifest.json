@@ -1,0 +1,14 @@
+{
+  "job_id": "vid-3f8e6ecb17",
+  "mode": "faceless",
+  "shots": [
+    "money stack",
+    "laptop",
+    "graph up",
+    "coffee"
+  ],
+  "voice_id": "en_US-amy-medium",
+  "clip_count": 4,
+  "size_bytes": 857937,
+  "created_at": "2026-05-29T21:19:28.133402+00:00"
+}

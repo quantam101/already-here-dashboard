@@ -2,7 +2,7 @@
 AI Operations Advisor - reads the live dashboard (ledger + analytics + scout)
 and asks Claude Sonnet for the single best next action.
 
-Cost Guard: uses Emergent LLM Key ($0 to operator).
+Cost Guard: routed through `services/llm_runner.run_cached` (BYO LLM key, cached).
 """
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
@@ -10,7 +10,6 @@ from datetime import datetime, timezone
 import json
 import uuid
 
-from emergentintegrations.llm.chat import LlmChat, UserMessage  # noqa: F401
 from routes.analytics import (
     conversion_funnel, stream_roi, momentum, viral_themes, platform_mix,
 )

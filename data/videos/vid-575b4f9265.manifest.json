@@ -1,0 +1,17 @@
+{
+  "job_id": "vid-575b4f9265",
+  "mode": "faceless",
+  "shots": [
+    "money stack",
+    "person typing on laptop",
+    "graph going up",
+    "coffee morning",
+    "phone notification"
+  ],
+  "voice_id": null,
+  "clip_count": 5,
+  "music_id": null,
+  "adaptive_captions_used": false,
+  "size_bytes": 815622,
+  "created_at": "2026-05-30T00:01:22.001075+00:00"
+}

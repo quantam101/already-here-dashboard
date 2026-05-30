@@ -103,6 +103,21 @@ if ! command -v bw >/dev/null 2>&1; then
     || warn "bw CLI install skipped (offline / arch mismatch). Run later: see /secrets page in dashboard."
 fi
 
+log "3c/6  installing video engine deps (ffmpeg + Piper TTS + mediapipe + default voice)..."
+apt-get install -y -qq ffmpeg python3-pip
+pip3 install --quiet --break-system-packages piper-tts onnxruntime mediapipe 2>/dev/null \
+  || pip3 install --quiet piper-tts onnxruntime mediapipe \
+  || warn "video deps install partial — re-run inside container if missing"
+mkdir -p /opt/command-os/data/voices
+if [ ! -f /opt/command-os/data/voices/en_US-amy-medium.onnx ]; then
+  curl -fsSL -o /opt/command-os/data/voices/en_US-amy-medium.onnx \
+    "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/amy/medium/en_US-amy-medium.onnx" \
+    && curl -fsSL -o /opt/command-os/data/voices/en_US-amy-medium.onnx.json \
+       "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/amy/medium/en_US-amy-medium.onnx.json" \
+    && log "Piper voice downloaded: en_US-amy-medium (~60 MB)" \
+    || warn "voice download failed — fetch manually from huggingface.co/rhasspy/piper-voices"
+fi
+
 log "4/6  cloning repo to /opt/command-os..."
 mkdir -p /opt
 [ -d /opt/command-os ] || git clone "$REPO" /opt/command-os
@@ -116,10 +131,13 @@ SQLITE_PATH="/app/data/command_os.db"
 MONGO_URL="${MONGO:-mongodb://mongodb:27017}"
 DB_NAME="command_os"
 CORS_ORIGINS="https://${DOMAIN}"
-EMERGENT_LLM_KEY="${EMERGENT_LLM_KEY:-}"
-STRIPE_API_KEY="${STRIPE_API_KEY:-sk_test_emergent}"
+LLM_API_KEY="${LLM_API_KEY:-${EMERGENT_LLM_KEY:-}}"
+STRIPE_API_KEY="${STRIPE_API_KEY:-}"
 STRIPE_WEBHOOK_SECRET="${STRIPE_WEBHOOK_SECRET:-}"
 OPERATOR_EMAIL="${OPERATOR_EMAIL:-${EMAIL}}"
+OPERATOR_TOKEN="${OPERATOR_TOKEN:-}"
+AUTONOMY_LEVEL="${AUTONOMY_LEVEL:-L3}"
+DUAL_ACTOR_APPROVAL="${DUAL_ACTOR_APPROVAL:-false}"
 BW_SESSION="${BW_SESSION:-}"
 WORKER_BASE_URL="${WORKER_URL}"
 ZERO_SPEND_MODE=true

@@ -1,0 +1,11 @@
+1
+00:00:00,000 --> 00:00:02,701
+I read 100 books in 90 days.
+
+2
+00:00:02,701 --> 00:00:05,403
+Audiobooks at 2x while commuting.
+
+3
+00:00:05,403 --> 00:00:08,104
+Follow for more frameworks.

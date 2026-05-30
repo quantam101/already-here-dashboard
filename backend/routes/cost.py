@@ -59,7 +59,10 @@ async def cost_status(db=Depends(get_db)):
     # Required secrets per integration (operator-facing, no values returned)
     required_secrets = {
         "STRIPE_API_KEY": "Stripe payments — receive real money",
-        "EMERGENT_LLM_KEY": "Emergent LLM Universal Key — proposals, books, advisor, scout",
+        "OPENAI_API_KEY": "OpenAI key — proposals, books, advisor (Tier 3)",
+        "ANTHROPIC_API_KEY": "Anthropic Claude key — advisor + reasoning (Tier 3)",
+        "GEMINI_API_KEY": "Google Gemini key — scripts + summarization (Tier 2)",
+        "LLM_API_KEY": "Universal fallback (set if all providers share one key e.g. OpenRouter)",
         "OPERATOR_EMAIL": "Operator allowlist — locks Google login to one email",
     }
     requires_secret = [
@@ -108,7 +111,7 @@ async def cost_policy():
         "manual_export_when_api_paid": True,
         "fail_closed_on_missing_secret": True,
         "approved_free_integrations": [
-            "Emergent LLM (Universal Key) — Gemini/Claude/GPT text + Nano Banana images",
+            "litellm + LLM provider API key (Gemini / Claude / OpenAI text + images, BYO key)",
             "Stripe Checkout (test mode by default)",
             "Reddit JSON API (no auth)",
             "HackerNews API (no auth)",

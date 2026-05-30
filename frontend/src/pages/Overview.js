@@ -14,6 +14,7 @@ import RevenueChart from "../components/RevenueChart";
 import ActivityFeed from "../components/ActivityFeed";
 import StreamHealthTable from "../components/StreamHealthTable";
 import ProfitMeter from "../components/ProfitMeter";
+import RevenueEquationCard from "../components/RevenueEquationCard";
 import RecordEarningsDialog from "../components/RecordEarningsDialog";
 import LogPostDialog from "../components/LogPostDialog";
 import { Brain, Zap, RefreshCw, Shield, CheckCircle, AlertTriangle } from "lucide-react";
@@ -194,7 +195,10 @@ export default function Overview() {
       {/* Profit meter */}
       <ProfitMeter progress={progress} />
 
-      {/* Top metrics */}
+      {/* Master Revenue Equation — north-star tracker */}
+      <RevenueEquationCard />
+
+      {/* Top Metrics */}
       <MetricsCards {...metrics} />
 
       {/* Revenue chart + activity */}
