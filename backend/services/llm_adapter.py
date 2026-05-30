@@ -154,9 +154,8 @@ def model_id(provider: str, model: str) -> str:
 _DEFAULT_GEMINI_FALLBACKS = [
     "gemini-2.5-flash",
     "gemini-2.0-flash",
+    "gemini-2.5-flash-lite",
     "gemini-2.0-flash-lite",
-    "gemini-1.5-flash",
-    "gemini-1.5-flash-8b",
 ]
 
 
@@ -165,8 +164,20 @@ def _quota_exhausted(err_msg: str) -> bool:
     m = err_msg.lower()
     return (
         "429" in m or "resource_exhausted" in m or "exceeded your current quota" in m
-        or "rate" in m and "limit" in m
+        or ("rate" in m and "limit" in m)
     )
+
+
+def _model_unavailable(err_msg: str) -> bool:
+    """True when the model is deprecated / unrecognised by upstream (404).
+
+    We treat this exactly like a quota hit: skip to the next fallback so
+    operators aren't blocked by Google deprecating a model in our chain.
+    """
+    m = err_msg.lower()
+    return (
+        "404" in m and ("not_found" in m or "is not found" in m or "not found" in m)
+    ) or "is not supported for generatecontent" in m
 
 
 def _gemini_fallbacks() -> list[str]:
@@ -253,16 +264,18 @@ async def llm_completion(
                 last_err = e
                 msg = str(e)
                 quota = _quota_exhausted(msg)
+                unavailable = _model_unavailable(msg)
                 transient = (
                     "503" in msg.lower() or "unavailable" in msg.lower()
                     or "overloaded" in msg.lower() or "timeout" in msg.lower()
                     or "connection" in msg.lower()
                 )
-                # Quota error on this model → break to try next fallback model.
-                if quota:
+                # Quota OR deprecated model → break to try next fallback model.
+                if quota or unavailable:
+                    reason = "quota exhausted" if quota else "model deprecated/404"
                     logger.warning(
-                        "llm_adapter: model=%s quota exhausted: %s",
-                        full_model, msg[:140],
+                        "llm_adapter: model=%s %s: %s",
+                        full_model, reason, msg[:140],
                     )
                     break
                 # Transient → retry same model (1s, 2s).
@@ -277,8 +290,28 @@ async def llm_completion(
                 # Permanent error → bubble.
                 raise
 
-    # All fallbacks exhausted. Caller will catch the quota error and may
-    # apply its own deterministic template fallback (see llm_runner.py).
+    # All fallbacks exhausted. As a final $0 last resort, try Pollinations
+    # keyless text generation (no quota, no token). Disabled by setting
+    # LLM_POLLINATIONS_FALLBACK=false.
+    if (
+        is_gemini and last_err is not None
+        and _quota_exhausted(str(last_err))
+        and os.environ.get("LLM_POLLINATIONS_FALLBACK", "true").lower() not in {"false", "0", "off"}
+    ):
+        try:
+            from services.free_apis import pollinations
+            logger.warning(
+                "llm_adapter: every Gemini bucket exhausted, falling back to "
+                "Pollinations keyless text generation (free, no quota)."
+            )
+            out = await pollinations.generate_text(
+                prompt, model="openai", system=system_msg,
+            )
+            if out:
+                return out
+        except Exception as fe:
+            logger.warning("pollinations text fallback failed: %s", str(fe)[:200])
+
     raise last_err or RuntimeError("llm_completion exhausted all fallback models")
 
 

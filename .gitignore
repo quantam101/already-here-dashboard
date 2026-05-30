@@ -64,6 +64,16 @@ chainlit.md
 # Data and databases
 agenthub/agents/youtube/db
 
+# Generated runtime artifacts — never commit these
+data/videos/*.wav
+data/videos/*.mp3
+data/videos/*.mp4
+data/stock_cache/*.mp4
+data/audiobooks/*.mp3
+data/audiobooks/*.wav
+*.db
+*.sqlite
+
 # Archive files and large assets
 **/*.zip
 **/*.tar.gz

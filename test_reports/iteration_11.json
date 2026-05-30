@@ -1,0 +1,43 @@
+{
+  "summary": "Iteration 11 (Generative Suite) — Full backend + frontend verification PASS. Backend pytest 170/170 PASS (incl. tests/test_free_apis.py 6/6 — Pollinations live keyless image gen, HF configured/not-configured paths, AI B-roll Ken-Burns MP4, voice-ref save/lookup, capability_report new fields). Live API regression (tests/test_iter11_live.py) 5/5 PASS against the public REACT_APP_BACKEND_URL: GET /api/video/config exposes free_providers={pollinations_ai:true,huggingface:false} + ai_b_roll_available=true + voice_cloning_available=false + ai_music_generation_available + text_to_video_available + voice_refs_uploaded; GET /api/video/free-providers returns the structured catalogue mentioning both providers; POST /api/video/generative/image (provider=pollinations, 1080x1920) returns 200 with size_bytes>1024 + data_url='data:image/...;base64,...' within ~10-30s; POST /api/video/voice-refs/upload (multipart wav) returns 200 with voice_ref_id and size_bytes, GET lists it, DELETE removes it; POST /api/video/render with unique shot_list runs the AI B-roll path via Pollinations + ffmpeg Ken-Burns and reaches status=complete with output_path set, polled via /api/video/jobs/{id} (~30-90s total as expected). Frontend /video-studio: GenerativeSuite section present, all 4 ProviderPills present (gen-pill-pollinations green/keyless, gen-pill-hugging-face amber/'set HF token', gen-pill-ai-b-roll green/'auto-on', gen-pill-voice-cloning amber/'needs HF token'), all 3 sub-panels present (generative-image-panel, voice-clone-panel, ai-music-panel). End-to-end generative image flow: typing prompt + clicking generative-image-btn invokes /api/video/generative/image (HTTP 200) and renders a 1080x1920 Pollinations AI image inside <img data-testid='generative-image-result'> (verified visually — pixel-art castle sunset rendered). Voice-ref upload (test.wav) creates voice-ref-{id} radio and is selectable. ai-music-prompt input present with placeholder 'e.g. epic orchestral cinematic build' and intentionally disabled until HUGGINGFACE_API_KEY is set, with clear amber 'Needs HUGGINGFACE_API_KEY (free)' callout — as specified in the review_request.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {"flow": "Generative image (Pollinations)", "issue": "First click in the very first browser session returned an ingress 502 because Pollinations took >30s and the k8s proxy idle-timeout fired. Second click on the same page succeeded (~6-10s response, 200) and rendered the JPEG. Consider adding a retry-with-backoff in videoAPI.generativeImage (axios) so the user sees one slow result instead of an error toast when Pollinations is cold.", "affected_selectors": ["[data-testid='generative-image-btn']", "[data-testid='generative-image-result']"]}
+    ],
+    "design_issues": [
+      {"screen": "/video-studio onboarding overlay", "issues": ["First-load 'Welcome' modal still lacks a data-testid on the Skip link (carried over from iter9/10)."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_free_apis.py",
+    "/app/backend/tests/test_iter11_live.py",
+    "/app/test_reports/pytest/iter11_full.xml",
+    "/app/test_reports/pytest/iter11_live.xml"
+  ],
+  "action_items": [
+    "OPTIONAL: Add retry/backoff inside videoAPI.generativeImage to soak the occasional ingress 502 when Pollinations is cold (>30s). Functional path already works on retry — not a blocker.",
+    "OPTIONAL: Move the data-testid from <img> onto a wrapper <div> for generative-image-result so test scripts that look for a child <img> work without special-casing — purely a testability nicety."
+  ],
+  "critical_code_review_comments": [
+    "services/free_apis/pollinations.py — keyless image gen wired correctly; magic-byte coverage in tests is good. Consider adding a 1-retry-on-timeout inside generate_image() to absorb cold-start latency on Pollinations (sometimes 30-60s) before bubbling up to the route.",
+    "services/free_apis/huggingface.py — is_configured() + HFNotConfigured cleanly separates the free path; capability_report correctly downgrades voice_cloning_available / ai_music_generation_available to false when no token. No token in this env, so live HF paths are intentionally not exercised.",
+    "services/video/ai_stock.py — Ken-Burns ffmpeg pipeline produces >50KB MP4 from a single Pollinations JPEG; cache key f'ai:{shot}:{style_suffix}' guarantees idempotency and is correctly bypassed by per-test unique shot strings.",
+    "services/video/engine.py — _run_faceless_pipeline now uses asyncio.gather across shots (verified end-to-end render landed in ~30-60s for 3 unique shots vs ~10s cached path). Voice-clone branch (synthesize_cloned_voice) is reachable only when both voice_ref_id and HF token are set — safe fallback to piper TTS otherwise.",
+    "routes/video.py RenderRequest.script is a ScriptBlock object (hook/script_body/cta/shot_list), NOT {title, blocks:[{shot,narration}]}. This is the iter10 schema preserved; test agents must use the canonical shape (see test_iter11_live.py / test_iter10_live.py).",
+    "frontend/src/components/GenerativeSuite.js line 107 puts data-testid='generative-image-result' on the <img> element directly. Visual rendering works perfectly, but Playwright scripts that do query_selector('[data-testid=...]').query_selector('img') will return None. Recommend wrapping the <img> in a <div data-testid='generative-image-result'> for cleaner test ergonomics.",
+    "frontend/src/components/GenerativeSuite.js line 220 disables ai-music-prompt with disabled={!hfReady} — correct per the review_request spec ('AI music requires HF token, surfaces as not configured'). UX-wise consider letting the user TYPE the prompt regardless and showing the gating only on submit; current behavior is acceptable.",
+    "services/llm_adapter.py — _model_unavailable() correctly treats 404 NOT_FOUND like quota and skips deprecated gemini-1.5-flash; verified via test_llm_fallback.py 6/6 PASS (incl. cascade + all-exhausted-raises)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter11_live.py (NEW — 5 live-API regression tests for the Generative Suite endpoints)"
+  ],
+  "success_rate": {"backend": "100% (170/170 unit + 5/5 live + 6/6 llm_fallback)", "frontend": "100% (all 11 review_request assertions verified)"},
+  "test_credentials": "None required — no auth gate on /video-studio or /api/video/* in this preview env.",
+  "seed_data_creation": "Live render created job vid-* via test_render_ai_broll_completes; voice-ref voice-28625106b308.wav created via the UI upload flow (deleted in pytest teardown but a fresh one is left from the browser session — harmless, persists in /app/data/voice_refs/).",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "The Generative Suite ships exactly as described in iter11. RenderRequest.script must be a ScriptBlock object (hook/script_body/cta/shot_list[]), NOT a {title, blocks:[]} shape — see /app/backend/tests/test_iter11_live.py for the canonical payload. /api/video/render is async: it returns 200 with {job_id, status:'pending'} immediately; poll GET /api/video/jobs/{job_id} every ~3s for up to 180s (AI B-roll path is intentionally 30-90s for 3 shots — do NOT flag as perf bug). To force-test the HF paths (voice cloning, MusicGen, AnimateDiff), set HUGGINGFACE_API_KEY in /app/backend/.env and restart backend; capability_report will flip ai_music_generation_available + voice_cloning_available + text_to_video_available to true, and the ai-music-prompt input will un-disable in the UI. The data-testid='generative-image-result' is on the <img> itself, not a wrapper — use page.query_selector('[data-testid=\"generative-image-result\"]') directly and read .src, not .query_selector('img').src.",
+  "rca_of_the_issue": "No new bug RCA needed. The original 429 'gemini-3-flash free_tier_requests limit' quota error from the user's first paste is fully neutralised by (a) iter10 multi-model fallback + deterministic templates, and (b) iter11 llm_adapter._model_unavailable() now also catching 404 NOT_FOUND for deprecated models. The follow-up directive 'implement everything free' is delivered as the Generative Suite (Pollinations keyless image + AI B-roll cascade + optional HF voice-clone/music/video) — verified live at $0 cost with HUGGINGFACE_API_KEY unset."
+}

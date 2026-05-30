@@ -23,6 +23,7 @@ import Sovereign from "./pages/Sovereign";
 import VoiceLab from "./pages/VoiceLab";
 import DASIMatrix from "./pages/DASIMatrix";
 import AuthGate from "./components/AuthGate";
+import { FirstRunWalkthrough } from "./components/FirstRunWalkthrough";
 import { Toaster } from "sonner";
 
 function App() {
@@ -30,6 +31,7 @@ function App() {
     <div className="App">
       <BrowserRouter>
         <AuthGate>
+          <FirstRunWalkthrough />
           <Routes>
             <Route path="/" element={<DashboardLayout />}>
               <Route index element={<Navigate to="/overview" replace />} />

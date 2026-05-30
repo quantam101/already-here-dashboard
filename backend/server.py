@@ -42,11 +42,39 @@ async def lifespan(app: FastAPI):
     app.state.storage_backend = STORAGE_BACKEND
     logging.info(f"Database connected ({STORAGE_BACKEND})")
     start_scheduler(db)
+
+    # Pre-warm heavy local generative models so first render isn't slow.
+    # Default ON; disable with VIDEO_PREWARM=false (for tight-memory hosts).
+    if os.environ.get("VIDEO_PREWARM", "true").lower() not in {"false", "0", "off"}:
+        import asyncio as _aio
+        _aio.create_task(_prewarm_local_models())
+
     yield
     stop_scheduler()
     client.close()
     logging.info("Database connection closed")
 
+
+
+async def _prewarm_local_models() -> None:
+    """Load Coqui XTTS-v2 + transformers MusicGen into memory at boot so the
+    first render doesn't pay the 47-110s cold-start. Runs in a background
+    task so the HTTP server is reachable while the models warm up.
+    """
+    import asyncio
+    log = logging.getLogger("video.prewarm")
+    try:
+        from services.video import local_music, local_voice
+        log.info("pre-warming Coqui XTTS-v2 …")
+        await asyncio.get_running_loop().run_in_executor(None, local_voice._load_tts)
+        log.info("Coqui XTTS-v2 loaded.")
+    except Exception as e:
+        log.warning("Coqui pre-warm skipped: %s", str(e)[:200])
+    try:
+        await asyncio.get_running_loop().run_in_executor(None, local_music._load)
+        log.info("MusicGen loaded.")
+    except Exception as e:
+        log.warning("MusicGen pre-warm skipped: %s", str(e)[:200])
 
 app = FastAPI(
     title="Already Here Command OS",

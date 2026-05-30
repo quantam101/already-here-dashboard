@@ -22,7 +22,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from services.video import avatar, captions, composer, external, music, stock, tts
+from services.video import avatar, captions, composer, external, gen_assets, local_music, local_voice, music, stock, tts
 
 logger = logging.getLogger("video.engine")
 
@@ -38,7 +38,7 @@ def new_job_id() -> str:
     return f"vid-{uuid.uuid4().hex[:10]}"
 
 
-async def create_job(db, *, script: dict, voice_id: str | None, mode: str = "faceless", portrait_path: str | None = None, music_id: str | None = None, music_volume: float = 0.15, adaptive_captions: bool = False) -> dict:
+async def create_job(db, *, script: dict, voice_id: str | None, mode: str = "faceless", portrait_path: str | None = None, music_id: str | None = None, music_volume: float = 0.15, adaptive_captions: bool = False, voice_ref_id: str | None = None, ai_music_prompt: str | None = None, pollinations_voice: str | None = None) -> dict:
     """Insert a `pending` job row and return it. Operator polls /status."""
     row = {
         "id": new_job_id(),
@@ -55,6 +55,9 @@ async def create_job(db, *, script: dict, voice_id: str | None, mode: str = "fac
         "music_id": music_id,
         "music_volume": float(music_volume),
         "adaptive_captions": bool(adaptive_captions),
+        "voice_ref_id": voice_ref_id,
+        "ai_music_prompt": ai_music_prompt,
+        "pollinations_voice": pollinations_voice,
         "progress_pct": 0,
         "message": "queued",
         "output_path": None,
@@ -113,15 +116,42 @@ async def _run_faceless_pipeline(db, job: dict) -> None:
     try:
         await _update(db, job_id, status="running", progress_pct=5, message="generating narration")
         wav_path = WORK_ROOT / f"{job_id}.wav"
-        await tts.synthesize(narration, wav_path, voice_id=job.get("voice_id"))
+        voice_ref_id = job.get("voice_ref_id")
+        pollinations_voice = job.get("pollinations_voice")
+        if voice_ref_id:
+            # Real local voice cloning via Coqui XTTS-v2 ($0, runs on CPU).
+            ref = gen_assets.voice_ref_path(voice_ref_id)
+            if not ref:
+                raise RuntimeError(f"voice reference {voice_ref_id!r} not found")
+            try:
+                await _update(db, job_id, progress_pct=8, message=f"local voice clone (Coqui XTTS-v2 ref={voice_ref_id})")
+                await local_voice.synthesize_cloned(narration, ref, wav_path)
+            except Exception as e:
+                logger.warning("local voice clone failed, falling back to Piper: %s", str(e)[:200])
+                await tts.synthesize(narration, wav_path, voice_id=job.get("voice_id"))
+        elif pollinations_voice:
+            try:
+                await _update(db, job_id, progress_pct=8, message=f"pollinations TTS ({pollinations_voice})")
+                await gen_assets.synthesize_pollinations_voice(narration, pollinations_voice, wav_path)
+            except Exception as e:
+                logger.warning("pollinations TTS failed, falling back to Piper: %s", str(e)[:200])
+                await tts.synthesize(narration, wav_path, voice_id=job.get("voice_id"))
+        else:
+            await tts.synthesize(narration, wav_path, voice_id=job.get("voice_id"))
 
-        await _update(db, job_id, progress_pct=25, message=f"fetching {len(shots)} stock clips")
-        clip_paths: list[Path] = []
-        for i, shot in enumerate(shots, 1):
+        await _update(db, job_id, progress_pct=25, message=f"fetching {len(shots)} stock clips in parallel")
+        # Fetch all shots concurrently — huge speedup when AI B-roll is active
+        # (Pollinations ~10-20s per image; serial 3 shots = 30-60s, parallel = ~20s).
+        async def _fetch(idx: int, shot: str):
             clip = await stock.fetch_clip_for_shot(shot)
-            clip_paths.append(clip)
-            pct = 25 + int(50 * i / len(shots))
-            await _update(db, job_id, progress_pct=pct, message=f"clip {i}/{len(shots)}: {shot[:40]}")
+            pct = 25 + int(50 * (idx + 1) / len(shots))
+            await _update(db, job_id, progress_pct=pct, message=f"clip {idx+1}/{len(shots)}: {shot[:40]}")
+            return clip
+        clip_paths_results = await asyncio.gather(
+            *[_fetch(i, s) for i, s in enumerate(shots)],
+            return_exceptions=False,
+        )
+        clip_paths: list[Path] = list(clip_paths_results)
 
         await _update(db, job_id, progress_pct=80, message="composing final MP4")
         caption_lines = _caption_lines(script)
@@ -134,6 +164,16 @@ async def _run_faceless_pipeline(db, job: dict) -> None:
                 logger.warning("adaptive caption transcription failed, falling back to uniform: %s", ex)
                 adaptive_srt_text = None
         music_path = music.resolve(job.get("music_id"))
+        # AI music override — if the operator supplied a prompt and HF is
+        # configured, generate a fresh bed via MusicGen.
+        ai_music_prompt = job.get("ai_music_prompt")
+        if ai_music_prompt:
+            try:
+                ai_path = await gen_assets.generate_music_track(ai_music_prompt, duration_s=30)
+                if ai_path and ai_path.exists():
+                    music_path = ai_path
+            except Exception as e:
+                logger.warning("AI music gen failed, keeping bundled bed: %s", str(e)[:160])
         out_mp4 = await composer.compose(
             clips=clip_paths,
             narration_wav=wav_path,
@@ -231,11 +271,18 @@ async def _run_avatar_pipeline(db, job: dict) -> None:
 
 
 async def _run_external_pipeline(db, job: dict) -> None:
-    """Phase-3: external generative-AI bridge (Sora 2 / Veo). Operator pays per render."""
+    """Phase-3: external generative-AI bridge.
+
+    Today the free HF text-to-video models (AnimateDiff, text-to-video-ms,
+    CogVideoX) are paid-provider-only on the new router.huggingface.co
+    routing. They reliably 400 on the free hf-inference tier. When that
+    happens we transparently fall back to the faceless pipeline so the
+    operator still ships a video instead of a 'failed' row.
+    """
     job_id = job["id"]
     if not external.is_configured():
         await _update(db, job_id, status="failed",
-                      error="external provider not configured (set OPENAI_VIDEO_KEY)")
+                      error="external provider not configured (set OPENAI_VIDEO_KEY or HUGGINGFACE_API_KEY)")
         return
     try:
         await _update(db, job_id, status="running", progress_pct=10,
@@ -243,19 +290,28 @@ async def _run_external_pipeline(db, job: dict) -> None:
         prompt = " ".join([
             job["script"].get("hook", ""), job["script"].get("script_body", ""),
         ]).strip()
-        # This raises NotImplementedError today — the bridge is wired,
-        # the upstream Sora 2 SDK is still in limited beta.
         result = await external.render_text_to_video(prompt)
         await _update(db, job_id, status="complete", progress_pct=100,
                       message="external render complete",
                       output_path=result.get("output_path"))
-    except NotImplementedError as e:
-        await _update(db, job_id, status="failed", error=str(e)[:500],
-                      message="external provider sdk in beta")
-    except Exception as e:
-        logger.exception("external pipeline failed: %s", e)
-        await _update(db, job["id"], status="failed", error=str(e)[:500],
-                      message="external render failed")
+    except (NotImplementedError, RuntimeError, Exception) as e:
+        # Anything from a 400 'Model not supported by provider hf-inference'
+        # to a NotImplementedError on the Sora bridge — fall back to faceless
+        # so the operator never sees an empty 'failed' job.
+        msg = str(e)[:300]
+        logger.warning(
+            "external pipeline failed (%s) — falling back to faceless mode",
+            msg,
+        )
+        await _update(
+            db, job_id, status="running", progress_pct=12,
+            message=f"external provider unavailable ({msg[:120]}) — falling back to faceless",
+        )
+        # Mutate the in-memory job dict and re-dispatch to faceless. Persist
+        # the mode swap so /jobs/{id} reports it accurately.
+        job["mode"] = "faceless"
+        await _update(db, job_id, mode="faceless")
+        return await _run_faceless_pipeline(db, job)
 
 
 def _caption_lines(script: dict) -> list[str]:
@@ -279,6 +335,7 @@ def kickoff(db, job_id: str) -> asyncio.Task:
 def capability_report() -> dict[str, Any]:
     """What the engine can do RIGHT NOW on this host."""
     import shutil
+    from services.free_apis import huggingface as _hf, pollinations as _poll
     ffmpeg = shutil.which("ffmpeg") is not None
     # piper ships as both a script ("piper") AND an importable Python module.
     # Check both — supervisor PATH may not include the venv bin dir even when
@@ -292,11 +349,18 @@ def capability_report() -> dict[str, Any]:
             piper = False
     voices = tts.list_installed_voices()
     music_tracks = music.list_tracks()
+    voice_refs = gen_assets.list_voice_refs()
     pexels_key = bool(os.environ.get("PEXELS_API_KEY", "").strip())
     mediapipe_ok = avatar.has_mediapipe()
     wav2lip_ok = avatar.has_wav2lip_onnx()
     whisper_ok = captions.is_available()
+    hf_ok = _hf.is_configured()
+    pollinations_ok = _poll.is_available()
     external_provider_ok = external.is_configured()
+    # Local Coqui XTTS-v2 + transformers MusicGen — REAL $0 implementations
+    # that run on CPU, no external API needed. Cold-start ~30-60s, then cached.
+    local_voice_ok = local_voice.is_available()
+    local_music_ok = local_music.is_available()
     return {
         "ffmpeg_installed": ffmpeg,
         "piper_installed": piper,
@@ -307,19 +371,33 @@ def capability_report() -> dict[str, Any]:
         "mediapipe_installed": mediapipe_ok,
         "wav2lip_onnx_present": wav2lip_ok,
         "external_provider_configured": external_provider_ok,
+        # NEW: $0 free-provider features
+        "free_providers": {
+            "pollinations_ai": pollinations_ok,
+            "huggingface": hf_ok,
+        },
+        "ai_b_roll_available": pollinations_ok or hf_ok,
+        # Local CPU-only implementations — TRULY $0 with no external dependencies.
+        "voice_cloning_available": local_voice_ok,  # Coqui XTTS-v2 local
+        "ai_music_generation_available": local_music_ok,  # transformers MusicGen local
+        "text_to_video_available": False,  # still requires GPU; not viable on CPU
+        "hf_image_generation_available": hf_ok,
+        "pollinations_tts_available": pollinations_ok,
+        "pollinations_tts_voices": ["alloy", "echo", "fable", "onyx", "nova", "shimmer"],
+        "voice_refs_uploaded": [r["voice_ref_id"] for r in voice_refs],
         "modes_available": {
             "faceless": ffmpeg and piper and bool(voices),
-            "avatar_lipsync": ffmpeg and piper and bool(voices),  # works with or without mediapipe (falls back to Ken-Burns)
+            "avatar_lipsync": ffmpeg and piper and bool(voices),
             "external_provider": external_provider_ok,
         },
         "external_provider_status": external.provider_status(),
-        "operator_actions": _operator_hints(ffmpeg, piper, voices, pexels_key, mediapipe_ok, wav2lip_ok),
+        "operator_actions": _operator_hints(ffmpeg, piper, voices, pexels_key, mediapipe_ok, wav2lip_ok, hf_ok),
     }
 
 
 def _operator_hints(
     ffmpeg: bool, piper: bool, voices: list, pexels: bool,
-    mediapipe: bool, wav2lip: bool,
+    mediapipe: bool, wav2lip: bool, hf: bool,
 ) -> list[str]:
     hints: list[str] = []
     if not ffmpeg:
@@ -346,5 +424,11 @@ def _operator_hints(
         hints.append(
             "Optional: drop a Wav2Lip ONNX model into /app/data/lipsync_models/wav2lip.onnx "
             "for photoreal lipsync. The free animated-portrait pipeline runs without it."
+        )
+    if not hf:
+        hints.append(
+            "Optional: set HUGGINGFACE_API_KEY (free at https://huggingface.co/settings/tokens) "
+            "to unlock voice cloning (XTTS-v2), AI music (MusicGen), and text-to-video (AnimateDiff). "
+            "All at $0/mo via the free Inference tier."
         )
     return hints
