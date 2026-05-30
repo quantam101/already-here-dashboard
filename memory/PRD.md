@@ -8,108 +8,111 @@ Factory, multi-agent management, Cost Guard, and Bitwarden integration.
 The application must be completely stripped of Emergent platform
 dependencies so it can be deployed autonomously and freely anywhere.
 
-Recently the user requested an AI Video Generator (Faceless, Avatars,
-Deepfakes, Generative Video) at $0 cost.
+The user requested an AI Video Generator with **every capability at $0**:
+faceless, avatars, deepfakes, generative video, voice cloning, AI music,
+AI B-roll, talking-heads, face-swap. Reference materials supplied:
+Atlas Cloud "10 best free AI video generators 2026", an email summary
+of Vidnoz / Invideo / JoggAI / ElevenLabs / Suno / SadTalker, and a
+Google AI blueprint chaining HuggingFace Spaces + Gradio + Llama + TTS
++ SadTalker + face-swap.
 
 ## Personas
-- **Operator (you)** — single-tenant power user. Has the Operator Token,
-  approves HITL gates, owns the LLM provider key.
-- **Audience** — TikTok/Reels/Shorts viewers who consume the videos the
-  operator publishes.
-- **Optional buyers** — operators who clone the repo, point it at their
-  own LLM key, and run the same dashboard $0/mo on Oracle.
+- **Operator** — single-tenant power user. Owns Operator Token + LLM key.
+- **Audience** — TikTok/Reels/Shorts viewers of operator's videos.
+- **Buyers** — operators who clone the repo, plug their own free keys,
+  and run $0/mo on Oracle Cloud Always Free.
 
 ## Core requirements (static)
-1. **$0/mo** — no recurring fees. Every paid integration is opt-in and
-   gated.
-2. **Local-first** — every CPU-bound task (TTS, captions, ffmpeg) runs on
-   the same OCI VM. No external worker queues, no SaaS dependencies.
-3. **Dual database** — MongoDB for the dashboard, SQLite for portable
-   offline export.
-4. **Governance** — L0-L5 with dual-actor HITL approval gates on
-   high-risk autonomous actions (capital_allocation, mass_outreach).
-5. **Distillation cache** — every LLM call goes through semantic
-   compression + cache lookup before hitting the provider.
+1. **$0/mo** — no recurring fees. Paid integrations opt-in & gated.
+2. **Local-first** — every CPU task runs on the same OCI VM.
+3. **Dual database** — MongoDB primary, SQLite portable export.
+4. **Governance** — L0-L5 with dual-actor HITL approval gates.
+5. **Distillation cache** — semantic compression + cache on every LLM call.
 6. **No Emergent dependencies** — pure litellm + standard SDKs.
 
-## What's implemented (current state — May 2026)
+## What's implemented
 
-### Iteration 10 (2026-05-29) — Free upgrade pack
-- ✅ Multi-model Gemini fallback chain in `services/llm_adapter.py`:
-  primary `gemini-3-flash-preview` → `gemini-2.5-flash` →
-  `gemini-2.0-flash` → `gemini-2.0-flash-lite` → `gemini-1.5-flash` →
-  `gemini-1.5-flash-8b`. Each fallback bucket has its own free-tier
-  daily quota so the operator gets ~3500+ free requests/day combined.
-- ✅ Deterministic template fallback for hook generation when every
-  Gemini bucket is exhausted (`routes/hooks._deterministic_hooks`).
-- ✅ Three bundled CC0 royalty-free music beds at `/app/data/music/`
-  (cinematic / upbeat / chill), procedurally synthesized via ffmpeg
-  `aevalsrc`. Mixed under TTS via a 3-input ffmpeg filter graph.
-- ✅ Adaptive captions via `faster-whisper` (tiny.en, int8 CPU). Real
-  word-aligned SRT replaces uniform per-line timing.
-- ✅ Per-shot voice override (already supported in engine, surfaced in
-  UI via Voice select).
-- ✅ Video Studio UI: music dropdown, adaptive-captions toggle, expanded
-  CapabilityCard with 8 pills.
-- ✅ New tests: `tests/test_llm_fallback.py` (6) + `tests/test_video_extras.py` (4).
-- ✅ **158/158 pytest PASS. All API + frontend regression PASS.**
+### Iteration 11 (2026-05-30) — Generative Suite at $0
+- ✅ **Pollinations.ai** keyless image gen integrated. Powers AI B-roll
+  (replaces Pexels placeholder cards with real AI images per shot).
+- ✅ **Hugging Face Inference API** client wired for voice cloning
+  (XTTS-v2), AI music (MusicGen), and text-to-video (AnimateDiff /
+  text-to-video-ms-1.7b). Free tier — operator provides HF token.
+- ✅ **AI B-roll** in faceless pipeline. Cascade: Pexels → Pollinations
+  → HF FLUX → solid-colour placeholder. ~3x faster via parallel
+  `asyncio.gather` per shot.
+- ✅ **Voice cloning** — upload reference WAV/MP3 → narration in operator's voice.
+- ✅ **AI music** — operator prompt → MusicGen bed overrides bundled CC0 beds.
+- ✅ **External provider** (Phase-3) now dispatches to HF AnimateDiff
+  ($0 free) when HUGGINGFACE_API_KEY is set; Sora 2 path still wired
+  for paid GA.
+- ✅ Fallback chain pruned: dropped deprecated `gemini-1.5-flash` /
+  `1.5-flash-8b` (404 NOT_FOUND); current chain = 2.5-flash → 2.0-flash
+  → 2.5-flash-lite → 2.0-flash-lite. 404 NOT_FOUND now treated like
+  quota (skip + try next).
+- ✅ New routes: `GET /api/video/free-providers`, `POST/GET/DELETE /api/video/voice-refs`,
+  `POST /api/video/generative/image`.
+- ✅ Generative Suite UI panel in Video Studio with image preview,
+  voice-ref upload, AI music prompt, provider status pills.
+- ✅ `tests/test_free_apis.py` 6 tests; suite **170/170 PASS**.
+- ✅ Testing agent: ALL PASS end-to-end (no retests).
+
+### Iteration 10 — Multi-model fallback + adaptive captions + bundled music
+- 6-model Gemini fallback chain + deterministic template fallback for hooks.
+- 3 procedural CC0 music beds (cinematic/upbeat/chill).
+- `faster-whisper` adaptive captions (tiny.en, int8 CPU).
+- UI controls in Video Studio.
 
 ### Iteration 9 — Video Engine
-- Phase 1 faceless: ffmpeg + Piper TTS + Pexels stock + burned-in
-  captions, vertical 1080×1920 MP4.
-- Phase 2 avatar lipsync: mediapipe + ffmpeg zoompan + audio meter.
-- Phase 2.5 Wav2Lip opt-in (ONNX model auto-detected).
-- Phase 3 external generative bridge wired (Sora 2 SDK pending GA).
-- Viral hook generator (`POST /api/hooks/` + `/api/hooks/ab-test`).
+- Faceless mode (ffmpeg + Piper + Pexels).
+- Avatar lipsync (mediapipe animated portrait).
+- Wav2Lip Phase 2.5 opt-in.
+- Viral hook generator + A/B test endpoint.
 
-### Earlier iterations
-- Books / audiobooks (Piper TTS for audio).
-- Proposals generator.
-- Master Revenue Equation tracker.
-- Data Distillation Framework (semantic compression + cache).
-- L5 dual-actor HITL governance.
-- Stripe payments (test key).
-- Complete Emergent scrub.
-- One-shot OCI deploy script (`scripts/one-shot-oci-deploy.sh`).
+### Earlier — Books / Audiobooks / Proposals / Master Revenue Equation /
+Distillation cache / L5 HITL governance / Stripe / Emergent scrub /
+OCI one-shot deploy script.
 
 ## Roadmap
 
-### P0 (next)
-- **User verification** — operator confirms A/B test + music + adaptive
-  captions work in the UI after this fix lands.
+### P0
+- **User verification of Generative Suite** — run a render with AI
+  B-roll on, optional voice-clone, optional AI music.
+- **Drop a free Hugging Face token** into `backend/.env` to unlock
+  voice cloning + AI music + text-to-video.
 
 ### P1
-- OCI deploy execution — user pushes to GitHub + runs the bootstrap.
-- Per-shot voice overrides surfaced in the UI (engine supports it).
+- OCI deploy execution (push to GitHub → bootstrap on Always Free VM).
+- Sidebar "Cost Guard fired N times today" badge.
+- Per-shot voice override in the UI (engine supports it).
 - Per-route LLM cost breakdown in `/api/distillation/stats`.
 
 ### P2
-- Sidebar "Cost Guard fired N times today" badge.
-- Buffer/Hootsuite fallback share chips.
-- Switch unbounded `find().to_list()` queries to MongoDB aggregations.
-- Royalty-free music: ingest a wider library (Pixabay/FreePD API)
-  instead of bundled procedural beds.
-- Multi-voice scripts: per-shot voice_id override surfaced in UI.
+- SadTalker direct (open-source local install) instead of HF-hosted.
+- Roop / InsightFace face-swap mode (license-gated, opt-in).
+- Suno-style song generation (different endpoint, longer outputs).
+- Buffer / Hootsuite share chips.
+- Wider royalty-free music library via Pixabay/FreePD API.
 
 ## Tech stack
 - **Backend** — FastAPI + Motor (MongoDB) + SQLite fallback.
 - **Frontend** — React + Vite + Tailwind + Shadcn UI + react-query.
-- **LLM** — `litellm` over BYO key (default chain: Gemini 3 Flash w/
-  6-model free-tier fallback).
-- **TTS** — Piper TTS local (`pip install piper-tts`).
-- **Video** — ffmpeg + Pexels free tier (200 req/hr) + mediapipe + faster-whisper.
-- **Music** — 3 bundled CC0 procedural beds (1.9 MB each).
+- **LLM** — `litellm` with 4-model Gemini free-tier fallback.
+- **TTS** — Piper local OR XTTS-v2 (HF) for voice cloning.
+- **Captions** — `faster-whisper` tiny.en int8 CPU.
+- **Image gen** — Pollinations.ai (keyless) + HF FLUX (free tier).
+- **Music** — 3 bundled CC0 procedural beds + MusicGen (HF).
+- **Video** — ffmpeg + Pexels + AI B-roll + mediapipe + Wav2Lip + HF AnimateDiff.
 - **Payments** — Stripe (opt-in, test key).
-- **Auth** — Operator token (L5), no public auth surface.
+- **Auth** — Operator token (L5).
 
-## API endpoints (key)
+## Key endpoints
 - `GET /api/video/config` — full capability self-report
-- `GET /api/video/music` — bundled music catalogue
-- `GET /api/video/voices` — installed Piper voices
-- `POST /api/video/render` — kick off a render (script + voice + music + captions + portrait + mode)
-- `POST /api/video/portraits/upload` — upload avatar portrait
-- `POST /api/hooks/` — generate 5 hook variants (with fallback chain)
-- `POST /api/hooks/ab-test` — generate N hooks + fire N parallel renders
-- `POST /api/books/{id}/audio/generate` — Piper-driven audiobook
-- `GET /api/distillation/stats` — cache + cost breakdown
-- `GET /api/governance/manifest` — L0-L5 governance manifest
+- `GET /api/video/free-providers` — Pollinations + HF status
+- `GET /api/video/music`, `POST /api/video/voice-refs/upload`
+- `POST /api/video/generative/image` — keyless Pollinations preview
+- `POST /api/video/render` — script + voice + music + captions + portrait
+  + voice_ref_id (clone) + ai_music_prompt (MusicGen) + mode
+- `POST /api/hooks/`, `POST /api/hooks/ab-test`
+- `POST /api/books/{id}/audio/generate` — Piper audiobook
+- `GET /api/distillation/stats`, `GET /api/governance/manifest`
