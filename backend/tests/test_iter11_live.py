@@ -16,6 +16,7 @@ import time
 import pytest
 import requests
 
+
 def _read_env_var(name: str) -> str:
     v = os.environ.get(name, "")
     if v:

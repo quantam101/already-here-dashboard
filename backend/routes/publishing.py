@@ -9,14 +9,14 @@ Every post the operator publishes (manually or via approved API) is logged here:
 
 This is the auditable chain: idea -> script -> export -> post URL -> verified.
 """
-from fastapi import APIRouter, HTTPException, Depends, Request
-from pydantic import BaseModel, Field
-from typing import Optional
-from datetime import datetime, timezone
 import uuid
+from datetime import UTC, datetime
 
-from services.audit_service import log_audit_event
+from fastapi import APIRouter, Depends, HTTPException, Request
+from pydantic import BaseModel, Field
+
 from services import governance_service as gov
+from services.audit_service import log_audit_event
 
 router = APIRouter()
 
@@ -27,27 +27,27 @@ class PublishingCreate(BaseModel):
     stream_id: str
     platform: str  # blog | medium | youtube | tiktok | instagram | linkedin | etsy | redbubble | ...
     title: str
-    content_id: Optional[str] = None
-    idea_id: Optional[str] = None
+    content_id: str | None = None
+    idea_id: str | None = None
     status: str = "drafted"
-    post_url: Optional[str] = None
-    notes: Optional[str] = None
+    post_url: str | None = None
+    notes: str | None = None
 
 
 class PublishingRecord(PublishingCreate):
     id: str = Field(default_factory=lambda: f"pub-{uuid.uuid4().hex[:10]}")
     metrics: dict = Field(default_factory=dict)
-    posted_at: Optional[str] = None
-    verified_at: Optional[str] = None
-    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
-    updated_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    posted_at: str | None = None
+    verified_at: str | None = None
+    created_at: str = Field(default_factory=lambda: datetime.now(UTC).isoformat())
+    updated_at: str = Field(default_factory=lambda: datetime.now(UTC).isoformat())
 
 
 class PublishingUpdate(BaseModel):
-    status: Optional[str] = None
-    post_url: Optional[str] = None
-    metrics: Optional[dict] = None
-    notes: Optional[str] = None
+    status: str | None = None
+    post_url: str | None = None
+    metrics: dict | None = None
+    notes: str | None = None
 
 
 async def get_db():
@@ -98,9 +98,9 @@ async def create_publishing_record(payload: PublishingCreate, http_request: Requ
 
 @router.get("/", response_model=list[PublishingRecord])
 async def list_publishing_records(
-    stream_id: Optional[str] = None,
-    platform: Optional[str] = None,
-    status: Optional[str] = None,
+    stream_id: str | None = None,
+    platform: str | None = None,
+    status: str | None = None,
     limit: int = 500,
     db=Depends(get_db),
 ):
@@ -124,7 +124,7 @@ async def update_publishing_record(record_id: str, updates: PublishingUpdate, db
     if not record:
         raise HTTPException(status_code=404, detail="Publishing record not found")
 
-    patch: dict = {"updated_at": datetime.now(timezone.utc).isoformat()}
+    patch: dict = {"updated_at": datetime.now(UTC).isoformat()}
     payload = updates.model_dump(exclude_none=True)
     if "status" in payload:
         _validate_status(payload["status"])
@@ -149,7 +149,7 @@ async def update_publishing_record(record_id: str, updates: PublishingUpdate, db
 async def publishing_stats(db=Depends(get_db)):
     """Counts by status + platform for the proof-of-work feed."""
     records = await db.publishing_log.find({}, {"_id": 0}).to_list(10000)
-    by_status: dict[str, int] = {s: 0 for s in ALLOWED_STATUSES}
+    by_status: dict[str, int] = dict.fromkeys(ALLOWED_STATUSES, 0)
     by_platform: dict[str, int] = {}
     verified_urls: list[str] = []
     for r in records:

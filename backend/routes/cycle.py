@@ -13,16 +13,17 @@ Full pipeline:
 
 Cost Guard: $0 (all sources free; LLM generation via litellm + BYO key).
 """
+import logging
+import uuid
+from datetime import UTC, datetime
+
 from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel
-from typing import Optional
-from datetime import datetime, timezone
-import uuid
-import logging
 
-from services.audit_service import log_audit_event
-from services import governance_service as gov
 from routes.scout import scout_viral
+from services import governance_service as gov
+from services.audit_service import log_audit_event
+from services.social_publisher import connector_status, get_publisher
 
 router = APIRouter()
 logger = logging.getLogger("cycle")
@@ -56,7 +57,7 @@ class CycleResult(BaseModel):
     next_action: str
     started_at: str
     completed_at: str
-    error: Optional[str] = None
+    error: str | None = None
 
 
 async def get_db():
@@ -121,9 +122,9 @@ async def run_cycle(
     """
     await gov.enforce(
         db=db, request=http_request, action_id="mass_outreach",
-        context={"route": "cycle/run", "stream_id": stream_id, "max_ideas": max_ideas, "platforms": platforms},
+        context={"route": "cycle/run", "stream_id": stream_id, "max_ideas": max_ideas, "platforms": ALL_PLATFORMS},
     )
-    started = datetime.now(timezone.utc)
+    started = datetime.now(UTC)
     cycle_id = f"cyc-{uuid.uuid4().hex[:8]}"
     opps: list = []
 
@@ -143,7 +144,7 @@ async def run_cycle(
             stream_id=stream_id, platforms=ALL_PLATFORMS, live_connectors=live_all,
             next_action="Retry cycle — scout external API failed",
             started_at=started.isoformat(),
-            completed_at=datetime.now(timezone.utc).isoformat(),
+            completed_at=datetime.now(UTC).isoformat(),
             error=f"scout failed: {e}",
         )
 
@@ -154,7 +155,7 @@ async def run_cycle(
     drafts_created = 0
     auto_posted    = 0
     export_packs   = 0
-    timestamp_iso  = datetime.now(timezone.utc).isoformat()
+    timestamp_iso  = datetime.now(UTC).isoformat()
     publisher      = get_publisher()
 
     for opp in top:
@@ -210,7 +211,7 @@ async def run_cycle(
         except Exception as e:
             logger.warning("Cycle export_pack error: %s", e)
 
-    completed = datetime.now(timezone.utc)
+    completed = datetime.now(UTC)
     await log_audit_event(
         db, "cycle.completed", "sovereign_orchestrator", "run",
         "cycle", cycle_id,
@@ -253,7 +254,7 @@ async def run_cycle(
     )
 
 
-@router.get("/last", response_model=Optional[CycleResult])
+@router.get("/last", response_model=CycleResult | None)
 async def last_cycle(db=Depends(get_db)):
     """Return summary of the most recent run cycle."""
     event = await db.audit_log.find_one(

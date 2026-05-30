@@ -198,7 +198,7 @@ async def delete_job(job_id: str, db=Depends(get_db)):
     if work_dir.exists():
         try:
             shutil.rmtree(work_dir)
-        except OSError as exc:
+        except OSError:
             pass  # non-fatal — record still removed from DB
     await db[engine.JOB_COLLECTION].delete_one({"id": job_id})
     return {"deleted": True, "id": job_id}

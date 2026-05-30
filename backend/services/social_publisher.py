@@ -27,7 +27,7 @@ from __future__ import annotations
 import logging
 import os
 import re
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 import httpx
@@ -40,7 +40,7 @@ def _env(key: str) -> str:
     return (os.environ.get(key) or "").strip()
 
 def _now() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 def _truncate(text: str, limit: int) -> str:
     if len(text) <= limit:
@@ -177,7 +177,7 @@ class SocialPublisher:
 
         # Quora — answer-format, authoritative
         if not platforms or "quora" in platforms:
-            intro = f"Great question. Here's what I've found:\n\n"
+            intro = "Great question. Here's what I've found:\n\n"
             pack["quora"] = {
                 "title": f"Answer about: {title}",
                 "body": f"{intro}{body[:2000]}\n\n{hashtags}",
@@ -399,7 +399,6 @@ class SocialPublisher:
         title = article.get("title", "")
         desc  = article.get("meta_description", "")
         tags  = article.get("tags", [])
-        src   = article.get("source_url", "")
         hashtags = " ".join(f"#{t}" for t in tags[:5])
         text = _truncate(f"{title}\n\n{desc}\n\n{hashtags}", 500)
 

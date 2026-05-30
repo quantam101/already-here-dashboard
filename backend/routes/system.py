@@ -4,8 +4,10 @@ System status — operator-facing health/config check that powers the Quickstart
 No secrets are leaked; the endpoint only reports *whether* each piece of config is
 set, not the values themselves.
 """
-from fastapi import APIRouter, Depends
 import os
+
+from fastapi import APIRouter, Depends
+
 from services.bitwarden_service import get_bitwarden_service
 
 router = APIRouter()

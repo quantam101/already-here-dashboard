@@ -5,21 +5,19 @@ Tests _make_idea_doc() and _make_publishing_draft() in isolation — no DB, no H
 """
 from __future__ import annotations
 
-import sys
 import os
-from datetime import datetime, timezone
-
-import pytest
+import sys
+from datetime import UTC, datetime
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../.."))
 
 from routes.cycle import (
-    _make_idea_doc,
-    _make_publishing_draft,
     ALL_PLATFORMS,
+    MANUAL_PLATFORMS,
     TEXT_PLATFORMS,
     VIDEO_PLATFORMS,
-    MANUAL_PLATFORMS,
+    _make_idea_doc,
+    _make_publishing_draft,
 )
 
 
@@ -46,7 +44,7 @@ class _FakeOpp:
         self.metadata = metadata or {}
 
 
-TS = datetime.now(timezone.utc).isoformat()
+TS = datetime.now(UTC).isoformat()
 CYCLE_ID = "cyc-test001"
 
 

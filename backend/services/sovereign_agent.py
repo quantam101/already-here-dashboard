@@ -36,12 +36,11 @@ import json
 import logging
 import os
 import uuid
-from datetime import datetime, timezone
-from typing import Any
+from datetime import UTC, datetime
 
-from services.llm_runner import run_cached
-from services.distillation_service import to_yaml_payload
 from services.audit_service import log_audit_event
+from services.distillation_service import to_yaml_payload
+from services.llm_runner import run_cached
 
 logger = logging.getLogger("sovereign_agent")
 
@@ -95,7 +94,7 @@ class SovereignDecision:
         self.risk_level = raw.get("risk_level", "low")
         self.estimated_tokens = int(raw.get("estimated_tokens", 0))
         self.skip_reason = raw.get("skip_reason")
-        self.made_at = datetime.now(timezone.utc).isoformat()
+        self.made_at = datetime.now(UTC).isoformat()
         self.session_id = session_id
 
     def to_dict(self) -> dict:
@@ -104,7 +103,7 @@ class SovereignDecision:
 
 async def _build_snapshot(db) -> dict:
     """Collect a lightweight system state snapshot for the Sovereign's context."""
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
 
     # Recent agent run summary
     try:

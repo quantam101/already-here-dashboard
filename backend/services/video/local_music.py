@@ -62,7 +62,7 @@ def _sync_generate(prompt: str, duration_s: int) -> np.ndarray:
 
 async def generate_music_track(prompt: str, duration_s: int = 20) -> Path:
     """Returns cached WAV path. Uses prompt hash for idempotent caching."""
-    key = hashlib.sha256(f"{prompt}:{duration_s}:{_MODEL_NAME}".encode("utf-8")).hexdigest()[:16]
+    key = hashlib.sha256(f"{prompt}:{duration_s}:{_MODEL_NAME}".encode()).hexdigest()[:16]
     wav_path = MUSIC_CACHE / f"musicgen-{key}.wav"
     if wav_path.exists() and wav_path.stat().st_size > 4096:
         return wav_path
@@ -84,8 +84,8 @@ async def generate_music_track(prompt: str, duration_s: int = 20) -> Path:
 
 def is_available() -> bool:
     try:
-        import transformers  # noqa: F401
         import torch  # noqa: F401
+        import transformers  # noqa: F401
         return True
     except ImportError:
         return False

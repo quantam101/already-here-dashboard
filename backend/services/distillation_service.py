@@ -32,7 +32,7 @@ import hashlib
 import json
 import os
 import re
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 try:
@@ -140,7 +140,7 @@ def fingerprint(model: str, system: str, prompt: str) -> str:
 
 
 def _now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def _is_expired(created_at: str) -> bool:
@@ -148,7 +148,7 @@ def _is_expired(created_at: str) -> bool:
         ts = datetime.fromisoformat(created_at)
     except Exception:
         return True
-    age = (datetime.now(timezone.utc) - ts).total_seconds()
+    age = (datetime.now(UTC) - ts).total_seconds()
     return age > CACHE_TTL_SECONDS
 
 

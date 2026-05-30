@@ -31,9 +31,8 @@ import random
 import re
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
 
 import yaml
 
@@ -150,7 +149,7 @@ JOB_COLLECTION = "dasi_jobs"
 
 
 def _now() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def new_job_id() -> str:
@@ -391,10 +390,6 @@ async def _run_stage_queue(
 
         # Snapshot current context for the user prompt
         ctx_snapshot = await _get_matrix_context(db, job_id)
-        user_prompt = (
-            f"[System State Matrix]\n{ctx_snapshot}\n\n"
-            f"[Pipeline Active Payload]\n{active_payload}"
-        )
 
         # Retry loop — recompile on policy violation (max 3 attempts)
         output = ""

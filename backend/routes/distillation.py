@@ -9,10 +9,11 @@ Data Distillation API — operator-facing telemetry + cache controls.
 
 No LLM is invoked here — these are pure telemetry/utility endpoints.
 """
+import os
+from typing import Any
+
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
-from typing import Any, Optional
-import os
 
 from services.distillation_service import (
     CACHE_TTL_SECONDS,
@@ -34,8 +35,8 @@ async def get_db():
 
 class PreviewRequest(BaseModel):
     text: str = ""
-    payload: Optional[Any] = None
-    max_chars: Optional[int] = None
+    payload: Any | None = None
+    max_chars: int | None = None
 
 
 @router.get("/stats")

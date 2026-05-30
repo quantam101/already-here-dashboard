@@ -29,16 +29,21 @@ from __future__ import annotations
 
 import logging
 import os
-from datetime import datetime, timezone
-from typing import Any
+from datetime import UTC, datetime
 
+from emergentintegrations.llm.chat import LlmChat, UserMessage
 from fastapi import HTTPException
-from services.llm_adapter import (
-    LLMProviderError, any_key_configured, llm_completion,
-)
 
 from services.distillation_service import (
-    cache_lookup, cache_store, distill_text, estimate_tokens,
+    cache_lookup,
+    cache_store,
+    distill_text,
+    estimate_tokens,
+)
+from services.llm_adapter import (
+    LLMProviderError,
+    any_key_configured,
+    llm_completion,
 )
 
 logger = logging.getLogger("llm_runner")
@@ -47,7 +52,7 @@ BUDGET_COLLECTION = "llm_budget"
 
 
 def _today_iso() -> str:
-    return datetime.now(timezone.utc).date().isoformat()
+    return datetime.now(UTC).date().isoformat()
 
 
 def _daily_cap() -> int:

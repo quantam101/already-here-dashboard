@@ -9,9 +9,9 @@ DELETE /api/sovereign/cache       — Clear LLM decision cache (force fresh reas
 """
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException
-from typing import Optional
 import logging
+
+from fastapi import APIRouter, Depends
 
 logger = logging.getLogger("sovereign_route")
 
@@ -65,8 +65,8 @@ async def sovereign_history(limit: int = 20, db=Depends(get_db)):
 @router.post("/trigger")
 async def trigger_sovereign_cycle(db=Depends(get_db)):
     """Manually trigger one full sovereign cycle (decision + agent dispatch)."""
+    from services.agent_executor import AGENT_REGISTRY, AgentExecutor
     from services.sovereign_agent import make_decision
-    from services.agent_executor import AgentExecutor, AGENT_REGISTRY
 
     decision = await make_decision(db, list(AGENT_REGISTRY.keys()))
     if decision.skip_reason:
@@ -98,7 +98,7 @@ async def list_agent_registry():
 async def clear_sovereign_cache(db=Depends(get_db)):
     """Wipe sovereign decision cache (forces fresh LLM reasoning next cycle)."""
     from services.distillation_service import cache_clear
-    from services.sovereign_agent import SOVEREIGN_SYSTEM
+
     # Only clear entries matching sovereign system prompt fingerprint
     n = await cache_clear(db)
     return {"cleared": n, "note": "Next Cash cycle will call LLM fresh."}

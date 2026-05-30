@@ -25,7 +25,7 @@ import os
 import shutil
 import subprocess
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import aiohttp
@@ -58,7 +58,7 @@ _VOICE_COLORS: dict[str, str] = {
 # ---------------------------------------------------------------------------
 
 def _now() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def new_job_id() -> str:
@@ -139,7 +139,7 @@ async def run_pipeline(db, job_id: str) -> None:
         ]
         results = await asyncio.gather(*tasks, return_exceptions=True)
 
-    for voice, result in zip(voices, results):
+    for voice, result in zip(voices, results, strict=False):
         if isinstance(result, Exception):
             logger.error("voicelab: extraction failed for %s: %s", voice, result)
             extraction_errors.append(f"{voice}: {result}")
@@ -293,7 +293,7 @@ async def _extract_voice(
                         )
                         last_err = RuntimeError(f"HTTP {resp.status}: {body[:120]}")
 
-            except (aiohttp.ClientError, asyncio.TimeoutError, ValueError) as exc:
+            except (TimeoutError, aiohttp.ClientError, ValueError) as exc:
                 logger.error(
                     "voicelab: voice='%s' attempt %d error: %s",
                     voice, attempt, exc,

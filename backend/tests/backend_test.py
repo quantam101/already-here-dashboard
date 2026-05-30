@@ -1,5 +1,6 @@
 """Backend API tests for Already Here Command OS."""
 import os
+
 import pytest
 import requests
 

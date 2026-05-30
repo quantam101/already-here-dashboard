@@ -25,14 +25,13 @@ import asyncio
 import json
 import os
 import uuid
-from typing import Any, Optional
+from typing import Any
 
 import aiosqlite
 
-
 # ─── filter/update predicates ──────────────────────────────────────────────────
 
-def _matches(doc: dict, filter_: Optional[dict]) -> bool:
+def _matches(doc: dict, filter_: dict | None) -> bool:
     if not filter_:
         return True
     for k, v in filter_.items():
@@ -134,8 +133,8 @@ class _FindCursor:
         self._table = table
         self._filter = filter_ or {}
         self._projection = projection
-        self._sort: Optional[tuple] = None
-        self._limit: Optional[int] = None
+        self._sort: tuple | None = None
+        self._limit: int | None = None
 
     def sort(self, field, direction=1):
         self._sort = (field, direction)
@@ -145,7 +144,7 @@ class _FindCursor:
         self._limit = n
         return self
 
-    async def to_list(self, length: Optional[int] = None):
+    async def to_list(self, length: int | None = None):
         return await self._db._find_list(
             self._table, self._filter, self._projection, self._sort,
             self._limit if self._limit is not None else length,
@@ -158,7 +157,7 @@ class _AggregateCursor:
         self._table = table
         self._pipeline = pipeline
 
-    async def to_list(self, length: Optional[int] = None):
+    async def to_list(self, length: int | None = None):
         return await self._db._aggregate(self._table, self._pipeline, length)
 
 
@@ -245,7 +244,7 @@ class SqliteDatabase:
             self._tables_known.add(table)
 
     @staticmethod
-    def _project(doc: dict, projection: Optional[dict]) -> dict:
+    def _project(doc: dict, projection: dict | None) -> dict:
         if not projection:
             return doc
         # Mongo idiom in this codebase: {"_id": 0} — we never store _id, so noop

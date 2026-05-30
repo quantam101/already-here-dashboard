@@ -1,4 +1,5 @@
-from typing import Any, Optional
+from typing import Any
+
 from models import AuditEvent, StatusEnum
 
 
@@ -8,8 +9,8 @@ async def log_audit_event(
     actor: str,
     action: str,
     resource_type: str,
-    resource_id: Optional[str] = None,
-    metadata: Optional[dict[str, Any]] = None,
+    resource_id: str | None = None,
+    metadata: dict[str, Any] | None = None,
     status: StatusEnum = StatusEnum.SUCCESS,
 ) -> AuditEvent:
     """

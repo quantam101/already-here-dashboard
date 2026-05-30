@@ -11,7 +11,6 @@ from __future__ import annotations
 import asyncio
 import logging
 import urllib.parse
-from typing import Optional
 
 import httpx
 
@@ -35,7 +34,7 @@ async def generate_image(
     width: int = DEFAULT_W,
     height: int = DEFAULT_H,
     model: str = "flux",
-    seed: Optional[int] = None,
+    seed: int | None = None,
     nologo: bool = True,
     timeout: float = 60.0,
 ) -> bytes:
@@ -152,5 +151,5 @@ async def health_check(timeout: float = 5.0) -> bool:
         async with httpx.AsyncClient(timeout=timeout) as client:
             r = await client.get(f"{TEXT_ENDPOINT}/ping?model=openai")
             return r.status_code == 200
-    except (httpx.HTTPError, asyncio.TimeoutError):
+    except (TimeoutError, httpx.HTTPError):
         return False

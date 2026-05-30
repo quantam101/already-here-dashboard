@@ -75,7 +75,7 @@ def _format_prompt(req: HookRequest) -> str:
     )
 
 
-def _deterministic_hooks(topic: str, niche: str, count: int) -> list["HookVariant"]:
+def _deterministic_hooks(topic: str, niche: str, count: int) -> list[HookVariant]:
     """Template-based fallback hooks — used when every LLM quota is exhausted.
 
     Not as creative as a real LLM, but guarantees the A/B test pipeline
@@ -199,8 +199,9 @@ async def ab_test_hooks(req: ABTestRequest, db=Depends(get_db)):
         used_fallback = True
 
     # Step 2: fire parallel video renders, one per variant
-    from services.video import engine as _video_engine
     import asyncio
+
+    from services.video import engine as _video_engine
 
     job_ids: list[str] = []
     for variant in variants:

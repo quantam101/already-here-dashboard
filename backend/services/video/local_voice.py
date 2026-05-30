@@ -29,6 +29,7 @@ def _load_tts():
         _ptu.isin_mps_friendly = torch.isin
     # The TTS library checks XttsConfig safe-load; allow it.
     from TTS.api import TTS  # type: ignore
+
     # XTTS v2 is gated behind a CPML license agreement. Auto-accept since
     # the operator explicitly opted in by selecting voice cloning.
     os.environ.setdefault("COQUI_TOS_AGREED", "1")

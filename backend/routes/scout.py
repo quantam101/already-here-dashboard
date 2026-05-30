@@ -12,13 +12,13 @@ All endpoints return structured opportunities. Operator + content agents can
 queue them as ContentIdeas, or the Proposal Engine can use grants/contracts
 to draft responses.
 """
+import xml.etree.ElementTree as ET
+from datetime import UTC, datetime
+from urllib.parse import quote_plus
+
+import httpx
 from fastapi import APIRouter, Query
 from pydantic import BaseModel
-from typing import Optional
-import httpx
-import xml.etree.ElementTree as ET
-from urllib.parse import quote_plus
-from datetime import datetime, timezone
 
 router = APIRouter()
 
@@ -32,9 +32,9 @@ class Opportunity(BaseModel):
     source: str  # reddit | hackernews | grants_gov | google_news | sam_gov
     kind: str  # viral | grant | contract | news
     url: str
-    score: Optional[float] = None
-    summary: Optional[str] = None
-    posted_at: Optional[str] = None
+    score: float | None = None
+    summary: str | None = None
+    posted_at: str | None = None
     metadata: dict = {}
 
 
@@ -73,7 +73,7 @@ async def scout_viral(
                 url=f"https://reddit.com{d.get('permalink', '')}",
                 score=float(d.get("score", 0)),
                 summary=(d.get("selftext", "") or "")[:500],
-                posted_at=datetime.fromtimestamp(d.get("created_utc", 0), tz=timezone.utc).isoformat() if d.get("created_utc") else None,
+                posted_at=datetime.fromtimestamp(d.get("created_utc", 0), tz=UTC).isoformat() if d.get("created_utc") else None,
                 metadata={"subreddit": d.get("subreddit"), "comments": d.get("num_comments", 0)},
             ))
     except Exception as e:
@@ -97,7 +97,7 @@ async def scout_viral(
                     kind="viral",
                     url=story.get("url", f"https://news.ycombinator.com/item?id={story.get('id')}"),
                     score=float(story.get("score", 0)),
-                    posted_at=datetime.fromtimestamp(story.get("time", 0), tz=timezone.utc).isoformat() if story.get("time") else None,
+                    posted_at=datetime.fromtimestamp(story.get("time", 0), tz=UTC).isoformat() if story.get("time") else None,
                     metadata={"by": story.get("by"), "descendants": story.get("descendants", 0)},
                 ))
             except Exception:

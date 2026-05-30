@@ -1,9 +1,9 @@
-from content_models import ContentScript
 import logging
 
+from content_models import ContentScript
 from services.distillation_service import distill_text, to_yaml_payload
+from services.llm_adapter import LLMProviderError, llm_completion
 from services.llm_runner import run_cached
-from services.llm_adapter import llm_completion, LLMProviderError
 
 logger = logging.getLogger(__name__)
 
@@ -154,10 +154,10 @@ async def generate_captions_for_platform(script: dict, platform: str) -> str:
         "twitter": 280,
         "linkedin": 3000,
     }
-    
+
     max_length = platform_limits.get(platform, 2000)
     caption = f"{script['hook']}\n\n{script['script_body'][:max_length - 200]}\n\n{script['cta']}"
-    
+
     return caption
 
 def get_base_hashtags(topic: str) -> list:

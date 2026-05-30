@@ -6,34 +6,31 @@ No network. No DB. Zero external dependencies.
 """
 from __future__ import annotations
 
-import sys
 import os
+import sys
 import uuid
-from datetime import datetime
+from datetime import UTC, datetime
 
 import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../.."))
 
 from content_models import (
+    ContentAnalytics,
     ContentIdea,
     ContentScript,
-    ContentAsset,
-    PlatformConnector,
-    ScheduledPost,
-    ContentAnalytics,
-    PlatformVariant,
     ContentStatusEnum,
     CostClassEnum,
+    PlatformConnector,
     PlatformEnum,
+    ScheduledPost,
 )
-
 
 # ── ContentIdea ───────────────────────────────────────────────────────────────
 
 class TestContentIdea:
     def _valid(self, **kwargs):
-        defaults = dict(title="Test Idea", description="A description", topic="AI")
+        defaults = {"title": "Test Idea", "description": "A description", "topic": "AI"}
         defaults.update(kwargs)
         return ContentIdea(**defaults)
 
@@ -187,21 +184,19 @@ class TestPlatformConnector:
 
 class TestScheduledPost:
     def test_status_defaults_to_scheduled(self):
-        from datetime import timezone
         post = ScheduledPost(
             content_id="idea-001",
             platform=PlatformEnum.TIKTOK,
-            scheduled_time=datetime.now(timezone.utc),
+            scheduled_time=datetime.now(UTC),
             caption="Test caption",
         )
         assert post.status == ContentStatusEnum.SCHEDULED
 
     def test_retry_count_defaults_zero(self):
-        from datetime import timezone
         post = ScheduledPost(
             content_id="idea-001",
             platform=PlatformEnum.YOUTUBE,
-            scheduled_time=datetime.now(timezone.utc),
+            scheduled_time=datetime.now(UTC),
             caption="Caption",
         )
         assert post.retry_count == 0

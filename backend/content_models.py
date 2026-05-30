@@ -1,12 +1,13 @@
-from pydantic import BaseModel, Field, ConfigDict
-from typing import List, Optional, Dict, Any
-from datetime import datetime, timezone
 import uuid
-from enum import Enum
+from datetime import UTC, datetime
+from enum import StrEnum
+from typing import Any, Dict, List
+
+from pydantic import BaseModel, ConfigDict, Field
 
 # Content Factory Models
 
-class ContentStatusEnum(str, Enum):
+class ContentStatusEnum(StrEnum):
     IDEA = "idea"
     DRAFTED = "drafted"
     SCRIPTED = "scripted"
@@ -26,7 +27,7 @@ class ContentStatusEnum(str, Enum):
     ARCHIVED = "archived"
     REPURPOSE_CANDIDATE = "repurpose_candidate"
 
-class CostClassEnum(str, Enum):
+class CostClassEnum(StrEnum):
     FREE_LOCAL = "free_local"
     FREE_EXTERNAL = "free_external"
     FREE_WITH_LIMITS = "free_with_limits"
@@ -34,7 +35,7 @@ class CostClassEnum(str, Enum):
     UNKNOWN_COST_BLOCKED = "unknown_cost_blocked"
     PAID_BLOCKED = "paid_blocked"
 
-class PlatformEnum(str, Enum):
+class PlatformEnum(StrEnum):
     TIKTOK = "tiktok"
     YOUTUBE = "youtube"
     YOUTUBE_SHORTS = "youtube_shorts"
@@ -66,10 +67,10 @@ class ContentIdea(BaseModel):
     status: ContentStatusEnum = ContentStatusEnum.IDEA
     priority: str = "medium"  # low, medium, high, critical
     tags: List[str] = Field(default_factory=list)
-    inspiration_source: Optional[str] = None
+    inspiration_source: str | None = None
     metadata: Dict[str, Any] = Field(default_factory=dict)
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 # Content Script
 class ContentScript(BaseModel):
@@ -78,12 +79,12 @@ class ContentScript(BaseModel):
     idea_id: str
     hook: str
     script_body: str
-    cta: Optional[str] = None
-    duration_seconds: Optional[int] = None
+    cta: str | None = None
+    duration_seconds: int | None = None
     shot_list: List[str] = Field(default_factory=list)
     metadata: Dict[str, Any] = Field(default_factory=dict)
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 # Content Asset
 class ContentAsset(BaseModel):
@@ -91,14 +92,14 @@ class ContentAsset(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     name: str
     asset_type: str  # video, image, audio, text
-    file_path: Optional[str] = None
-    file_url: Optional[str] = None
-    file_size: Optional[int] = None
-    duration: Optional[float] = None
-    dimensions: Optional[str] = None  # WxH
+    file_path: str | None = None
+    file_url: str | None = None
+    file_size: int | None = None
+    duration: float | None = None
+    dimensions: str | None = None  # WxH
     tags: List[str] = Field(default_factory=list)
     metadata: Dict[str, Any] = Field(default_factory=dict)
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 # Platform Connector
 class PlatformConnector(BaseModel):
@@ -110,19 +111,19 @@ class PlatformConnector(BaseModel):
     has_api: bool = False
     api_authenticated: bool = False
     requires_app_review: bool = False
-    app_review_status: Optional[str] = None  # pending, approved, rejected
+    app_review_status: str | None = None  # pending, approved, rejected
     credential_status: str = "missing"  # missing, configured, expired
     supported_media_types: List[str] = Field(default_factory=list)
-    max_file_size_mb: Optional[int] = None
-    max_duration_seconds: Optional[int] = None
-    caption_max_length: Optional[int] = None
+    max_file_size_mb: int | None = None
+    max_duration_seconds: int | None = None
+    caption_max_length: int | None = None
     supports_scheduling: bool = False
-    rate_limit_per_day: Optional[int] = None
-    blocked_reason: Optional[str] = None
-    setup_instructions: Optional[str] = None
+    rate_limit_per_day: int | None = None
+    blocked_reason: str | None = None
+    setup_instructions: str | None = None
     metadata: Dict[str, Any] = Field(default_factory=dict)
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 # Scheduled Post
 class ScheduledPost(BaseModel):
@@ -132,20 +133,20 @@ class ScheduledPost(BaseModel):
     platform: PlatformEnum
     status: ContentStatusEnum = ContentStatusEnum.SCHEDULED
     scheduled_time: datetime
-    title: Optional[str] = None
+    title: str | None = None
     caption: str
     hashtags: List[str] = Field(default_factory=list)
     media_urls: List[str] = Field(default_factory=list)
-    thumbnail_url: Optional[str] = None
+    thumbnail_url: str | None = None
     publishing_method: str = "direct_api"  # direct_api, manual_export
-    export_pack_path: Optional[str] = None
-    published_url: Optional[str] = None
-    published_at: Optional[datetime] = None
-    failure_reason: Optional[str] = None
+    export_pack_path: str | None = None
+    published_url: str | None = None
+    published_at: datetime | None = None
+    failure_reason: str | None = None
     retry_count: int = 0
     metadata: Dict[str, Any] = Field(default_factory=dict)
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 # Content Analytics
 class ContentAnalytics(BaseModel):
@@ -160,11 +161,11 @@ class ContentAnalytics(BaseModel):
     shares: int = 0
     saves: int = 0
     clicks: int = 0
-    watch_time_seconds: Optional[float] = None
-    engagement_rate: Optional[float] = None
+    watch_time_seconds: float | None = None
+    engagement_rate: float | None = None
     conversion_events: int = 0
-    revenue: Optional[float] = None
-    last_updated: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    revenue: float | None = None
+    last_updated: datetime = Field(default_factory=lambda: datetime.now(UTC))
     metadata: Dict[str, Any] = Field(default_factory=dict)
 
 # Platform Variant
@@ -177,9 +178,9 @@ class PlatformVariant(BaseModel):
     title: str
     caption: str
     hashtags: List[str] = Field(default_factory=list)
-    description: Optional[str] = None
-    video_path: Optional[str] = None
-    thumbnail_path: Optional[str] = None
-    subtitle_path: Optional[str] = None
+    description: str | None = None
+    video_path: str | None = None
+    thumbnail_path: str | None = None
+    subtitle_path: str | None = None
     metadata: Dict[str, Any] = Field(default_factory=dict)
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))

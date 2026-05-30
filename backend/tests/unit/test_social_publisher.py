@@ -6,16 +6,16 @@ No network. No credentials required. Runs in < 1 second.
 """
 from __future__ import annotations
 
-import sys
-import os
 import asyncio
-import pytest
+import os
+import sys
 from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../.."))
 
-from services.social_publisher import SocialPublisher, PostResult, connector_status, _strip_md, _truncate
-
+from services.social_publisher import SocialPublisher, _strip_md, _truncate, connector_status
 
 # ── helpers ───────────────────────────────────────────────────────────────────
 

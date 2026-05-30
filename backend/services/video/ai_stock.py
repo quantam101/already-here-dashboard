@@ -37,7 +37,7 @@ async def fetch_ai_clip_for_shot(
     the caller can fall back to the colour-card placeholder.
     """
     cache_key = hashlib.sha256(
-        f"ai:{shot_text}:{style_suffix}".encode("utf-8")
+        f"ai:{shot_text}:{style_suffix}".encode()
     ).hexdigest()[:16]
     cached = CACHE_DIR / f"{cache_key}.mp4"
     if cached.exists() and cached.stat().st_size > 1024:

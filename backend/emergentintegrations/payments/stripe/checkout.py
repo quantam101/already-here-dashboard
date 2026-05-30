@@ -16,7 +16,7 @@ import asyncio
 import logging
 import os
 from dataclasses import dataclass, field
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 logger = logging.getLogger("emergentintegrations.payments.stripe.checkout")
 
@@ -40,8 +40,8 @@ class CheckoutSession:
 class CheckoutStatus:
     status: str           # "open" | "complete" | "expired"
     payment_status: str   # "paid" | "unpaid" | "no_payment_required"
-    amount_total: Optional[float]  # in cents
-    currency: Optional[str]
+    amount_total: float | None  # in cents
+    currency: str | None
     session_id: str
 
 
@@ -49,7 +49,7 @@ class CheckoutStatus:
 class WebhookEvent:
     event_type: str
     payment_status: str
-    session_id: Optional[str]
+    session_id: str | None
 
 
 class StripeCheckout:

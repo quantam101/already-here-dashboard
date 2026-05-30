@@ -13,17 +13,16 @@ Endpoints:
 from __future__ import annotations
 
 import os
-import shutil
 import uuid
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException, Request, BackgroundTasks, UploadFile, File, Form
+from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
-from services import governance_service as gov
 from services.audit_service import log_audit_event
-from services.video import avatar, captions as _captions, engine, gen_assets, music as _music, tts
+from services.video import avatar, engine, gen_assets, tts
+from services.video import music as _music
 
 router = APIRouter()
 
@@ -68,7 +67,6 @@ class RenderFromScriptRequest(BaseModel):
     voice_ref_id: str | None = None
     ai_music_prompt: str | None = None
     pollinations_voice: str | None = None
-    pollinations_voice: str | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -101,7 +99,8 @@ async def music():
 @router.get("/free-providers")
 async def free_providers():
     """Status of the keyless/free-tier AI providers wired into the engine."""
-    from services.free_apis import huggingface as _hf, pollinations as _poll
+    from services.free_apis import huggingface as _hf
+    from services.free_apis import pollinations as _poll
     return {
         "pollinations": {
             "available": _poll.is_available(),
@@ -175,8 +174,10 @@ class GenerativeImageRequest(BaseModel):
 @router.post("/generative/image")
 async def generative_image_preview(req: GenerativeImageRequest):
     """One-off prompt → image, for the Generative Suite preview tile."""
-    from services.free_apis import huggingface as _hf, pollinations as _poll
     import base64
+
+    from services.free_apis import huggingface as _hf
+    from services.free_apis import pollinations as _poll
     try:
         if req.provider == "huggingface":
             if not _hf.is_configured():

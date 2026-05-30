@@ -10,14 +10,11 @@ Covers:
 from __future__ import annotations
 
 import asyncio
-import os
-from pathlib import Path
 
 import pytest
 
 from services.free_apis import huggingface, pollinations
-from services.video import ai_stock, engine, gen_assets
-
+from services.video import engine, gen_assets
 
 # ---------------------------------------------------------------------------
 # Pollinations

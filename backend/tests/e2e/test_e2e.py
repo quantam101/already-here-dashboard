@@ -16,12 +16,13 @@ The AuthGate passes through automatically when no operator email is set.
 from __future__ import annotations
 
 import os
+
 import pytest
 
 # Skip entire module if playwright isn't installed
 pytest.importorskip("playwright", reason="playwright not installed — skipping E2E tests")
 
-from playwright.sync_api import Page, expect, Browser
+from playwright.sync_api import Browser, Page, expect
 
 BASE_URL = os.environ.get(
     "REACT_APP_BACKEND_URL", "https://app.alreadyherellc.com"

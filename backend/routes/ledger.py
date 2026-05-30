@@ -7,13 +7,13 @@ This is the single source of truth for revenue actuals (vs. seeded targets).
 
 Goal: $25,000 net profit -> commercialization unlock.
 """
-from fastapi import APIRouter, HTTPException, Depends, UploadFile, File, Form
-from pydantic import BaseModel, Field
-from typing import Optional
-from datetime import datetime, timezone, timedelta
-import uuid
 import csv
 import io
+import uuid
+from datetime import UTC, datetime, timedelta
+
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from pydantic import BaseModel, Field
 
 from services.audit_service import log_audit_event
 
@@ -29,13 +29,13 @@ class LedgerEntryCreate(BaseModel):
     net_amount: float = Field(ge=0)
     currency: str = "USD"
     source: str = "manual"  # manual | csv | webhook | api
-    proof_url: Optional[str] = None  # screenshot, dashboard URL, csv hash
-    notes: Optional[str] = None
+    proof_url: str | None = None  # screenshot, dashboard URL, csv hash
+    notes: str | None = None
 
 
 class LedgerEntry(LedgerEntryCreate):
     id: str = Field(default_factory=lambda: f"led-{uuid.uuid4().hex[:10]}")
-    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    created_at: str = Field(default_factory=lambda: datetime.now(UTC).isoformat())
 
 
 async def get_db():
@@ -66,8 +66,8 @@ async def create_ledger_entry(entry: LedgerEntryCreate, db=Depends(get_db)):
 
 @router.get("/", response_model=list[LedgerEntry])
 async def list_ledger_entries(
-    stream_id: Optional[str] = None,
-    since_days: Optional[int] = None,
+    stream_id: str | None = None,
+    since_days: int | None = None,
     limit: int = 500,
     db=Depends(get_db),
 ):
@@ -76,7 +76,7 @@ async def list_ledger_entries(
     if stream_id:
         query["stream_id"] = stream_id
     if since_days is not None and since_days > 0:
-        cutoff = (datetime.now(timezone.utc) - timedelta(days=since_days)).date().isoformat()
+        cutoff = (datetime.now(UTC) - timedelta(days=since_days)).date().isoformat()
         query["occurred_on"] = {"$gte": cutoff}
     cursor = db.revenue_ledger.find(query, {"_id": 0}).sort("occurred_on", -1).limit(limit)
     return await cursor.to_list(limit)
@@ -89,7 +89,7 @@ async def profit_progress(db=Depends(get_db)):
     total_net = sum(e.get("net_amount", 0.0) for e in entries)
     total_gross = sum(e.get("gross_amount", 0.0) for e in entries)
 
-    today = datetime.now(timezone.utc).date()
+    today = datetime.now(UTC).date()
     month_start = today.replace(day=1).isoformat()
     last30 = (today - timedelta(days=30)).isoformat()
 
@@ -178,7 +178,7 @@ def _parse_csv_row(
         "source": source_label,
         "proof_url": f"csv://{filename}" if filename else None,
         "notes": f"row {line_no} of {filename or 'upload.csv'}",
-        "created_at": datetime.now(timezone.utc).isoformat(),
+        "created_at": datetime.now(UTC).isoformat(),
     }, None
 
 

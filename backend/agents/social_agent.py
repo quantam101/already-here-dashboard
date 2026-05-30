@@ -13,11 +13,10 @@ Budget: 0 LLM tokens — pure API calls.
 from __future__ import annotations
 
 import logging
-import os
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from agents.base_agent import BaseAgent
-from services.social_publisher import get_publisher, connector_status
+from services.social_publisher import connector_status, get_publisher
 
 logger = logging.getLogger("social_agent")
 
@@ -71,11 +70,11 @@ class SocialAgent(BaseAgent):
         posted_count = 0
         export_count = 0
         errors: list[str] = []
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
 
         for item in items:
             article = item.get("article", {})
-            opp_src = item.get("opportunity_source", "")
+            _opp_src = item.get("opportunity_source", "")
             item_id = item.get("id", "")
 
             # Enrich article with source URL if available

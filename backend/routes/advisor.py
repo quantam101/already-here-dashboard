@@ -4,17 +4,22 @@ and asks Claude Sonnet for the single best next action.
 
 Cost Guard: routed through `services/llm_runner.run_cached` (BYO LLM key, cached).
 """
-from fastapi import APIRouter, Depends
-from pydantic import BaseModel
-from datetime import datetime, timezone
 import json
 import uuid
+from datetime import UTC, datetime
+
+from fastapi import APIRouter, Depends
+from pydantic import BaseModel
 
 from routes.analytics import (
-    conversion_funnel, stream_roi, momentum, viral_themes, platform_mix,
+    conversion_funnel,
+    momentum,
+    platform_mix,
+    stream_roi,
+    viral_themes,
 )
 from services.distillation_service import to_yaml_payload
-from services.llm_runner import run_cached, llm_complete
+from services.llm_runner import llm_complete
 
 router = APIRouter()
 
@@ -90,7 +95,7 @@ async def get_recommendation(db=Depends(get_db)):
 
     rec = AdvisorRecommendation(
         id=f"adv-{uuid.uuid4().hex[:10]}",
-        generated_at=datetime.now(timezone.utc).isoformat(),
+        generated_at=datetime.now(UTC).isoformat(),
         headline=parsed.get("headline", "")[:240],
         next_action=parsed.get("next_action", "")[:1000],
         rationale=parsed.get("rationale", "")[:1000],

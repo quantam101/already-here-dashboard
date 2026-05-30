@@ -1,5 +1,6 @@
-from models import ContentGenerateRequest
 from dotenv import load_dotenv
+from models import ContentGenerateRequest
+
 from services.llm_adapter import llm_completion
 
 load_dotenv()

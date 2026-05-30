@@ -16,8 +16,7 @@ import logging
 import time
 import uuid
 from abc import ABC, abstractmethod
-from datetime import datetime, timezone
-from typing import Any
+from datetime import UTC, datetime
 
 from fastapi import HTTPException
 
@@ -119,7 +118,7 @@ class BaseAgent(ABC):
     async def run(self, db, ctx: dict | None = None) -> AgentResult:
         """Run the agent with full safety wrapping: circuit-breaker, timeout, audit."""
         run_id = f"run-{uuid.uuid4().hex[:10]}"
-        started = datetime.now(timezone.utc)
+        started = datetime.now(UTC)
         start_mono = time.monotonic()
         ctx = ctx or {}
 
@@ -128,9 +127,9 @@ class BaseAgent(ABC):
             result = AgentResult(
                 self.agent_id, run_id,
                 success=False,
-                error=f"circuit-breaker open — too many recent failures",
+                error="circuit-breaker open — too many recent failures",
                 started_at=started.isoformat(),
-                completed_at=datetime.now(timezone.utc).isoformat(),
+                completed_at=datetime.now(UTC).isoformat(),
             )
             await self._persist_run(db, result)
             return result
@@ -143,7 +142,7 @@ class BaseAgent(ABC):
             data = await asyncio.wait_for(
                 self.execute(db, ctx), timeout=self.timeout_seconds
             )
-            completed = datetime.now(timezone.utc)
+            completed = datetime.now(UTC)
             self._cb.record_success()
             result = AgentResult(
                 self.agent_id, run_id,
@@ -154,14 +153,14 @@ class BaseAgent(ABC):
                 started_at=started.isoformat(),
                 completed_at=completed.isoformat(),
             )
-        except asyncio.TimeoutError:
+        except TimeoutError:
             self._cb.record_failure()
             result = AgentResult(
                 self.agent_id, run_id, success=False,
                 error=f"timeout after {self.timeout_seconds}s",
                 duration_ms=int((time.monotonic() - start_mono) * 1000),
                 started_at=started.isoformat(),
-                completed_at=datetime.now(timezone.utc).isoformat(),
+                completed_at=datetime.now(UTC).isoformat(),
             )
         except HTTPException as exc:
             # Budget / auth errors — record but don't open circuit
@@ -170,7 +169,7 @@ class BaseAgent(ABC):
                 error=f"HTTP {exc.status_code}: {exc.detail}",
                 duration_ms=int((time.monotonic() - start_mono) * 1000),
                 started_at=started.isoformat(),
-                completed_at=datetime.now(timezone.utc).isoformat(),
+                completed_at=datetime.now(UTC).isoformat(),
             )
         except Exception as exc:  # noqa: BLE001
             self._cb.record_failure()
@@ -180,7 +179,7 @@ class BaseAgent(ABC):
                 error=str(exc),
                 duration_ms=int((time.monotonic() - start_mono) * 1000),
                 started_at=started.isoformat(),
-                completed_at=datetime.now(timezone.utc).isoformat(),
+                completed_at=datetime.now(UTC).isoformat(),
             )
 
         await self._persist_run(db, result)
@@ -193,7 +192,7 @@ class BaseAgent(ABC):
         """Agent logic. Return a dict payload; include `_tokens_used` if applicable."""
         ...
 
-    async def check_budget(self, db) -> None:
+    async def check_budget(self, db) -> None:  # noqa: B027
         """Override to add LLM budget pre-check. Default: no-op."""
 
     # ── Internals ──────────────────────────────────────────────────────────────

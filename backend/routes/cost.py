@@ -11,8 +11,9 @@ cost_class taxonomy (from connectors registry):
   - paid_blocked        → blocked by Cost Guard (Twitter API, etc.)
   - unknown             → must be blocked-by-default per directive
 """
-from fastapi import APIRouter, Depends
 import os
+
+from fastapi import APIRouter, Depends
 
 router = APIRouter()
 

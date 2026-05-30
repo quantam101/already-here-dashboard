@@ -9,6 +9,7 @@ secret value should call `get_bitwarden_service().get_secret(name)` from the
 backend process directly.
 """
 from fastapi import APIRouter
+
 from services.bitwarden_service import get_bitwarden_service
 
 router = APIRouter()

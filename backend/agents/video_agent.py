@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import logging
 import re
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from agents.base_agent import AgentResult, BaseAgent
 from services.llm_runner import llm_complete
@@ -127,7 +127,7 @@ class VideoScriptAgent(BaseAgent):
     cost_class = "free_local"
 
     async def execute(self, db, ctx: dict) -> AgentResult:
-        ts = datetime.now(timezone.utc).isoformat()
+        ts = datetime.now(UTC).isoformat()
         ideas_processed = 0
         scripts_generated = 0
         errors = []

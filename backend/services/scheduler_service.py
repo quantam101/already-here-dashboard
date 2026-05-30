@@ -17,7 +17,7 @@ Backwards-compatible: set LEGACY_CYCLE_ONLY=true to restore old behavior.
 import asyncio
 import logging
 import os
-from datetime import datetime, timezone, timedelta
+from datetime import UTC, datetime, timedelta
 
 logger = logging.getLogger("scheduler")
 
@@ -39,8 +39,8 @@ async def _sovereign_cycle():
     if _db is None:
         return
     try:
+        from services.agent_executor import AGENT_REGISTRY, AgentExecutor
         from services.sovereign_agent import make_decision
-        from services.agent_executor import AgentExecutor, AGENT_REGISTRY
 
         decision = await make_decision(_db, list(AGENT_REGISTRY.keys()))
 
@@ -84,7 +84,7 @@ async def _scheduler_loop():
         if legacy:
             # Legacy path: one run per day at configured hour
             hour = int(os.environ.get("DAILY_CYCLE_HOUR_UTC", "7"))
-            now = datetime.now(timezone.utc)
+            now = datetime.now(UTC)
             target = now.replace(hour=hour, minute=0, second=0, microsecond=0)
             if target <= now:
                 target += timedelta(days=1)

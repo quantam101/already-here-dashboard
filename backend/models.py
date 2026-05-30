@@ -1,10 +1,12 @@
-from pydantic import BaseModel, Field, ConfigDict
-from typing import List, Optional, Dict, Any
-from datetime import datetime, timezone
 import uuid
-from enum import Enum
+from datetime import UTC, datetime
+from enum import StrEnum
+from typing import Any, Dict, List
 
-class StatusEnum(str, Enum):
+from pydantic import BaseModel, ConfigDict, Field
+
+
+class StatusEnum(StrEnum):
     ACTIVE = "active"
     INACTIVE = "inactive"
     DRAFT = "draft"
@@ -18,7 +20,7 @@ class StatusEnum(str, Enum):
     LIVE = "live"
     ARCHIVED = "archived"
 
-class PriorityEnum(str, Enum):
+class PriorityEnum(StrEnum):
     LOW = "low"
     MEDIUM = "medium"
     HIGH = "high"
@@ -33,16 +35,16 @@ class RevenueStream(BaseModel):
     status: StatusEnum = StatusEnum.ACTIVE
     monthly_target: float = 0.0
     monthly_actual: float = 0.0
-    description: Optional[str] = None
+    description: str | None = None
     metadata: Dict[str, Any] = Field(default_factory=dict)
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 class RevenueStreamCreate(BaseModel):
     name: str
     type: str
     monthly_target: float = 0.0
-    description: Optional[str] = None
+    description: str | None = None
     metadata: Dict[str, Any] = Field(default_factory=dict)
 
 # Content Models
@@ -53,28 +55,28 @@ class ContentPiece(BaseModel):
     content_type: str  # blog, social, email, proposal
     body: str
     status: StatusEnum = StatusEnum.DRAFT
-    platform: Optional[str] = None
-    revenue_stream_id: Optional[str] = None
+    platform: str | None = None
+    revenue_stream_id: str | None = None
     generated_by: str = "ai"
-    published_at: Optional[datetime] = None
+    published_at: datetime | None = None
     metadata: Dict[str, Any] = Field(default_factory=dict)
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 class ContentGenerateRequest(BaseModel):
     content_type: str
     topic: str
-    platform: Optional[str] = None
+    platform: str | None = None
     tone: str = "professional"
     length: str = "medium"
     keywords: List[str] = Field(default_factory=list)
-    revenue_stream_id: Optional[str] = None
+    revenue_stream_id: str | None = None
 
 class ContentUpdateRequest(BaseModel):
-    title: Optional[str] = None
-    body: Optional[str] = None
-    status: Optional[StatusEnum] = None
-    metadata: Optional[Dict[str, Any]] = None
+    title: str | None = None
+    body: str | None = None
+    status: StatusEnum | None = None
+    metadata: Dict[str, Any] | None = None
 
 # Agent Models
 class Agent(BaseModel):
@@ -88,13 +90,13 @@ class Agent(BaseModel):
     forbidden_actions: List[str] = Field(default_factory=list)
     approval_required_actions: List[str] = Field(default_factory=list)
     cost_ceiling: float = 0.0
-    last_run: Optional[datetime] = None
+    last_run: datetime | None = None
     run_count: int = 0
     success_count: int = 0
     failure_count: int = 0
     metadata: Dict[str, Any] = Field(default_factory=dict)
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 class AgentCreate(BaseModel):
     name: str
@@ -112,23 +114,23 @@ class Build(BaseModel):
     name: str
     type: str
     status: StatusEnum = StatusEnum.DRAFT
-    source_repo: Optional[str] = None
-    source_folder: Optional[str] = None
+    source_repo: str | None = None
+    source_folder: str | None = None
     modules: List[str] = Field(default_factory=list)
     production_gate_score: int = 0
-    last_deploy: Optional[datetime] = None
-    last_ci_status: Optional[str] = None
+    last_deploy: datetime | None = None
+    last_ci_status: str | None = None
     revenue_path: str = "indirect"
-    next_action: Optional[str] = None
+    next_action: str | None = None
     metadata: Dict[str, Any] = Field(default_factory=dict)
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 class BuildCreate(BaseModel):
     name: str
     type: str
-    source_repo: Optional[str] = None
-    source_folder: Optional[str] = None
+    source_repo: str | None = None
+    source_folder: str | None = None
     modules: List[str] = Field(default_factory=list)
     revenue_path: str = "indirect"
 
@@ -143,19 +145,19 @@ class Deployment(BaseModel):
     version: str
     deployed_by: str = "system"
     rollback_available: bool = False
-    health_check_url: Optional[str] = None
-    health_status: Optional[str] = None
-    error_log: Optional[str] = None
+    health_check_url: str | None = None
+    health_status: str | None = None
+    error_log: str | None = None
     metadata: Dict[str, Any] = Field(default_factory=dict)
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 class DeploymentCreate(BaseModel):
     build_id: str
     environment: str
     target: str
     version: str
-    health_check_url: Optional[str] = None
+    health_check_url: str | None = None
 
 # Audit Models
 class AuditEvent(BaseModel):
@@ -165,17 +167,17 @@ class AuditEvent(BaseModel):
     actor: str
     action: str
     resource_type: str
-    resource_id: Optional[str] = None
+    resource_id: str | None = None
     status: StatusEnum = StatusEnum.SUCCESS
     metadata: Dict[str, Any] = Field(default_factory=dict)
-    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 class AuditEventCreate(BaseModel):
     event_type: str
     actor: str
     action: str
     resource_type: str
-    resource_id: Optional[str] = None
+    resource_id: str | None = None
     metadata: Dict[str, Any] = Field(default_factory=dict)
 
 # Approval Models
@@ -185,22 +187,22 @@ class ApprovalRequest(BaseModel):
     action: str
     agent_id: str
     resource_type: str
-    resource_id: Optional[str] = None
+    resource_id: str | None = None
     reason: str
     priority: PriorityEnum = PriorityEnum.MEDIUM
     status: StatusEnum = StatusEnum.PENDING
     requested_by: str = "system"
-    approved_by: Optional[str] = None
-    approved_at: Optional[datetime] = None
+    approved_by: str | None = None
+    approved_at: datetime | None = None
     metadata: Dict[str, Any] = Field(default_factory=dict)
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 class ApprovalRequestCreate(BaseModel):
     action: str
     agent_id: str
     resource_type: str
-    resource_id: Optional[str] = None
+    resource_id: str | None = None
     reason: str
     priority: PriorityEnum = PriorityEnum.MEDIUM
     requested_by: str = "system"
@@ -209,7 +211,7 @@ class ApprovalRequestCreate(BaseModel):
 class ApprovalDecision(BaseModel):
     status: StatusEnum
     approved_by: str
-    notes: Optional[str] = None
+    notes: str | None = None
 
 # Health Check Models
 class HealthCheck(BaseModel):
@@ -217,7 +219,7 @@ class HealthCheck(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     service_name: str
     status: StatusEnum = StatusEnum.SUCCESS
-    response_time: Optional[float] = None
-    error_message: Optional[str] = None
+    response_time: float | None = None
+    error_message: str | None = None
     metadata: Dict[str, Any] = Field(default_factory=dict)
-    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))

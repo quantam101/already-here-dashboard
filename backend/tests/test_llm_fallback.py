@@ -6,6 +6,7 @@ the deterministic hook generator in routes.hooks._deterministic_hooks.
 from __future__ import annotations
 
 import asyncio
+
 import pytest
 
 from routes.hooks import _deterministic_hooks

@@ -14,9 +14,8 @@ This file is the "before/after snapshot" layer in the test pyramid.
 """
 from __future__ import annotations
 
-import sys
 import os
-import pytest
+import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../.."))
 

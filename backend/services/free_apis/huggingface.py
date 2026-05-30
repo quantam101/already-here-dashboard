@@ -22,7 +22,6 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
-from typing import Optional
 
 import httpx
 
@@ -61,7 +60,7 @@ class HFModelLoading(RuntimeError):
     """Returned when the model is cold-loading on the HF infrastructure."""
 
 
-def _token() -> Optional[str]:
+def _token() -> str | None:
     return os.environ.get("HUGGINGFACE_API_KEY") or os.environ.get("HF_API_KEY")
 
 
@@ -151,7 +150,7 @@ async def synthesize_speech(
     text: str,
     *,
     model: str = DEFAULT_TTS_MODEL,
-    reference_voice_wav_bytes: Optional[bytes] = None,
+    reference_voice_wav_bytes: bytes | None = None,
 ) -> bytes:
     """Voice cloning if `reference_voice_wav_bytes` supplied (XTTS-v2),
     otherwise expressive TTS in the model's default voice."""

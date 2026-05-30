@@ -8,9 +8,10 @@ the dashboard renders as a side panel.
 Compliant with the Free-Only Build Directive: zero paid API calls, deterministic
 code, fail-closed on missing data.
 """
-from fastapi import APIRouter, Depends
-from datetime import datetime, timezone, timedelta
 import os
+from datetime import UTC, datetime, timedelta
+
+from fastapi import APIRouter, Depends
 
 router = APIRouter()
 
@@ -56,7 +57,7 @@ async def lifelong_catch_correct(db=Depends(get_db)):
         })
 
     # ─── Ledger anomalies ────────────────────────────────────────────────────
-    cutoff_iso = (datetime.now(timezone.utc) - timedelta(days=30)).isoformat()
+    cutoff_iso = (datetime.now(UTC) - timedelta(days=30)).isoformat()
     recent = await db.revenue_ledger.find(
         {"occurred_on": {"$gte": cutoff_iso}}, {"_id": 0}
     ).to_list(1000)
@@ -108,7 +109,7 @@ async def lifelong_catch_correct(db=Depends(get_db)):
         if isinstance(last_ts, str):
             try:
                 last_dt = datetime.fromisoformat(last_ts.replace("Z", "+00:00"))
-                age_hours = (datetime.now(timezone.utc) - last_dt).total_seconds() / 3600
+                age_hours = (datetime.now(UTC) - last_dt).total_seconds() / 3600
                 if age_hours > 24:
                     findings.append({
                         "severity": "low",
@@ -124,7 +125,7 @@ async def lifelong_catch_correct(db=Depends(get_db)):
     findings.sort(key=lambda f: severity_order.get(f["severity"], 9))
 
     return {
-        "scanned_at": datetime.now(timezone.utc).isoformat(),
+        "scanned_at": datetime.now(UTC).isoformat(),
         "findings_count": len(findings),
         "by_severity": {
             sev: sum(1 for f in findings if f["severity"] == sev)

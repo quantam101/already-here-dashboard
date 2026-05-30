@@ -112,7 +112,7 @@ def write_export_files(pack_dir: Path, post: dict, metadata: dict):
     metadata_file = pack_dir / "post_metadata.json"
     with open(metadata_file, 'w') as f:
         json.dump(metadata, f, indent=2)
-    
+
     # Write caption file
     caption_file = pack_dir / "caption.txt"
     with open(caption_file, 'w') as f:
@@ -120,12 +120,12 @@ def write_export_files(pack_dir: Path, post: dict, metadata: dict):
         if post.get('hashtags'):
             f.write("\n\n")
             f.write(" ".join(f"#{tag}" for tag in post['hashtags']))
-    
+
     # Write upload instructions
     instructions_file = pack_dir / "UPLOAD_INSTRUCTIONS.txt"
     with open(instructions_file, 'w') as f:
         f.write(get_platform_upload_instructions(post['platform']))
-    
+
     # Write title file if exists
     if post.get('title'):
         title_file = pack_dir / "title.txt"
@@ -139,18 +139,18 @@ async def create_export_pack(post: dict) -> str:
     """
     export_dir = Path("/app/exports")
     export_dir.mkdir(exist_ok=True)
-    
+
     post_id = post['id']
     platform = post['platform']
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    
+
     pack_dir = export_dir / f"{platform}_{post_id}_{timestamp}"
     pack_dir.mkdir(exist_ok=True)
-    
+
     # Generate export package metadata
     export_metadata = create_export_metadata(post)
-    
+
     # Write all files
     write_export_files(pack_dir, post, export_metadata)
-    
+
     return str(pack_dir)

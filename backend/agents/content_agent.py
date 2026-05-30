@@ -20,13 +20,13 @@ import logging
 import os
 import re
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 import httpx
 
 from agents.base_agent import BaseAgent
-from services.llm_runner import run_cached, llm_complete
+from services.llm_runner import llm_complete
 
 logger = logging.getLogger("content_agent")
 
@@ -96,7 +96,7 @@ class ContentAgent(BaseAgent):
                 # Mark opportunity as processed
                 await db[OPPORTUNITIES_COLLECTION].update_one(
                     {"id": opp["id"]},
-                    {"$set": {"processed": True, "processed_at": datetime.now(timezone.utc).isoformat()}},
+                    {"$set": {"processed": True, "processed_at": datetime.now(UTC).isoformat()}},
                 )
             except Exception as e:
                 errors.append(f"{opp.get('id', '?')}: {e}")
@@ -156,7 +156,7 @@ class ContentAgent(BaseAgent):
         return article, tok
 
     async def _save_to_queue(self, db, article: dict, opp: dict) -> None:
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         doc = {
             "id": f"cq-{uuid.uuid4().hex[:10]}",
             "article": article,
@@ -172,7 +172,7 @@ class ContentAgent(BaseAgent):
     async def _publish_article(self, article: dict) -> dict:
         """Publish to GitHub Pages and Dev.to. Returns published URLs."""
         result: dict[str, str] = {}
-        date_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        date_str = datetime.now(UTC).strftime("%Y-%m-%d")
         slug = article.get("slug", "article")
         filename = f"{date_str}-{slug}.md"
         jekyll_content = self._make_jekyll_post(article, date_str)

@@ -11,13 +11,13 @@ Vendor-neutral OPERATOR_TOKEN flow:
 For multi-user / OAuth deployments later, drop a new dependency at
 `get_current_user` — the cookie + session_token schema below is generic.
 """
-from fastapi import APIRouter, HTTPException, Request, Response, Depends, Header
-from pydantic import BaseModel
-from datetime import datetime, timezone, timedelta
-from typing import Optional
 import hmac
 import os
 import uuid
+from datetime import UTC, datetime, timedelta
+
+from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response
+from pydantic import BaseModel
 
 router = APIRouter()
 
@@ -29,12 +29,12 @@ class User(BaseModel):
     user_id: str
     email: str
     name: str
-    picture: Optional[str] = None
+    picture: str | None = None
 
 
 class LoginBody(BaseModel):
     operator_token: str
-    name: Optional[str] = None  # display name (optional)
+    name: str | None = None  # display name (optional)
 
 
 async def get_db():
@@ -42,17 +42,17 @@ async def get_db():
     return db
 
 
-def _operator_email() -> Optional[str]:
+def _operator_email() -> str | None:
     return (os.environ.get("OPERATOR_EMAIL") or "").strip().lower() or None
 
 
-def _operator_token() -> Optional[str]:
+def _operator_token() -> str | None:
     return (os.environ.get("OPERATOR_TOKEN") or "").strip() or None
 
 
 async def _resolve_session_token(
-    token_from_cookie: Optional[str], authorization: Optional[str]
-) -> Optional[str]:
+    token_from_cookie: str | None, authorization: str | None
+) -> str | None:
     if token_from_cookie:
         return token_from_cookie
     if authorization and authorization.lower().startswith("bearer "):
@@ -62,7 +62,7 @@ async def _resolve_session_token(
 
 async def get_current_user(
     request: Request,
-    authorization: Optional[str] = Header(None),
+    authorization: str | None = Header(None),
     db=Depends(get_db),
 ) -> User:
     """Auth dependency - reads session_token from cookie or Bearer header."""
@@ -78,8 +78,8 @@ async def get_current_user(
     if isinstance(expires_at, str):
         expires_at = datetime.fromisoformat(expires_at)
     if expires_at.tzinfo is None:
-        expires_at = expires_at.replace(tzinfo=timezone.utc)
-    if expires_at < datetime.now(timezone.utc):
+        expires_at = expires_at.replace(tzinfo=UTC)
+    if expires_at < datetime.now(UTC):
         raise HTTPException(status_code=401, detail="Session expired")
 
     user_doc = await db.users.find_one({"user_id": session["user_id"]}, {"_id": 0})
@@ -113,7 +113,7 @@ async def login(body: LoginBody, response: Response, db=Depends(get_db)):
         await db.users.update_one(
             {"user_id": user_id},
             {"$set": {"name": body.name or existing.get("name") or "Operator",
-                      "updated_at": datetime.now(timezone.utc).isoformat()}},
+                      "updated_at": datetime.now(UTC).isoformat()}},
         )
     else:
         user_id = f"user_{uuid.uuid4().hex[:12]}"
@@ -122,18 +122,18 @@ async def login(body: LoginBody, response: Response, db=Depends(get_db)):
             "email": email,
             "name": body.name or "Operator",
             "picture": None,
-            "created_at": datetime.now(timezone.utc),
+            "created_at": datetime.now(UTC),
         })
 
     session_token = f"st_{uuid.uuid4().hex}"
-    expires_at = datetime.now(timezone.utc) + timedelta(days=SESSION_TTL_DAYS)
+    expires_at = datetime.now(UTC) + timedelta(days=SESSION_TTL_DAYS)
     # One active session per operator (kicks out any other open tabs)
     await db.user_sessions.delete_many({"user_id": user_id})
     await db.user_sessions.insert_one({
         "user_id": user_id,
         "session_token": session_token,
         "expires_at": expires_at,
-        "created_at": datetime.now(timezone.utc),
+        "created_at": datetime.now(UTC),
     })
 
     response.set_cookie(
@@ -150,7 +150,7 @@ async def whoami(user: User = Depends(get_current_user)):
 
 
 @router.post("/logout")
-async def logout(request: Request, response: Response, authorization: Optional[str] = Header(None), db=Depends(get_db)):
+async def logout(request: Request, response: Response, authorization: str | None = Header(None), db=Depends(get_db)):
     token = await _resolve_session_token(request.cookies.get(COOKIE_NAME), authorization)
     if token:
         await db.user_sessions.delete_one({"session_token": token})

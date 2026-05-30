@@ -67,7 +67,7 @@ class LlmChat:
         self._provider: str = "gemini"
         self._model: str = "gemini-2.5-flash"
 
-    def with_model(self, provider: str, model: str) -> "LlmChat":
+    def with_model(self, provider: str, model: str) -> LlmChat:
         self._provider = provider.lower()
         self._model = model
         return self

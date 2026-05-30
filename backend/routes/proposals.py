@@ -11,16 +11,15 @@ Document types supported:
   - invoice: itemized invoice
   - cover_letter: cover letter for any of the above
 """
-from fastapi import APIRouter, HTTPException, Depends, Request
-from pydantic import BaseModel, Field
-from typing import Optional
-from datetime import datetime, timezone
-import os
 import uuid
+from datetime import UTC, datetime
 
+from fastapi import APIRouter, Depends, HTTPException, Request
+from pydantic import BaseModel, Field
+
+from services import governance_service as gov
 from services.audit_service import log_audit_event
 from services.llm_runner import run_cached
-from services import governance_service as gov
 
 router = APIRouter()
 
@@ -92,31 +91,31 @@ DEFAULT_COMPANY = {
 class ProposalDraftRequest(BaseModel):
     doc_type: str
     title: str
-    target_org: Optional[str] = None  # agency, foundation, client
-    opportunity_url: Optional[str] = None
-    deadline: Optional[str] = None
-    budget_usd: Optional[float] = None
+    target_org: str | None = None  # agency, foundation, client
+    opportunity_url: str | None = None
+    deadline: str | None = None
+    budget_usd: float | None = None
     company_profile: dict = Field(default_factory=dict)
     requirements: list[str] = Field(default_factory=list)
     evidence: list[str] = Field(default_factory=list)
-    instructions: Optional[str] = None
+    instructions: str | None = None
 
 
 class InvoiceLineItem(BaseModel):
     description: str
     quantity: float = 1.0
     unit_price: float
-    total: Optional[float] = None
+    total: float | None = None
 
 
 class InvoiceRequest(BaseModel):
     client_name: str
-    client_email: Optional[str] = None
-    invoice_number: Optional[str] = None
-    issue_date: Optional[str] = None
-    due_date: Optional[str] = None
+    client_email: str | None = None
+    invoice_number: str | None = None
+    issue_date: str | None = None
+    due_date: str | None = None
     line_items: list[InvoiceLineItem]
-    notes: Optional[str] = None
+    notes: str | None = None
     company_name: str = "Already Here"
     tax_pct: float = 0.0
 
@@ -125,12 +124,12 @@ class ProposalDocument(BaseModel):
     id: str = Field(default_factory=lambda: f"prop-{uuid.uuid4().hex[:10]}")
     doc_type: str
     title: str
-    target_org: Optional[str] = None
+    target_org: str | None = None
     content: str
     metadata: dict = Field(default_factory=dict)
     status: str = "draft"  # draft | finalized | submitted
-    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
-    updated_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    created_at: str = Field(default_factory=lambda: datetime.now(UTC).isoformat())
+    updated_at: str = Field(default_factory=lambda: datetime.now(UTC).isoformat())
 
 
 async def get_db():
@@ -225,8 +224,8 @@ async def draft_proposal(req: ProposalDraftRequest, http_request: Request, db=De
 @router.post("/invoice", response_model=ProposalDocument, status_code=201)
 async def create_invoice(req: InvoiceRequest, db=Depends(get_db)):
     """Generate a structured invoice markdown - no LLM needed (deterministic)."""
-    issue = req.issue_date or datetime.now(timezone.utc).date().isoformat()
-    invoice_num = req.invoice_number or f"INV-{datetime.now(timezone.utc).strftime('%Y%m%d')}-{uuid.uuid4().hex[:4].upper()}"
+    issue = req.issue_date or datetime.now(UTC).date().isoformat()
+    invoice_num = req.invoice_number or f"INV-{datetime.now(UTC).strftime('%Y%m%d')}-{uuid.uuid4().hex[:4].upper()}"
     subtotal = 0.0
     rows = []
     for item in req.line_items:
@@ -276,7 +275,7 @@ async def create_invoice(req: InvoiceRequest, db=Depends(get_db)):
 
 
 @router.get("/", response_model=list[ProposalDocument])
-async def list_proposals(doc_type: Optional[str] = None, status: Optional[str] = None, db=Depends(get_db)):
+async def list_proposals(doc_type: str | None = None, status: str | None = None, db=Depends(get_db)):
     """List all proposals/invoices/etc."""
     query: dict = {}
     if doc_type:
@@ -300,7 +299,7 @@ async def get_proposal(prop_id: str, db=Depends(get_db)):
 async def update_proposal(prop_id: str, updates: dict, db=Depends(get_db)):
     if "status" in updates and updates["status"] not in {"draft", "finalized", "submitted"}:
         raise HTTPException(status_code=400, detail="status must be draft|finalized|submitted")
-    updates["updated_at"] = datetime.now(timezone.utc).isoformat()
+    updates["updated_at"] = datetime.now(UTC).isoformat()
     result = await db.proposals.update_one({"id": prop_id}, {"$set": updates})
     if result.matched_count == 0:
         raise HTTPException(status_code=404, detail="Proposal not found")

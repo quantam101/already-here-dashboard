@@ -15,10 +15,11 @@ Endpoints:
   GET /api/analytics/viral-themes   -> top-scoring scout themes
   GET /api/analytics/momentum       -> last-30-day revenue trend + projection to $25K
 """
-from fastapi import APIRouter, Depends
-from datetime import datetime, timezone, timedelta
-from collections import Counter
 import re
+from collections import Counter
+from datetime import UTC, datetime, timedelta
+
+from fastapi import APIRouter, Depends
 
 router = APIRouter()
 
@@ -183,7 +184,7 @@ async def viral_themes(db=Depends(get_db)):
 @router.get("/momentum")
 async def momentum(db=Depends(get_db)):
     """30-day revenue trend, 7-day rolling avg, projected days to $25K at current rate."""
-    today = datetime.now(timezone.utc).date()
+    today = datetime.now(UTC).date()
     start = (today - timedelta(days=30)).isoformat()
     entries = await db.revenue_ledger.find({"occurred_on": {"$gte": start}}, {"_id": 0}).to_list(10000)
 

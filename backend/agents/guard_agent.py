@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import logging
 import os
-from datetime import datetime, timezone, timedelta
+from datetime import UTC, datetime, timedelta
 
 import httpx
 
@@ -39,7 +39,7 @@ class GuardAgent(BaseAgent):
     timeout_seconds = 20.0
 
     async def execute(self, db, ctx: dict) -> dict:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         health = await self._check_health()
         memory = self._check_memory()
@@ -111,7 +111,7 @@ class GuardAgent(BaseAgent):
             try:
                 await db[AGENT_RUNS_COLLECTION].update_one(
                     {"id": run["id"]},
-                    {"$set": {"requeued": True, "requeued_at": datetime.now(timezone.utc).isoformat()}},
+                    {"$set": {"requeued": True, "requeued_at": datetime.now(UTC).isoformat()}},
                 )
                 drained += 1
             except Exception:

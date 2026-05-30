@@ -11,8 +11,7 @@ Responsibilities:
 from __future__ import annotations
 
 import logging
-import os
-from datetime import datetime, timezone, timedelta
+from datetime import UTC, datetime, timedelta
 
 from agents.base_agent import BaseAgent
 
@@ -39,7 +38,7 @@ class RevenueAgent(BaseAgent):
     timeout_seconds = 30.0
 
     async def execute(self, db, ctx: dict) -> dict:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         # 1. Tally ledger
         net_usd = await self._tally_ledger(db)
@@ -92,7 +91,7 @@ class RevenueAgent(BaseAgent):
             return 0.0
 
     async def _revenue_last_n_days(self, db, n: int) -> float:
-        cutoff = (datetime.now(timezone.utc) - timedelta(days=n)).isoformat()
+        cutoff = (datetime.now(UTC) - timedelta(days=n)).isoformat()
         try:
             rows = await db[LEDGER_COLLECTION].find(
                 {"created_at": {"$gte": cutoff}},
@@ -113,7 +112,7 @@ class RevenueAgent(BaseAgent):
                 await db[MILESTONES_COLLECTION].insert_one({
                     "id": f"milestone-{int(target)}",
                     "target": target,
-                    "crossed_at": datetime.now(timezone.utc).isoformat(),
+                    "crossed_at": datetime.now(UTC).isoformat(),
                     "net_at_crossing": round(net_usd, 2),
                 })
                 newly_crossed.append(target)

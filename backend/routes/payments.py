@@ -10,20 +10,20 @@ Successful paid checkouts automatically write a ledger entry into revenue_ledger
 under a "rev-saas" stream, so the $25K Proof-of-Work meter increments on REAL
 revenue. This is the bridge between the dashboard and actual cash.
 """
-from fastapi import APIRouter, HTTPException, Request, Depends
-from pydantic import BaseModel
-from typing import Optional
-from datetime import datetime, timezone
 import os
 import uuid
+from datetime import UTC, datetime
 
-from services.stripe_adapter import (
-    StripeAdapter,
-    CheckoutSessionRequest,
-)
 import stripe as stripe_sdk
-from services.audit_service import log_audit_event
+from fastapi import APIRouter, Depends, HTTPException, Request
+from pydantic import BaseModel
+
 from services import governance_service as gov
+from services.audit_service import log_audit_event
+from services.stripe_adapter import (
+    CheckoutSessionRequest,
+    StripeAdapter,
+)
 
 router = APIRouter()
 
@@ -63,10 +63,10 @@ REVENUE_STREAM_FOR_PAYMENTS = "rev-saas"
 class CheckoutCreateRequest(BaseModel):
     package_id: str
     origin_url: str  # frontend's window.location.origin (used for success/cancel)
-    utm_source: Optional[str] = None  # reddit, linkedin, twitter, blog, ...
-    utm_medium: Optional[str] = None  # post, dm, email, organic, paid
-    utm_campaign: Optional[str] = None
-    referrer: Optional[str] = None
+    utm_source: str | None = None  # reddit, linkedin, twitter, blog, ...
+    utm_medium: str | None = None  # post, dm, email, organic, paid
+    utm_campaign: str | None = None
+    referrer: str | None = None
 
 
 class CheckoutCreateResponse(BaseModel):
@@ -80,8 +80,8 @@ class CheckoutStatusResponse(BaseModel):
     payment_status: str
     amount_total: float
     currency: str
-    package_id: Optional[str] = None
-    ledger_entry_id: Optional[str] = None
+    package_id: str | None = None
+    ledger_entry_id: str | None = None
     recorded: bool = False
 
 
@@ -149,7 +149,7 @@ async def _ensure_saas_stream(db):
     existing = await db.revenue_streams.find_one({"id": REVENUE_STREAM_FOR_PAYMENTS})
     if existing:
         return
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
     await db.revenue_streams.insert_one({
         "id": REVENUE_STREAM_FOR_PAYMENTS,
         "name": "SaaS Subscriptions",
@@ -255,8 +255,8 @@ async def create_checkout(payload: CheckoutCreateRequest, http_request: Request,
             "referrer": payload.referrer or "",
         },
         "ledger_entry_id": None,
-        "created_at": datetime.now(timezone.utc).isoformat(),
-        "updated_at": datetime.now(timezone.utc).isoformat(),
+        "created_at": datetime.now(UTC).isoformat(),
+        "updated_at": datetime.now(UTC).isoformat(),
     })
     await log_audit_event(
         db, "payment.initiated", "operator", "checkout",
@@ -271,7 +271,7 @@ async def _record_paid_to_ledger(db, txn: dict) -> str:
     """Idempotently record a paid Stripe transaction into revenue_ledger."""
     if txn.get("ledger_entry_id"):
         return txn["ledger_entry_id"]  # already recorded
-    today = datetime.now(timezone.utc).date().isoformat()
+    today = datetime.now(UTC).date().isoformat()
     entry_id = f"led-{uuid.uuid4().hex[:10]}"
     utm_meta = {k: txn.get("metadata", {}).get(k, "") for k in ("utm_source", "utm_medium", "utm_campaign", "referrer")}
     await db.revenue_ledger.insert_one({
@@ -286,11 +286,11 @@ async def _record_paid_to_ledger(db, txn: dict) -> str:
         "notes": f"Stripe checkout - package {txn['package_id']}"
                  + (f" via {utm_meta['utm_source']}" if utm_meta["utm_source"] else ""),
         "metadata": {**utm_meta, "package_id": txn["package_id"]},
-        "created_at": datetime.now(timezone.utc).isoformat(),
+        "created_at": datetime.now(UTC).isoformat(),
     })
     await db.payment_transactions.update_one(
         {"session_id": txn["session_id"]},
-        {"$set": {"ledger_entry_id": entry_id, "updated_at": datetime.now(timezone.utc).isoformat()}},
+        {"$set": {"ledger_entry_id": entry_id, "updated_at": datetime.now(UTC).isoformat()}},
     )
     await log_audit_event(
         db, "payment.recorded_to_ledger", "stripe", "record",
@@ -317,7 +317,7 @@ async def get_checkout_status(session_id: str, http_request: Request, db=Depends
 
     # Update local status
     new_status = status.payment_status
-    updates: dict = {"payment_status": new_status, "updated_at": datetime.now(timezone.utc).isoformat()}
+    updates: dict = {"payment_status": new_status, "updated_at": datetime.now(UTC).isoformat()}
     ledger_entry_id = txn.get("ledger_entry_id")
     recorded = bool(ledger_entry_id)
 
@@ -399,7 +399,7 @@ async def _refund_smoke_test(db, txn: dict) -> None:
             "smoke_refund_id": refund_id,
             "smoke_refund_status": refund_status,
             "payment_status": "refunded" if refund_status == "succeeded" else txn.get("payment_status"),
-            "updated_at": datetime.now(timezone.utc).isoformat(),
+            "updated_at": datetime.now(UTC).isoformat(),
         }},
     )
     await log_audit_event(
@@ -472,8 +472,8 @@ async def smoke_test_create(http_request: Request, db=Depends(get_db)):
         "ledger_entry_id": None,
         "smoke_refund_id": None,
         "smoke_refund_status": None,
-        "created_at": datetime.now(timezone.utc).isoformat(),
-        "updated_at": datetime.now(timezone.utc).isoformat(),
+        "created_at": datetime.now(UTC).isoformat(),
+        "updated_at": datetime.now(UTC).isoformat(),
     })
     await log_audit_event(
         db, "payment.smoke_test_created", "operator", "smoke_test",
@@ -567,6 +567,7 @@ async def generate_share_link(
     if package_id not in PACKAGES:
         raise HTTPException(status_code=400, detail=f"Unknown package: {package_id}")
     from urllib.parse import urlencode
+
     # Resolve origin: query param > REACT_APP_BACKEND_URL env > APP_PUBLIC_URL env
     resolved_origin = (
         origin_url.rstrip("/")
@@ -593,8 +594,8 @@ async def generate_share_link(
 
 class StripeKeyRotation(BaseModel):
     stripe_api_key: str
-    stripe_webhook_secret: Optional[str] = None
-    note: Optional[str] = None
+    stripe_webhook_secret: str | None = None
+    note: str | None = None
 
 
 def _validate_stripe_key_shape(key: str) -> str:
@@ -602,7 +603,7 @@ def _validate_stripe_key_shape(key: str) -> str:
     k = (key or "").strip()
     if not k:
         raise HTTPException(status_code=400, detail="stripe_api_key is required")
-    if not (k.startswith("sk_test_") or k.startswith("sk_live_") or k.startswith("rk_live_") or k.startswith("rk_test_")):
+    if not k.startswith(("sk_test_", "sk_live_", "rk_live_", "rk_test_")):
         raise HTTPException(
             status_code=400,
             detail="stripe_api_key must start with sk_test_, sk_live_, rk_test_, or rk_live_",
@@ -645,7 +646,7 @@ async def rotate_stripe_keys(
     lines = [f"STRIPE_API_KEY={new_key}"]
     if body.stripe_webhook_secret:
         lines.append(f"STRIPE_WEBHOOK_SECRET={body.stripe_webhook_secret.strip()}")
-    lines.append(f"# proposed {datetime.now(timezone.utc).isoformat()} via /api/payments/keys/rotate")
+    lines.append(f"# proposed {datetime.now(UTC).isoformat()} via /api/payments/keys/rotate")
     try:
         import pathlib
         pathlib.Path(proposed_path).parent.mkdir(parents=True, exist_ok=True)

@@ -17,9 +17,10 @@ existing collections (`payment_transactions`, `revenue_ledger`, `analytics_event
 GET /api/revenue/equation     -> current snapshot + projection to $1M/day
 GET /api/revenue/bottleneck   -> which of the 6 variables is the limiter
 """
-from fastapi import APIRouter, Depends
-from datetime import datetime, timezone, timedelta
 from collections import Counter
+from datetime import UTC, datetime, timedelta
+
+from fastapi import APIRouter, Depends
 
 from services import governance_service as gov
 
@@ -39,7 +40,7 @@ def _safe(numerator: float, denominator: float, *, default: float = 0.0) -> floa
 
 async def _compute_variables(db) -> dict:
     """Compute the 6 variables from real live data."""
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     cutoff_30 = (now - timedelta(days=30)).isoformat()
 
     # --- Q_D: Qualified Demand (leads/day from analytics_events) ---
@@ -168,7 +169,7 @@ async def equation(db=Depends(get_db)):
     pct_of_target = round(_safe(today_capacity, north_star) * 100, 4)
 
     return {
-        "as_of": datetime.now(timezone.utc).isoformat(),
+        "as_of": datetime.now(UTC).isoformat(),
         "formula": "Q_D * C_R * A_OV * P_F * F_C * P_M",
         "variables": vars_,
         "variable_targets": target_per_var,

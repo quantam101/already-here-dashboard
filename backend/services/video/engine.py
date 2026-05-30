@@ -18,7 +18,7 @@ import asyncio
 import logging
 import os
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -31,7 +31,7 @@ WORK_ROOT = Path(os.environ.get("VIDEO_OUTPUT_DIR", "/app/data/videos"))
 
 
 def _now() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def new_job_id() -> str:
@@ -335,7 +335,9 @@ def kickoff(db, job_id: str) -> asyncio.Task:
 def capability_report() -> dict[str, Any]:
     """What the engine can do RIGHT NOW on this host."""
     import shutil
-    from services.free_apis import huggingface as _hf, pollinations as _poll
+
+    from services.free_apis import huggingface as _hf
+    from services.free_apis import pollinations as _poll
     ffmpeg = shutil.which("ffmpeg") is not None
     # piper ships as both a script ("piper") AND an importable Python module.
     # Check both — supervisor PATH may not include the venv bin dir even when

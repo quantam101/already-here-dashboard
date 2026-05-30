@@ -20,6 +20,7 @@ from __future__ import annotations
 import asyncio
 import os
 import sys
+
 import pytest
 
 # Ensure backend package is importable when running tests from /backend/tests/

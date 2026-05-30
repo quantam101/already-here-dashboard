@@ -41,7 +41,7 @@ async def _run_bw(*args: str, timeout: float = 8.0) -> tuple[int, str, str]:
     )
     try:
         out, err = await asyncio.wait_for(proc.communicate(), timeout=timeout)
-    except asyncio.TimeoutError:
+    except TimeoutError:
         proc.kill()
         return 124, "", "bw command timed out"
     return proc.returncode or 0, out.decode("utf-8", errors="replace"), err.decode("utf-8", errors="replace")

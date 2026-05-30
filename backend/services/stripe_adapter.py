@@ -16,7 +16,6 @@ from typing import Any
 
 import stripe as stripe_sdk
 
-
 _PLACEHOLDER_PREFIXES = ("sk_test_placeholder", "sk_test_emergent")
 
 

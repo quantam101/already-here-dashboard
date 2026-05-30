@@ -25,9 +25,8 @@ from __future__ import annotations
 import logging
 import os
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Optional
 
 import yaml
 from fastapi import HTTPException, Request
@@ -99,7 +98,7 @@ def level_numeric(level: str | None = None) -> int:
     return LEVEL_TO_INT.get((level or current_level()).upper(), 3)
 
 
-def gate(action_id: str) -> Optional[dict]:
+def gate(action_id: str) -> dict | None:
     """Return the gate dict for an action id, or None if no gate is mapped."""
     for g in load_manifest().get("hitl_gates", []) or []:
         if g.get("id") == action_id:
@@ -107,7 +106,7 @@ def gate(action_id: str) -> Optional[dict]:
     return None
 
 
-def route_to_gate(method: str, path: str) -> Optional[str]:
+def route_to_gate(method: str, path: str) -> str | None:
     """Map an inbound HTTP request to a gate id, if any."""
     key = f"{method.upper()} {path}"
     return (load_manifest().get("route_gates", {}) or {}).get(key)
@@ -139,7 +138,7 @@ async def create_approval_row(db, action_id: str, context: dict) -> dict:
         "action_id": action_id,
         "context": context,
         "status": "pending",
-        "requested_at": datetime.now(timezone.utc).isoformat(),
+        "requested_at": datetime.now(UTC).isoformat(),
         "decided_at": None,
         "decided_by": None,
         "decision_note": None,
@@ -150,7 +149,7 @@ async def create_approval_row(db, action_id: str, context: dict) -> dict:
     return row
 
 
-async def get_approval(db, approval_id: str) -> Optional[dict]:
+async def get_approval(db, approval_id: str) -> dict | None:
     return await db[APPROVAL_COLLECTION].find_one({"id": approval_id}, {"_id": 0})
 
 
@@ -175,7 +174,7 @@ async def decide_approval(
     if row.get("status") in {"approved", "rejected"}:
         return row  # final — no further decisions accepted
 
-    now_iso = datetime.now(timezone.utc).isoformat()
+    now_iso = datetime.now(UTC).isoformat()
     decision_entry = {
         "actor": actor,
         "approve": approve,

@@ -15,8 +15,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
-from datetime import datetime, timezone, timedelta
-from typing import Any
+from datetime import UTC, datetime, timedelta
 
 import httpx
 
@@ -49,7 +48,7 @@ def _url_key(url: str) -> str:
 
 
 def _now() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 class ScoutAgent(BaseAgent):
@@ -64,7 +63,7 @@ class ScoutAgent(BaseAgent):
     timeout_seconds = 45.0
 
     async def execute(self, db, ctx: dict) -> dict:
-        cutoff = (datetime.now(timezone.utc) - timedelta(hours=DEDUP_HOURS)).isoformat()
+        cutoff = (datetime.now(UTC) - timedelta(hours=DEDUP_HOURS)).isoformat()
         existing_keys: set[str] = set()
         try:
             rows = await db[COLLECTION].find(

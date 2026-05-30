@@ -1,12 +1,18 @@
-from fastapi import APIRouter, HTTPException, Depends
-from typing import List, Optional
+from datetime import UTC, datetime
+from typing import List
+
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
+
 from content_models import (
-    ContentIdea, ContentScript, PlatformConnector,
-    ScheduledPost, ContentAnalytics,
-    ContentStatusEnum, PlatformEnum
+    ContentAnalytics,
+    ContentIdea,
+    ContentScript,
+    ContentStatusEnum,
+    PlatformConnector,
+    PlatformEnum,
+    ScheduledPost,
 )
-from datetime import datetime, timezone
 from services.audit_service import log_audit_event
 
 router = APIRouter()
@@ -17,9 +23,9 @@ class ContentIdeaCreate(BaseModel):
     description: str
     topic: str
     target_platforms: List[PlatformEnum] = Field(default_factory=list)
-    priority: Optional[str] = "medium"
+    priority: str | None = "medium"
     tags: List[str] = Field(default_factory=list)
-    inspiration_source: Optional[str] = None
+    inspiration_source: str | None = None
 
 
 async def get_db():
@@ -55,20 +61,20 @@ async def generate_script(idea_id: str, db=Depends(get_db)):
     idea = await db.content_ideas.find_one({"id": idea_id}, {"_id": 0})
     if not idea:
         raise HTTPException(status_code=404, detail="Idea not found")
-    
+
     from services.content_generation_service import generate_script_from_idea
     script = await generate_script_from_idea(idea, db=db)
-    
+
     doc = script.model_dump()
     doc['created_at'] = doc['created_at'].isoformat()
     doc['updated_at'] = doc['updated_at'].isoformat()
     await db.content_scripts.insert_one(doc)
-    
+
     await db.content_ideas.update_one(
         {"id": idea_id},
-        {"$set": {"status": "scripted", "updated_at": datetime.now(timezone.utc).isoformat()}}
+        {"$set": {"status": "scripted", "updated_at": datetime.now(UTC).isoformat()}}
     )
-    
+
     await log_audit_event(db, "content_script.generated", "system", "generate", "content_script", script.id)
     return script
 
@@ -114,7 +120,7 @@ async def get_connector(connector_id: str, db=Depends(get_db)):
     connector = await db.platform_connectors.find_one({"id": connector_id}, {"_id": 0})
     if not connector:
         raise HTTPException(status_code=404, detail="Connector not found")
-    
+
     if isinstance(connector.get('created_at'), str):
         connector['created_at'] = datetime.fromisoformat(connector['created_at'])
     if isinstance(connector.get('updated_at'), str):
@@ -125,30 +131,30 @@ async def get_connector(connector_id: str, db=Depends(get_db)):
 @router.post("/schedule/", response_model=ScheduledPost)
 async def schedule_post(post: dict, db=Depends(get_db)):
     post_obj = ScheduledPost(**post)
-    
+
     # Check platform connector
     connector = await db.platform_connectors.find_one(
         {"platform": post_obj.platform},
         {"_id": 0}
     )
-    
+
     if not connector:
         raise HTTPException(status_code=400, detail=f"No connector configured for {post_obj.platform}")
-    
+
     # Determine publishing method based on connector status
     if connector['cost_class'] in ['free_local', 'free_external'] and connector['api_authenticated']:
         post_obj.publishing_method = "direct_api"
     else:
         post_obj.publishing_method = "manual_export"
         post_obj.status = ContentStatusEnum.MANUAL_UPLOAD_REQUIRED
-    
+
     doc = post_obj.model_dump()
     doc['scheduled_time'] = doc['scheduled_time'].isoformat()
     doc['created_at'] = doc['created_at'].isoformat()
     doc['updated_at'] = doc['updated_at'].isoformat()
     if doc.get('published_at'):
         doc['published_at'] = doc['published_at'].isoformat()
-    
+
     await db.scheduled_posts.insert_one(doc)
     await log_audit_event(db, "post.scheduled", "system", "schedule", "scheduled_post", post_obj.id)
     return post_obj
@@ -160,7 +166,7 @@ async def list_scheduled_posts(platform: str = None, status: str = None, db=Depe
         query['platform'] = platform
     if status:
         query['status'] = status
-    
+
     posts = await db.scheduled_posts.find(query, {"_id": 0}).sort("scheduled_time", 1).to_list(1000)
     for post in posts:
         if isinstance(post.get('scheduled_time'), str):
@@ -178,19 +184,19 @@ async def generate_export_pack(post_id: str, db=Depends(get_db)):
     post = await db.scheduled_posts.find_one({"id": post_id}, {"_id": 0})
     if not post:
         raise HTTPException(status_code=404, detail="Scheduled post not found")
-    
+
     from services.export_service import create_export_pack
     export_path = await create_export_pack(post)
-    
+
     await db.scheduled_posts.update_one(
         {"id": post_id},
         {"$set": {
             "export_pack_path": export_path,
             "status": "manual_upload_required",
-            "updated_at": datetime.now(timezone.utc).isoformat()
+            "updated_at": datetime.now(UTC).isoformat()
         }}
     )
-    
+
     return {"export_pack_path": export_path, "message": "Export pack ready for manual upload"}
 
 # Analytics

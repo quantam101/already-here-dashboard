@@ -42,8 +42,21 @@ ignore = [
 ]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/**/*.py" = ["S", "B", "E402"]   # tests: relax security + import-order rules
-"seed_data.py" = ["S"]                  # seed script: hardcoded test data is fine
+"tests/**/*.py" = ["S", "B", "E402"]           # tests: relax security + import-order rules
+"tests/*.py" = ["S", "B", "E402"]              # also matches top-level test files
+"backend/tests/**/*.py" = ["S", "B", "E402"]   # when ruff runs from repo root
+"backend/tests/*.py" = ["S", "B", "E402"]      # top-level backend test files
+"seed_data.py" = ["S"]                          # seed script: hardcoded test data is fine
+"backend/seed_data.py" = ["S"]
+"server.py" = ["E402"]                          # load_dotenv must run before route imports
+"backend/server.py" = ["E402"]
+"run_sqlite_test.py" = ["E402"]                 # sys.path.insert must precede server import
+"backend/run_sqlite_test.py" = ["E402"]
+
+[tool.ruff.lint.isort]
+# Match standalone isort profile="black" config
+known-first-party = ["agents", "routes", "services", "content_models"]
+known-third-party = ["fastapi", "pydantic", "httpx", "uvicorn"]
 
 [tool.ruff.format]
 quote-style = "double"

@@ -18,8 +18,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
-from datetime import datetime, timezone
-from typing import Any
+from datetime import UTC, datetime
 
 from agents.base_agent import AgentResult, BaseAgent
 
@@ -45,7 +44,7 @@ class ExecutionReport:
     def __init__(self, results: list[AgentResult], duration_ms: int):
         self.results = results
         self.duration_ms = duration_ms
-        self.started_at = datetime.now(timezone.utc).isoformat()
+        self.started_at = datetime.now(UTC).isoformat()
         self.agents_run = len(results)
         self.agents_succeeded = sum(1 for r in results if r.success)
         self.agents_failed = self.agents_run - self.agents_succeeded

@@ -102,8 +102,9 @@ async def synthesize_pollinations_voice(
     Returns a WAV file (we transcode the MP3 to WAV so it merges with the
     rest of the ffmpeg pipeline that expects WAV input).
     """
-    from services.free_apis import pollinations
     import asyncio as _asyncio
+
+    from services.free_apis import pollinations
     output_wav.parent.mkdir(parents=True, exist_ok=True)
     mp3_bytes = await pollinations.synthesize_speech(text, voice=voice)
     mp3_path = output_wav.with_suffix(".mp3")
@@ -134,7 +135,7 @@ async def generate_music_track(prompt: str, duration_s: int = 30) -> Path | None
     if not huggingface.is_configured():
         return None
     import hashlib
-    key = hashlib.sha256(f"{prompt}:{duration_s}".encode("utf-8")).hexdigest()[:16]
+    key = hashlib.sha256(f"{prompt}:{duration_s}".encode()).hexdigest()[:16]
     cached = AI_MUSIC_DIR / f"{key}.wav"
     if cached.exists() and cached.stat().st_size > 1024:
         return cached

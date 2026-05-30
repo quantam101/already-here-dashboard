@@ -9,17 +9,17 @@ Stored in MongoDB `books` collection; downloadable from frontend.
 
 Adds a new revenue stream: rev-books.
 """
-from fastapi import APIRouter, HTTPException, Depends, Request, BackgroundTasks
-from fastapi.responses import PlainTextResponse, Response, FileResponse
-from pydantic import BaseModel, Field
-from typing import Optional
-from datetime import datetime, timezone
 import os
 import uuid
+from datetime import UTC, datetime
 
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
+from fastapi.responses import FileResponse, PlainTextResponse, Response
+from pydantic import BaseModel, Field
+
+from services import governance_service as gov
 from services.audit_service import log_audit_event
 from services.llm_runner import run_cached
-from services import governance_service as gov
 
 router = APIRouter()
 
@@ -39,7 +39,7 @@ class BookCreateRequest(BaseModel):
     word_target_per_chapter: int = 800
     chapter_count: int = DEFAULT_CHAPTER_COUNT
     outline_hints: list[str] = Field(default_factory=list)
-    instructions: Optional[str] = None
+    instructions: str | None = None
 
 
 class BookChapter(BaseModel):
@@ -60,8 +60,8 @@ class Book(BaseModel):
     total_word_count: int = 0
     download_count: int = 0
     metadata: dict = Field(default_factory=dict)
-    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
-    updated_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    created_at: str = Field(default_factory=lambda: datetime.now(UTC).isoformat())
+    updated_at: str = Field(default_factory=lambda: datetime.now(UTC).isoformat())
 
 
 async def get_db():
@@ -78,7 +78,7 @@ async def _ensure_books_stream(db):
     """Ensure rev-books revenue stream exists."""
     if await db.revenue_streams.find_one({"id": REVENUE_STREAM_BOOKS}):
         return
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
     await db.revenue_streams.insert_one({
         "id": REVENUE_STREAM_BOOKS, "name": "Books & Ebooks", "type": "content",
         "status": "active", "monthly_target": 3000.0, "monthly_actual": 0.0,
@@ -224,7 +224,7 @@ async def _generate_book_task(db, book_id: str, req: BookCreateRequest) -> None:
                 {"id": book_id},
                 {"$set": {
                     "chapters": [c.model_dump() for c in chapters],
-                    "updated_at": datetime.now(timezone.utc).isoformat(),
+                    "updated_at": datetime.now(UTC).isoformat(),
                 }},
             )
 
@@ -235,7 +235,7 @@ async def _generate_book_task(db, book_id: str, req: BookCreateRequest) -> None:
                 "chapters": [c.model_dump() for c in chapters],
                 "status": "complete",
                 "total_word_count": total_words,
-                "updated_at": datetime.now(timezone.utc).isoformat(),
+                "updated_at": datetime.now(UTC).isoformat(),
             }},
         )
         await log_audit_event(
@@ -251,13 +251,13 @@ async def _generate_book_task(db, book_id: str, req: BookCreateRequest) -> None:
             {"$set": {
                 "status": "failed",
                 "metadata.error": str(e)[:500],
-                "updated_at": datetime.now(timezone.utc).isoformat(),
+                "updated_at": datetime.now(UTC).isoformat(),
             }},
         )
 
 
 @router.get("/", response_model=list[Book])
-async def list_books(status: Optional[str] = None, db=Depends(get_db)):
+async def list_books(status: str | None = None, db=Depends(get_db)):
     query: dict = {}
     if status:
         query["status"] = status

@@ -8,12 +8,10 @@ from __future__ import annotations
 
 import asyncio
 import subprocess
-from pathlib import Path
 
 import pytest
 
 from services.video import local_music, local_voice
-
 
 pytestmark = pytest.mark.slow
 
