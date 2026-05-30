@@ -38,7 +38,7 @@ def new_job_id() -> str:
     return f"vid-{uuid.uuid4().hex[:10]}"
 
 
-async def create_job(db, *, script: dict, voice_id: str | None, mode: str = "faceless", portrait_path: str | None = None, music_id: str | None = None, music_volume: float = 0.15, adaptive_captions: bool = False, voice_ref_id: str | None = None, ai_music_prompt: str | None = None) -> dict:
+async def create_job(db, *, script: dict, voice_id: str | None, mode: str = "faceless", portrait_path: str | None = None, music_id: str | None = None, music_volume: float = 0.15, adaptive_captions: bool = False, voice_ref_id: str | None = None, ai_music_prompt: str | None = None, pollinations_voice: str | None = None) -> dict:
     """Insert a `pending` job row and return it. Operator polls /status."""
     row = {
         "id": new_job_id(),
@@ -57,6 +57,7 @@ async def create_job(db, *, script: dict, voice_id: str | None, mode: str = "fac
         "adaptive_captions": bool(adaptive_captions),
         "voice_ref_id": voice_ref_id,
         "ai_music_prompt": ai_music_prompt,
+        "pollinations_voice": pollinations_voice,
         "progress_pct": 0,
         "message": "queued",
         "output_path": None,
@@ -116,12 +117,20 @@ async def _run_faceless_pipeline(db, job: dict) -> None:
         await _update(db, job_id, status="running", progress_pct=5, message="generating narration")
         wav_path = WORK_ROOT / f"{job_id}.wav"
         voice_ref_id = job.get("voice_ref_id")
+        pollinations_voice = job.get("pollinations_voice")
         if voice_ref_id:
             try:
                 await _update(db, job_id, progress_pct=8, message=f"voice-cloning via XTTS-v2 ({voice_ref_id})")
                 await gen_assets.synthesize_cloned_voice(narration, voice_ref_id, wav_path)
             except Exception as e:
                 logger.warning("voice clone failed, falling back to Piper: %s", str(e)[:200])
+                await tts.synthesize(narration, wav_path, voice_id=job.get("voice_id"))
+        elif pollinations_voice:
+            try:
+                await _update(db, job_id, progress_pct=8, message=f"pollinations TTS ({pollinations_voice})")
+                await gen_assets.synthesize_pollinations_voice(narration, pollinations_voice, wav_path)
+            except Exception as e:
+                logger.warning("pollinations TTS failed, falling back to Piper: %s", str(e)[:200])
                 await tts.synthesize(narration, wav_path, voice_id=job.get("voice_id"))
         else:
             await tts.synthesize(narration, wav_path, voice_id=job.get("voice_id"))
@@ -344,9 +353,16 @@ def capability_report() -> dict[str, Any]:
             "huggingface": hf_ok,
         },
         "ai_b_roll_available": pollinations_ok or hf_ok,
-        "voice_cloning_available": hf_ok,
-        "ai_music_generation_available": hf_ok,
-        "text_to_video_available": hf_ok,
+        # NOTE (Feb 2026): HF pruned voice/music/video models from the free
+        # hf-inference tier. Only text-to-image + ASR remain free on HF.
+        # We surface what's *actually* available; Pollinations TTS provides a
+        # keyless free TTS path (expressive voices, no cloning).
+        "voice_cloning_available": False,  # XTTS-v2 no longer on free tier
+        "pollinations_tts_available": pollinations_ok,
+        "pollinations_tts_voices": ["alloy", "echo", "fable", "onyx", "nova", "shimmer"],
+        "ai_music_generation_available": False,  # MusicGen not on free tier
+        "text_to_video_available": False,  # AnimateDiff not on free tier
+        "hf_image_generation_available": hf_ok,
         "voice_refs_uploaded": [r["voice_ref_id"] for r in voice_refs],
         "modes_available": {
             "faceless": ffmpeg and piper and bool(voices),

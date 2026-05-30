@@ -64,11 +64,19 @@ async def synthesize_cloned_voice(
     voice_ref_id: str,
     output_wav: Path,
 ) -> Path:
-    """XTTS-v2 via HF. Raises if HF not configured or model fails to warm."""
+    """XTTS-v2 via HF. Raises if HF not configured or model not available.
+
+    NOTE (Feb 2026): HF pruned XTTS-v2 from the free hf-inference tier.
+    The free fallback path is `synthesize_pollinations_voice()` which
+    gives expressive non-cloned voices (alloy/nova/echo/etc.) at $0.
+    """
     if not huggingface.is_configured():
         raise huggingface.HFNotConfigured(
             "Voice cloning requires HUGGINGFACE_API_KEY (free at "
-            "https://huggingface.co/settings/tokens)."
+            "https://huggingface.co/settings/tokens). NOTE: XTTS-v2 was "
+            "pruned from the free hf-inference tier in 2025; the hosted "
+            "endpoint may return 'model not supported'. Use the Pollinations "
+            "TTS fallback (`pollinations_voice` option) for expressive $0 narration."
         )
     ref = voice_ref_path(voice_ref_id)
     if not ref:
@@ -80,6 +88,40 @@ async def synthesize_cloned_voice(
     )
     output_wav.write_bytes(audio_bytes)
     logger.info("voice-cloned WAV: %s (%d bytes)", output_wav.name, len(audio_bytes))
+    return output_wav
+
+
+async def synthesize_pollinations_voice(
+    text: str,
+    voice: str,
+    output_wav: Path,
+) -> Path:
+    """Pollinations OpenAI-compatible TTS — keyless free.
+
+    Voices: alloy, echo, fable, onyx, nova, shimmer.
+    Returns a WAV file (we transcode the MP3 to WAV so it merges with the
+    rest of the ffmpeg pipeline that expects WAV input).
+    """
+    from services.free_apis import pollinations
+    import asyncio as _asyncio
+    output_wav.parent.mkdir(parents=True, exist_ok=True)
+    mp3_bytes = await pollinations.synthesize_speech(text, voice=voice)
+    mp3_path = output_wav.with_suffix(".mp3")
+    mp3_path.write_bytes(mp3_bytes)
+    # Transcode MP3 → WAV so downstream ffmpeg concat / probe_duration works
+    proc = await _asyncio.create_subprocess_exec(
+        "ffmpeg", "-y", "-loglevel", "error",
+        "-i", str(mp3_path), "-ar", "22050", "-ac", "1", str(output_wav),
+        stderr=_asyncio.subprocess.PIPE,
+    )
+    _, err = await proc.communicate()
+    if proc.returncode != 0:
+        raise RuntimeError(f"pollinations TTS transcode failed: {err.decode(errors='replace')[:300]}")
+    try:
+        mp3_path.unlink()
+    except OSError:
+        pass
+    logger.info("pollinations WAV: %s voice=%s (%d bytes)", output_wav.name, voice, output_wav.stat().st_size)
     return output_wav
 
 

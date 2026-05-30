@@ -52,8 +52,9 @@ class RenderRequest(BaseModel):
     music_id: str | None = None  # cinematic | upbeat | chill | None
     music_volume: float = 0.15
     adaptive_captions: bool = False  # use faster-whisper word-level timing
-    voice_ref_id: str | None = None  # XTTS-v2 voice clone source
-    ai_music_prompt: str | None = None  # if set, MusicGen overrides bundled bed
+    voice_ref_id: str | None = None  # XTTS-v2 voice clone source (legacy; HF pruned)
+    ai_music_prompt: str | None = None  # if set, MusicGen overrides bundled bed (HF pruned)
+    pollinations_voice: str | None = None  # alloy|echo|fable|onyx|nova|shimmer — keyless free TTS
 
 
 class RenderFromScriptRequest(BaseModel):
@@ -66,6 +67,8 @@ class RenderFromScriptRequest(BaseModel):
     adaptive_captions: bool = False
     voice_ref_id: str | None = None
     ai_music_prompt: str | None = None
+    pollinations_voice: str | None = None
+    pollinations_voice: str | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -228,6 +231,7 @@ async def render(req: RenderRequest, http_request: Request, background: Backgrou
         adaptive_captions=req.adaptive_captions,
         voice_ref_id=req.voice_ref_id,
         ai_music_prompt=req.ai_music_prompt,
+        pollinations_voice=req.pollinations_voice,
     )
     background.add_task(_run_pipeline_task, job["id"])
     await log_audit_event(
@@ -321,6 +325,7 @@ async def render_from_script(
         adaptive_captions=req.adaptive_captions,
         voice_ref_id=req.voice_ref_id,
         ai_music_prompt=req.ai_music_prompt,
+        pollinations_voice=req.pollinations_voice,
     )
     return await render(payload, http_request, background, db)
 

@@ -1,0 +1,11 @@
+1
+00:00:00,000 --> 00:00:03,978
+Hello world iter11-1780105530.
+
+2
+00:00:03,978 --> 00:00:07,957
+This is an iteration eleven AI B-roll regression test.
+
+3
+00:00:07,957 --> 00:00:11,935
+Subscribe now.

@@ -1,0 +1,15 @@
+{
+  "job_id": "vid-f881a3b8cc",
+  "mode": "faceless",
+  "shots": [
+    "unique scene iter11-1780105755 pyramid night sky stars",
+    "unique scene iter11-1780105755 ocean sunset waves",
+    "unique scene iter11-1780105755 forest mist morning"
+  ],
+  "voice_id": null,
+  "clip_count": 3,
+  "music_id": null,
+  "adaptive_captions_used": false,
+  "size_bytes": 12366223,
+  "created_at": "2026-05-30T01:49:52.772795+00:00"
+}

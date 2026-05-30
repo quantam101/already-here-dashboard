@@ -18,8 +18,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 
-export function GenerativeSuite({ capability, voiceRefId, setVoiceRefId, aiMusicPrompt, setAiMusicPrompt }) {
+export function GenerativeSuite({ capability, voiceRefId, setVoiceRefId, aiMusicPrompt, setAiMusicPrompt, pollinationsVoice, setPollinationsVoice }) {
   const free = capability?.free_providers || {};
+  const ttsVoices = capability?.pollinations_tts_voices || ["alloy", "echo", "fable", "onyx", "nova", "shimmer"];
   return (
     <div className="metric-card mb-6" data-testid="generative-suite">
       <div className="flex items-start justify-between gap-4 mb-3">
@@ -30,29 +31,29 @@ export function GenerativeSuite({ capability, voiceRefId, setVoiceRefId, aiMusic
             <span className="text-[10px] uppercase tracking-wider text-fuchsia-300 bg-fuchsia-500/15 border border-fuchsia-500/30 rounded px-1.5 py-0.5">$0 / mo</span>
           </div>
           <p className="text-xs text-gray-500">
-            Pollinations (keyless) + Hugging Face Inference (free tier). Image gen, voice cloning, AI music, text-to-video — all free.
+            Pollinations (keyless, image + TTS) + Hugging Face Inference (free FLUX-schnell image gen). All zero-cost.
           </p>
         </div>
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 text-xs mb-4">
         <ProviderPill label="Pollinations" ok={!!free.pollinations_ai} note="keyless" />
-        <ProviderPill label="Hugging Face" ok={!!free.huggingface} note={free.huggingface ? "configured" : "set HF token"} />
+        <ProviderPill label="Hugging Face" ok={!!free.huggingface} note={free.huggingface ? "FLUX-schnell" : "set HF token"} />
         <ProviderPill label="AI B-roll" ok={!!capability?.ai_b_roll_available} note={capability?.ai_b_roll_available ? "auto-on" : "—"} />
-        <ProviderPill label="Voice Cloning" ok={!!capability?.voice_cloning_available} note={capability?.voice_cloning_available ? "XTTS-v2" : "needs HF token"} />
+        <ProviderPill label="Pollinations TTS" ok={!!capability?.pollinations_tts_available} note="6 voices" />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <ImagePreview />
-        <VoiceRefPanel voiceRefId={voiceRefId} setVoiceRefId={setVoiceRefId} hfReady={!!free.huggingface} />
-        <AiMusicPanel aiMusicPrompt={aiMusicPrompt} setAiMusicPrompt={setAiMusicPrompt} hfReady={!!free.huggingface} />
+        <ImagePreview hfReady={!!free.huggingface} />
+        <PollinationsTTSPanel voices={ttsVoices} pollinationsVoice={pollinationsVoice} setPollinationsVoice={setPollinationsVoice} />
+        <VoiceRefPanel voiceRefId={voiceRefId} setVoiceRefId={setVoiceRefId} cloneAvailable={!!capability?.voice_cloning_available} />
       </div>
 
-      {!free.huggingface && (
+      {(capability?.ai_music_generation_available === false || capability?.text_to_video_available === false) && (
         <div className="mt-3 pt-3 border-t border-white/5">
-          <p className="text-[10px] uppercase tracking-wider text-amber-300 mb-1">Unlock everything by adding a free HF token</p>
+          <p className="text-[10px] uppercase tracking-wider text-amber-300 mb-1">Free-tier notice (Feb 2026)</p>
           <p className="text-xs text-gray-400 leading-snug">
-            Drop a free <code className="text-amber-300">HUGGINGFACE_API_KEY</code> into <code className="text-amber-300">backend/.env</code> (get one at <a href="https://huggingface.co/settings/tokens" target="_blank" rel="noreferrer" className="text-blue-300 underline">huggingface.co/settings/tokens</a>) to unlock voice cloning, AI music, and text-to-video — all at $0/mo on the free Inference tier.
+            Hugging Face pruned MusicGen, XTTS-v2 voice cloning, and AnimateDiff from the free hf-inference tier. The Generative Suite now uses <span className="text-emerald-300">Pollinations TTS</span> (keyless, 6 voices) for narration variety and the <span className="text-emerald-300">bundled CC0 music beds</span> for backing tracks. FLUX-schnell text-to-image still works free on HF.
           </p>
         </div>
       )}
@@ -72,18 +73,34 @@ function ProviderPill({ label, ok, note }) {
   );
 }
 
-function ImagePreview() {
+function ImagePreview({ hfReady }) {
   const [prompt, setPrompt] = useState("cinematic golden hour city skyline, neon highlights, 9:16 vertical");
+  const [provider, setProvider] = useState("pollinations");
   const [dataUrl, setDataUrl] = useState(null);
   const gen = useMutation({
-    mutationFn: () => videoAPI.generativeImage({ prompt, provider: "pollinations", width: 1080, height: 1920 }).then((r) => r.data),
+    mutationFn: () => videoAPI.generativeImage({ prompt, provider, width: 1024, height: 1024 }).then((r) => r.data),
     onSuccess: (data) => setDataUrl(data.data_url),
     onError: (e) => toast.error(e?.response?.data?.detail || e.message),
   });
   return (
     <div className="bg-[rgba(20,15,30,0.4)] border border-fuchsia-500/20 rounded-lg p-3" data-testid="generative-image-panel">
       <div className="text-[11px] font-semibold text-fuchsia-200 mb-2 flex items-center gap-1.5">
-        <ImageIcon className="w-3.5 h-3.5" /> Try an AI image (Pollinations / FLUX)
+        <ImageIcon className="w-3.5 h-3.5" /> Image generation
+      </div>
+      <div className="flex gap-1 mb-2">
+        <button
+          type="button"
+          onClick={() => setProvider("pollinations")}
+          className={`flex-1 text-[10px] py-1 px-2 rounded border transition-colors ${provider === "pollinations" ? "border-fuchsia-400 bg-fuchsia-500/15 text-white" : "border-white/10 bg-black/20 text-gray-300"}`}
+          data-testid="image-provider-pollinations"
+        >Pollinations (turbo)</button>
+        <button
+          type="button"
+          onClick={() => setProvider("huggingface")}
+          disabled={!hfReady}
+          className={`flex-1 text-[10px] py-1 px-2 rounded border transition-colors ${provider === "huggingface" ? "border-fuchsia-400 bg-fuchsia-500/15 text-white" : "border-white/10 bg-black/20 text-gray-300"} ${!hfReady ? "opacity-40 cursor-not-allowed" : ""}`}
+          data-testid="image-provider-huggingface"
+        >HF FLUX-schnell</button>
       </div>
       <Input
         value={prompt}
@@ -100,18 +117,47 @@ function ImagePreview() {
         data-testid="generative-image-btn"
       >
         {gen.isPending ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <Sparkles className="w-3 h-3 mr-1" />}
-        Generate (~15s)
+        Generate {provider === "huggingface" ? "(~5s)" : "(~15s)"}
       </Button>
       {dataUrl && (
         <div className="mt-2">
-          <img src={dataUrl} alt="ai preview" className="w-full rounded border border-white/10 aspect-[9/16] object-cover" data-testid="generative-image-result" />
+          <img src={dataUrl} alt="ai preview" className="w-full rounded border border-white/10 aspect-square object-cover" data-testid="generative-image-result" />
         </div>
       )}
     </div>
   );
 }
 
-function VoiceRefPanel({ voiceRefId, setVoiceRefId, hfReady }) {
+function PollinationsTTSPanel({ voices, pollinationsVoice, setPollinationsVoice }) {
+  return (
+    <div className="bg-[rgba(15,30,30,0.4)] border border-emerald-500/20 rounded-lg p-3" data-testid="pollinations-tts-panel">
+      <div className="text-[11px] font-semibold text-emerald-200 mb-2 flex items-center gap-1.5">
+        <Mic className="w-3.5 h-3.5" /> Narration voice (free, keyless)
+      </div>
+      <p className="text-[10px] text-gray-500 mb-2 leading-snug">
+        OpenAI-compatible voices via Pollinations. Overrides Piper TTS when set.
+      </p>
+      <select
+        value={pollinationsVoice}
+        onChange={(e) => setPollinationsVoice(e.target.value)}
+        className="w-full bg-black/30 border border-white/10 rounded px-2 py-1.5 text-xs text-white"
+        data-testid="pollinations-voice-select"
+      >
+        <option value="">— Piper local (default) —</option>
+        {(voices || []).map((v) => (
+          <option key={v} value={v}>{v} (Pollinations)</option>
+        ))}
+      </select>
+      {pollinationsVoice && (
+        <div className="text-[10px] text-emerald-300/80 mt-2">
+          Selected: <code className="text-emerald-200">{pollinationsVoice}</code>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function VoiceRefPanel({ voiceRefId, setVoiceRefId, cloneAvailable }) {
   const queryClient = useQueryClient();
   const { data: refs = [] } = useQuery({
     queryKey: ["voice-refs"],
@@ -148,11 +194,11 @@ function VoiceRefPanel({ voiceRefId, setVoiceRefId, hfReady }) {
   return (
     <div className="bg-[rgba(15,20,30,0.4)] border border-blue-500/20 rounded-lg p-3" data-testid="voice-clone-panel">
       <div className="text-[11px] font-semibold text-blue-200 mb-2 flex items-center gap-1.5">
-        <Mic className="w-3.5 h-3.5" /> Clone your voice (XTTS-v2)
+        <UploadCloud className="w-3.5 h-3.5" /> Voice clone refs (XTTS-v2)
       </div>
       <p className="text-[10px] text-gray-500 mb-2 leading-snug">
-        Upload 6-30s of clean speech. Toggled per render below.
-        {!hfReady && <span className="block text-amber-400 mt-1">Needs HUGGINGFACE_API_KEY (free).</span>}
+        Upload 6-30s of clean speech.
+        {!cloneAvailable && <span className="block text-amber-400 mt-1">Hosted XTTS-v2 unavailable on HF free tier (Feb 2026). Files saved for future local install.</span>}
       </p>
       <label className="block">
         <input
@@ -180,6 +226,7 @@ function VoiceRefPanel({ voiceRefId, setVoiceRefId, hfReady }) {
               checked={voiceRefId === r.voice_ref_id}
               onChange={() => setVoiceRefId(r.voice_ref_id)}
               className="accent-blue-400"
+              disabled={!cloneAvailable}
             />
             <code className="text-blue-300 text-[10px] flex-1 truncate">{r.voice_ref_id}</code>
             <button onClick={(e) => { e.preventDefault(); handleDelete(r.voice_ref_id); }} className="text-red-400 hover:text-red-300">
@@ -196,31 +243,6 @@ function VoiceRefPanel({ voiceRefId, setVoiceRefId, hfReady }) {
             Clear selection
           </button>
         )}
-      </div>
-    </div>
-  );
-}
-
-function AiMusicPanel({ aiMusicPrompt, setAiMusicPrompt, hfReady }) {
-  return (
-    <div className="bg-[rgba(20,30,15,0.4)] border border-emerald-500/20 rounded-lg p-3" data-testid="ai-music-panel">
-      <div className="text-[11px] font-semibold text-emerald-200 mb-2 flex items-center gap-1.5">
-        <Music2 className="w-3.5 h-3.5" /> Generate AI music (MusicGen)
-      </div>
-      <p className="text-[10px] text-gray-500 mb-2 leading-snug">
-        Describe the vibe — overrides the bundled bed on render.
-        {!hfReady && <span className="block text-amber-400 mt-1">Needs HUGGINGFACE_API_KEY (free).</span>}
-      </p>
-      <Input
-        value={aiMusicPrompt}
-        onChange={(e) => setAiMusicPrompt(e.target.value)}
-        placeholder="e.g. epic orchestral cinematic build"
-        data-testid="ai-music-prompt"
-        className="bg-black/30 border-white/10 text-xs h-8"
-        disabled={!hfReady}
-      />
-      <div className="text-[10px] text-emerald-300/70 mt-1">
-        {aiMusicPrompt ? `Will generate on next render` : "Leave empty to use bundled bed"}
       </div>
     </div>
   );

@@ -290,8 +290,28 @@ async def llm_completion(
                 # Permanent error → bubble.
                 raise
 
-    # All fallbacks exhausted. Caller will catch the quota error and may
-    # apply its own deterministic template fallback (see llm_runner.py).
+    # All fallbacks exhausted. As a final $0 last resort, try Pollinations
+    # keyless text generation (no quota, no token). Disabled by setting
+    # LLM_POLLINATIONS_FALLBACK=false.
+    if (
+        is_gemini and last_err is not None
+        and _quota_exhausted(str(last_err))
+        and os.environ.get("LLM_POLLINATIONS_FALLBACK", "true").lower() not in {"false", "0", "off"}
+    ):
+        try:
+            from services.free_apis import pollinations
+            logger.warning(
+                "llm_adapter: every Gemini bucket exhausted, falling back to "
+                "Pollinations keyless text generation (free, no quota)."
+            )
+            out = await pollinations.generate_text(
+                prompt, model="openai", system=system_msg,
+            )
+            if out:
+                return out
+        except Exception as fe:
+            logger.warning("pollinations text fallback failed: %s", str(fe)[:200])
+
     raise last_err or RuntimeError("llm_completion exhausted all fallback models")
 
 

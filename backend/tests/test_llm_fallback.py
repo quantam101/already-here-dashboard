@@ -84,8 +84,10 @@ def test_llm_completion_cascades_through_models(monkeypatch, reset_gemini_env):
 
 
 def test_llm_completion_all_models_exhausted_raises(monkeypatch, reset_gemini_env):
-    """When every model in the chain 429s, the original error bubbles."""
+    """When every model in the chain 429s AND Pollinations fallback is
+    disabled, the original error bubbles."""
     monkeypatch.setenv("LLM_GEMINI_FALLBACK_MODELS", "gemini-2.5-flash")
+    monkeypatch.setenv("LLM_POLLINATIONS_FALLBACK", "false")
 
     async def fake_acompletion(**_kwargs):
         raise Exception(

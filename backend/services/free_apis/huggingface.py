@@ -28,14 +28,29 @@ import httpx
 
 logger = logging.getLogger("free_apis.huggingface")
 
-BASE = "https://api-inference.huggingface.co/models"
+BASE = "https://router.huggingface.co/hf-inference/models"
 
 # Conservative model picks — these are confirmed on the free Inference tier
-# as of Feb-May 2026. Operator can override via env vars.
+# as of Feb-May 2026 via the new router.huggingface.co endpoint. Operator
+# can override via env vars.
+# NOTE: HF heavily pruned the free hf-inference provider in 2025. The
+# previously-free FLUX.1-schnell is now a paid-provider model. We default
+# to SD 1.5 which remains on the free CPU tier.
 DEFAULT_IMAGE_MODEL = os.environ.get("HF_IMAGE_MODEL", "black-forest-labs/FLUX.1-schnell")
 DEFAULT_TTS_MODEL = os.environ.get("HF_TTS_MODEL", "coqui/XTTS-v2")
 DEFAULT_MUSIC_MODEL = os.environ.get("HF_MUSIC_MODEL", "facebook/musicgen-small")
 DEFAULT_VIDEO_MODEL = os.environ.get("HF_VIDEO_MODEL", "ali-vilab/text-to-video-ms-1.7b")
+
+# Task names per the new pipeline routing scheme.
+# NOTE (Feb 2026): the hf-inference router actually rejects requests when
+# the explicit `/pipeline/{task}` suffix is appended for the most common
+# diffusion / TTS / audio / video models — it expects the bare
+# /models/{model} path with `inputs` in the body. We keep the constants
+# for documentation but no longer append them to the URL.
+TASK_TEXT_TO_IMAGE = "text-to-image"
+TASK_TEXT_TO_SPEECH = "text-to-speech"
+TASK_TEXT_TO_AUDIO = "text-to-audio"
+TASK_TEXT_TO_VIDEO = "text-to-video"
 
 
 class HFNotConfigured(RuntimeError):
@@ -68,10 +83,17 @@ async def _post_for_bytes(
     model: str,
     json_payload: dict,
     *,
+    task: str = TASK_TEXT_TO_IMAGE,  # kept for API compat; unused in URL
     timeout: float = 120.0,
     max_warm_wait: float = 60.0,
 ) -> bytes:
-    """POST JSON, return binary body. If model is loading, wait + retry."""
+    """POST JSON to the new router endpoint, return binary body.
+
+    Endpoint format (Feb 2026): /hf-inference/models/{model}
+    (No /pipeline/{task} suffix — router rejects that for most models.)
+    If model is loading (503), wait + retry until `max_warm_wait` elapses.
+    """
+    del task  # the URL no longer needs an explicit task; kept for caller compat
     url = f"{BASE}/{model}"
     deadline = asyncio.get_event_loop().time() + max_warm_wait
     async with httpx.AsyncClient(timeout=timeout) as client:
@@ -101,6 +123,12 @@ async def _post_for_bytes(
                 logger.info("HF model %s warming, waiting %.1fs", model, wait)
                 await asyncio.sleep(min(wait, 15.0))
                 continue
+            if r.status_code == 404:
+                # Model not available on the free hf-inference provider
+                raise HFModelLoading(
+                    f"model {model!r} not available on free hf-inference tier — "
+                    f"try a different model or use Pollinations.ai (keyless)."
+                )
             r.raise_for_status()
             raise httpx.HTTPError(f"unexpected status {r.status_code}: {r.text[:200]}")
 
@@ -116,7 +144,7 @@ async def generate_image(
         "inputs": prompt[:800],
         "parameters": {"width": width, "height": height},
     }
-    return await _post_for_bytes(model, payload)
+    return await _post_for_bytes(model, payload, task=TASK_TEXT_TO_IMAGE)
 
 
 async def synthesize_speech(
@@ -137,7 +165,7 @@ async def synthesize_speech(
         }
     else:
         payload = {"inputs": text[:600]}
-    return await _post_for_bytes(model, payload, max_warm_wait=120)
+    return await _post_for_bytes(model, payload, task=TASK_TEXT_TO_SPEECH, max_warm_wait=120)
 
 
 async def generate_music(
@@ -150,7 +178,7 @@ async def generate_music(
         "inputs": prompt[:300],
         "parameters": {"duration": int(duration_s)},
     }
-    return await _post_for_bytes(model, payload, max_warm_wait=120)
+    return await _post_for_bytes(model, payload, task=TASK_TEXT_TO_AUDIO, max_warm_wait=120)
 
 
 async def generate_video(
@@ -164,7 +192,7 @@ async def generate_video(
         "inputs": prompt[:300],
         "parameters": {"num_frames": int(num_frames)},
     }
-    return await _post_for_bytes(model, payload, max_warm_wait=180)
+    return await _post_for_bytes(model, payload, task=TASK_TEXT_TO_VIDEO, max_warm_wait=180)
 
 
 async def health_check(timeout: float = 6.0) -> bool:

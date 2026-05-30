@@ -164,7 +164,7 @@ function CapPill({ label, ok, note }) {
   );
 }
 
-function RenderForm({ voices, capability, music, voiceRefId, aiMusicPrompt, onSubmit, isSubmitting }) {
+function RenderForm({ voices, capability, music, voiceRefId, aiMusicPrompt, pollinationsVoice, onSubmit, isSubmitting }) {
   const [hook, setHook] = useState("Stop scrolling — this changes how you think about money.");
   const [body, setBody] = useState("Most people work for money. Smart people build systems that pay them while they sleep.");
   const [cta, setCta] = useState("Follow for daily money tactics.");
@@ -221,6 +221,7 @@ function RenderForm({ voices, capability, music, voiceRefId, aiMusicPrompt, onSu
       adaptive_captions: adaptiveCaptions,
       voice_ref_id: voiceRefId || undefined,
       ai_music_prompt: aiMusicPrompt || undefined,
+      pollinations_voice: pollinationsVoice || undefined,
     });
   };
 
@@ -569,6 +570,7 @@ export default function VideoStudio() {
   const queryClient = useQueryClient();
   const [voiceRefId, setVoiceRefId] = useState("");
   const [aiMusicPrompt, setAiMusicPrompt] = useState("");
+  const [pollinationsVoice, setPollinationsVoice] = useState("");
 
   const { data: config } = useQuery({
     queryKey: ["video-config"],
@@ -628,6 +630,8 @@ export default function VideoStudio() {
         setVoiceRefId={setVoiceRefId}
         aiMusicPrompt={aiMusicPrompt}
         setAiMusicPrompt={setAiMusicPrompt}
+        pollinationsVoice={pollinationsVoice}
+        setPollinationsVoice={setPollinationsVoice}
       />
       <RenderForm
         voices={voices}
@@ -635,6 +639,7 @@ export default function VideoStudio() {
         music={music}
         voiceRefId={voiceRefId}
         aiMusicPrompt={aiMusicPrompt}
+        pollinationsVoice={pollinationsVoice}
         onSubmit={(payload) => render.mutate(payload)}
         isSubmitting={render.isPending}
       />

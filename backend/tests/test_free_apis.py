@@ -111,11 +111,12 @@ def test_gen_assets_save_and_lookup_voice_ref(tmp_path, monkeypatch):
 
 def test_capability_report_exposes_new_free_provider_fields():
     report = engine.capability_report()
-    # New fields shipped in iteration-11
+    # New fields shipped in iteration-11/12
     for key in (
         "free_providers", "ai_b_roll_available", "voice_cloning_available",
         "ai_music_generation_available", "text_to_video_available",
-        "voice_refs_uploaded",
+        "voice_refs_uploaded", "pollinations_tts_available",
+        "pollinations_tts_voices", "hf_image_generation_available",
     ):
         assert key in report, f"capability report missing field: {key}"
     fp = report["free_providers"]
@@ -123,3 +124,9 @@ def test_capability_report_exposes_new_free_provider_fields():
     assert "huggingface" in fp
     # Pollinations is keyless so should always be true
     assert fp["pollinations_ai"] is True
+    # As of Feb 2026 these are hardcoded False because HF pruned them
+    assert report["voice_cloning_available"] is False
+    assert report["ai_music_generation_available"] is False
+    assert report["text_to_video_available"] is False
+    # 6 Pollinations TTS voices
+    assert set(report["pollinations_tts_voices"]) == {"alloy", "echo", "fable", "onyx", "nova", "shimmer"}
