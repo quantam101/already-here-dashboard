@@ -16,8 +16,10 @@ The AuthGate passes through automatically when no operator email is set.
 from __future__ import annotations
 
 import os
+import time
 
 import pytest
+import urllib.request
 
 # Skip entire module if playwright isn't installed
 pytest.importorskip("playwright", reason="playwright not installed — skipping E2E tests")
@@ -30,8 +32,33 @@ BASE_URL = os.environ.get(
 
 FRONTEND_URL = os.environ.get("FRONTEND_URL", "https://app.alreadyherellc.com")
 
+# How long to wait (total) for the backend to become healthy before E2E tests run
+BACKEND_READY_TIMEOUT = 90  # seconds
+
+
+def _wait_for_backend(timeout: int = BACKEND_READY_TIMEOUT) -> None:
+    """Poll /api/health/ until it returns healthy or we hit the timeout."""
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        try:
+            with urllib.request.urlopen(f"{BASE_URL}/api/health/", timeout=5) as r:
+                import json
+                d = json.loads(r.read())
+                if d.get("status") == "healthy":
+                    return
+        except Exception:
+            pass
+        time.sleep(3)
+    raise RuntimeError(f"Backend not healthy after {timeout}s — E2E aborted")
+
 
 # ── Fixtures ───────────────────────────────────────────────────────────────────
+
+@pytest.fixture(scope="session", autouse=True)
+def wait_for_backend():
+    """Session-scoped: block until backend is healthy before any E2E test runs."""
+    _wait_for_backend()
+
 
 @pytest.fixture(scope="session")
 def browser_context(browser: Browser):
@@ -56,6 +83,8 @@ def page(browser_context):
         "localStorage.setItem('pe5_walkthrough_seen', new Date().toISOString());"
         "localStorage.setItem('ah_quickstart_completed_v1', new Date().toISOString());"
     )
+    # Wait for React to finish initial render before tests begin
+    p.set_default_timeout(30_000)
     yield p
     p.close()
 
@@ -79,34 +108,34 @@ class TestAPIHealthE2E:
 
 class TestDashboardNavigationE2E:
     def test_overview_page_loads(self, page: Page):
-        page.goto(f"{FRONTEND_URL}/overview")
+        page.goto(f"{FRONTEND_URL}/overview", wait_until="networkidle")
         # Dashboard title should be visible
-        expect(page.get_by_test_id("dashboard-title")).to_be_visible(timeout=15000)
+        expect(page.get_by_test_id("dashboard-title")).to_be_visible(timeout=30000)
 
     def test_sidebar_nav_present(self, page: Page):
-        page.goto(f"{FRONTEND_URL}/overview")
-        expect(page.get_by_test_id("sidebar-nav")).to_be_visible(timeout=15000)
+        page.goto(f"{FRONTEND_URL}/overview", wait_until="networkidle")
+        expect(page.get_by_test_id("sidebar-nav")).to_be_visible(timeout=30000)
 
     def test_main_content_area_visible(self, page: Page):
-        page.goto(f"{FRONTEND_URL}/overview")
-        expect(page.get_by_test_id("main-content")).to_be_visible(timeout=10000)
+        page.goto(f"{FRONTEND_URL}/overview", wait_until="networkidle")
+        expect(page.get_by_test_id("main-content")).to_be_visible(timeout=30000)
 
     def test_navigate_to_studio(self, page: Page):
-        page.goto(f"{FRONTEND_URL}/overview")
+        page.goto(f"{FRONTEND_URL}/overview", wait_until="networkidle")
         # Click Content Factory nav link
         page.get_by_test_id("nav-content-factory").click()
-        page.wait_for_url("**/studio", timeout=10000)
+        page.wait_for_url("**/studio", timeout=15000)
         expect(page).to_have_url(f"{FRONTEND_URL}/studio")
 
     def test_navigate_to_sovereign(self, page: Page):
-        page.goto(f"{FRONTEND_URL}/overview")
+        page.goto(f"{FRONTEND_URL}/overview", wait_until="networkidle")
         page.get_by_test_id("nav-cash-ai").click()
-        page.wait_for_url("**/sovereign", timeout=10000)
+        page.wait_for_url("**/sovereign", timeout=15000)
 
     def test_navigate_to_scout(self, page: Page):
-        page.goto(f"{FRONTEND_URL}/overview")
+        page.goto(f"{FRONTEND_URL}/overview", wait_until="networkidle")
         page.get_by_test_id("nav-scout").click()
-        page.wait_for_url("**/scout", timeout=10000)
+        page.wait_for_url("**/scout", timeout=15000)
 
 
 # ── Quickstart Wizard ─────────────────────────────────────────────────────────
@@ -116,21 +145,21 @@ class TestQuickstartWizardE2E:
         """Open a fresh page with cleared localStorage to trigger first-run wizard."""
         page = browser_context.new_page()
         # Clear wizard completion flag
-        page.goto(f"{FRONTEND_URL}/overview")
+        page.goto(f"{FRONTEND_URL}/overview", wait_until="networkidle")
         page.evaluate("window.localStorage.removeItem('ah_quickstart_completed_v1')")
-        page.reload()
+        page.reload(wait_until="networkidle")
 
         # Wizard dialog should open
         wizard = page.get_by_test_id("quickstart-wizard")
-        expect(wizard).to_be_visible(timeout=15000)
+        expect(wizard).to_be_visible(timeout=30000)
         page.close()
 
     def test_wizard_skip_button_dismisses(self, browser_context):
         page = browser_context.new_page()
-        page.goto(f"{FRONTEND_URL}/overview")
+        page.goto(f"{FRONTEND_URL}/overview", wait_until="networkidle")
         page.evaluate("window.localStorage.removeItem('ah_quickstart_completed_v1')")
-        page.reload()
-        page.wait_for_selector('[data-testid="quickstart-wizard"]', timeout=15000)
+        page.reload(wait_until="networkidle")
+        page.wait_for_selector('[data-testid="quickstart-wizard"]', timeout=30000)
 
         # Click Skip
         page.get_by_test_id("quickstart-skip").click()
