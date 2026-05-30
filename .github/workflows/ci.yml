@@ -282,7 +282,6 @@ jobs:
     name: "6 · Regression Tests"
     needs: e2e-tests
     runs-on: ubuntu-latest
-    if: always()
     if: always() && needs.e2e-tests.result != 'failure'
     steps:
       - uses: actions/checkout@v4
