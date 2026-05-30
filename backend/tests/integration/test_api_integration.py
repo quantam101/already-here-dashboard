@@ -71,10 +71,11 @@ class TestAuthIntegration:
         r = client.get("/api/auth/me")
         assert r.status_code == 401
 
-    def test_session_bogus_id_401(self, client):
+    def test_login_bad_token_rejected(self, client):
         skip_no_app(client)
-        r = client.post("/api/auth/session", json={"session_id": "bogus-session-xyz"})
-        assert r.status_code == 401
+        r = client.post("/api/auth/login", json={"operator_token": "bogus-token-xyz"})
+        # 401 when OPERATOR_TOKEN is set but wrong; 503 when not configured in CI env
+        assert r.status_code in (401, 503), f"Expected rejection, got {r.status_code}"
 
     def test_logout_always_200(self, client):
         skip_no_app(client)
@@ -93,7 +94,7 @@ class TestSystemStatusIntegration:
         d = r.json()
         for key in (
             "operator_email_set", "stripe_mode", "stripe_webhook_secret_set",
-            "emergent_llm_key_set", "daily_cycle_hour_utc", "counts", "is_seeded",
+            "llm_key_set", "daily_cycle_hour_utc", "counts", "is_seeded",
         ):
             assert key in d, f"Missing key: {key}"
 
