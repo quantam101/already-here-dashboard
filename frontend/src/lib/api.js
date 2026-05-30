@@ -225,3 +225,14 @@ export const revenueEquationAPI = {
 export const lcacAPI = {
   scan: () => api.get("/lifelong-catch-correct/"),
 };
+
+// Voice Lab Multi-Channel Matrix Engine
+export const voiceLabAPI = {
+  config: () => api.get("/voicelab/config"),
+  compile: (script, voices) =>
+    api.post("/voicelab/compile", { script, voices: voices || null }),
+  jobs: (limit = 30) => api.get(`/voicelab/jobs?limit=${limit}`),
+  job: (id) => api.get(`/voicelab/jobs/${id}`),
+  downloadUrl: (id) => `${BACKEND_URL}/api/voicelab/jobs/${id}/download`,
+  deleteJob: (id) => api.delete(`/voicelab/jobs/${id}`),
+};

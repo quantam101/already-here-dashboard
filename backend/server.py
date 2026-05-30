@@ -11,7 +11,7 @@ ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / ".env")
 
 # Import routers
-from routes import revenue, content, agents, builds, deployments, audit, approvals, health, content_factory, ledger, publishing, scout, proposals, cycle, payments, analytics, advisor, auth, books, system, secrets, cost, lcac, distillation, governance, revenue_equation, video, hooks
+from routes import revenue, content, agents, builds, deployments, audit, approvals, health, content_factory, ledger, publishing, scout, proposals, cycle, payments, analytics, advisor, auth, books, system, secrets, cost, lcac, distillation, governance, revenue_equation, video, hooks, voicelab
 from services.scheduler_service import start_scheduler, stop_scheduler
 
 # Storage backend — Mongo (preview/dev) or SQLite (1GB-RAM production host)
@@ -95,6 +95,7 @@ api_router.include_router(governance.router, prefix="/governance", tags=["govern
 api_router.include_router(revenue_equation.router, prefix="/revenue-equation", tags=["revenue-equation"])
 api_router.include_router(video.router, prefix="/video", tags=["video"])
 api_router.include_router(hooks.router, prefix="/hooks", tags=["hooks"])
+api_router.include_router(voicelab.router, prefix="/voicelab", tags=["voicelab"])
 
 app.include_router(api_router)
 

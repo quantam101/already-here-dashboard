@@ -20,6 +20,7 @@ import PaymentSuccess from "./pages/PaymentSuccess";
 import Books from "./pages/Books";
 import Secrets from "./pages/Secrets";
 import Sovereign from "./pages/Sovereign";
+import VoiceLab from "./pages/VoiceLab";
 import AuthGate from "./components/AuthGate";
 import { Toaster } from "sonner";
 
@@ -49,6 +50,7 @@ function App() {
               <Route path="books"         element={<Books />} />
               <Route path="secrets"       element={<Secrets />} />
               <Route path="sovereign"     element={<Sovereign />} />
+              <Route path="voice-lab"    element={<VoiceLab />} />
             </Route>
             <Route path="/payment-success" element={<PaymentSuccess />} />
           </Routes>
