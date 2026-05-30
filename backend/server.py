@@ -1,17 +1,48 @@
-from fastapi import FastAPI, APIRouter, HTTPException, Depends, Header
-from dotenv import load_dotenv
-from starlette.middleware.cors import CORSMiddleware
-import os
 import logging
-from pathlib import Path
-from datetime import datetime, timezone
+import os
 from contextlib import asynccontextmanager
+from pathlib import Path
+
+from dotenv import load_dotenv
+from fastapi import APIRouter, FastAPI
+from starlette.middleware.cors import CORSMiddleware
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / ".env")
 
 # Import routers
-from routes import revenue, content, agents, builds, deployments, audit, approvals, health, content_factory, ledger, publishing, scout, proposals, cycle, payments, analytics, advisor, auth, books, system, secrets, cost, lcac, distillation, governance, revenue_equation, video, hooks, voicelab, dasi
+from routes import (
+    advisor,
+    agents,
+    analytics,
+    approvals,
+    audit,
+    auth,
+    books,
+    builds,
+    content,
+    content_factory,
+    cost,
+    cycle,
+    dasi,
+    deployments,
+    distillation,
+    governance,
+    health,
+    hooks,
+    lcac,
+    ledger,
+    payments,
+    proposals,
+    publishing,
+    revenue,
+    revenue_equation,
+    scout,
+    secrets,
+    system,
+    video,
+    voicelab,
+)
 from services.scheduler_service import start_scheduler, stop_scheduler
 
 # Storage backend — Mongo (preview/dev) or SQLite (1GB-RAM production host)

@@ -6,10 +6,11 @@ Refactored into modular functions with builder pattern for entities.
 Backend-agnostic: honors STORAGE_BACKEND=sqlite if set, otherwise uses MongoDB.
 """
 import asyncio
-from typing import Any
 import os
+from datetime import UTC, datetime
+from typing import Any
+
 from dotenv import load_dotenv
-from datetime import datetime, timezone
 
 load_dotenv()
 
@@ -30,7 +31,7 @@ db_name = os.environ.get("DB_NAME", "command_os")
 
 def now_iso() -> str:
     """Return current UTC timestamp in ISO format."""
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 async def clear_all_data(db) -> None:
