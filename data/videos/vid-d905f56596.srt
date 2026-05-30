@@ -1,0 +1,15 @@
+1
+00:00:00,000 --> 00:00:01,936
+Stop checking bank balances every 5 minutes.
+
+2
+00:00:01,936 --> 00:00:03,872
+Free productivity tips
+
+3
+00:00:03,872 --> 00:00:05,808
+Try this.
+
+4
+00:00:05,808 --> 00:00:07,744
+Follow for more.

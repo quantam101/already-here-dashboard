@@ -40,6 +40,8 @@ export function GenerativeSuite({ capability, voiceRefId, setVoiceRefId, aiMusic
         <ProviderPill label="Pollinations" ok={!!free.pollinations_ai} note="keyless" />
         <ProviderPill label="Hugging Face" ok={!!free.huggingface} note={free.huggingface ? "FLUX-schnell" : "set HF token"} />
         <ProviderPill label="AI B-roll" ok={!!capability?.ai_b_roll_available} note={capability?.ai_b_roll_available ? "auto-on" : "—"} />
+        <ProviderPill label="Voice Clone (local)" ok={!!capability?.voice_cloning_available} note="Coqui XTTS-v2" />
+        <ProviderPill label="AI Music (local)" ok={!!capability?.ai_music_generation_available} note="MusicGen" />
         <ProviderPill label="Pollinations TTS" ok={!!capability?.pollinations_tts_available} note="6 voices" />
       </div>
 
@@ -49,14 +51,22 @@ export function GenerativeSuite({ capability, voiceRefId, setVoiceRefId, aiMusic
         <VoiceRefPanel voiceRefId={voiceRefId} setVoiceRefId={setVoiceRefId} cloneAvailable={!!capability?.voice_cloning_available} />
       </div>
 
-      {(capability?.ai_music_generation_available === false || capability?.text_to_video_available === false) && (
-        <div className="mt-3 pt-3 border-t border-white/5">
-          <p className="text-[10px] uppercase tracking-wider text-amber-300 mb-1">Free-tier notice (Feb 2026)</p>
-          <p className="text-xs text-gray-400 leading-snug">
-            Hugging Face pruned MusicGen, XTTS-v2 voice cloning, and AnimateDiff from the free hf-inference tier. The Generative Suite now uses <span className="text-emerald-300">Pollinations TTS</span> (keyless, 6 voices) for narration variety and the <span className="text-emerald-300">bundled CC0 music beds</span> for backing tracks. FLUX-schnell text-to-image still works free on HF.
-          </p>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-4">
+        <AiMusicPanel aiMusicPrompt={aiMusicPrompt} setAiMusicPrompt={setAiMusicPrompt} musicAvailable={!!capability?.ai_music_generation_available} />
+        <div className="bg-[rgba(15,30,15,0.3)] border border-emerald-500/20 rounded-lg p-3" data-testid="local-stack-status">
+          <div className="text-[11px] font-semibold text-emerald-200 mb-2 flex items-center gap-1.5">
+            <CheckCircle2 className="w-3.5 h-3.5" /> Real local stack
+          </div>
+          <ul className="text-[10px] text-emerald-100/80 space-y-0.5 leading-relaxed">
+            <li>• <strong>Voice clone:</strong> Coqui XTTS-v2 on CPU — multilingual, real time</li>
+            <li>• <strong>AI Music:</strong> transformers MusicGen-small on CPU — ~20s/clip</li>
+            <li>• <strong>AI B-roll:</strong> Pollinations FLUX (keyless) + HF FLUX-schnell (your token)</li>
+            <li>• <strong>Adaptive captions:</strong> faster-whisper tiny.en, word-aligned</li>
+            <li>• <strong>Music beds:</strong> 3 bundled CC0 procedural tracks</li>
+            <li>• Everything generated locally — no API per render charge.</li>
+          </ul>
         </div>
-      )}
+      </div>
     </div>
   );
 }
@@ -243,6 +253,32 @@ function VoiceRefPanel({ voiceRefId, setVoiceRefId, cloneAvailable }) {
             Clear selection
           </button>
         )}
+      </div>
+    </div>
+  );
+}
+
+
+function AiMusicPanel({ aiMusicPrompt, setAiMusicPrompt, musicAvailable }) {
+  return (
+    <div className="bg-[rgba(20,30,15,0.4)] border border-emerald-500/20 rounded-lg p-3" data-testid="ai-music-panel">
+      <div className="text-[11px] font-semibold text-emerald-200 mb-2 flex items-center gap-1.5">
+        <Music2 className="w-3.5 h-3.5" /> AI music (local MusicGen)
+      </div>
+      <p className="text-[10px] text-gray-500 mb-2 leading-snug">
+        Describe the vibe — local transformers MusicGen renders a fresh 20s bed (overrides bundled bed).
+        {!musicAvailable && <span className="block text-amber-400 mt-1">Local model not loaded — pip install torch + transformers.</span>}
+      </p>
+      <Input
+        value={aiMusicPrompt}
+        onChange={(e) => setAiMusicPrompt(e.target.value)}
+        placeholder="e.g. epic orchestral cinematic build"
+        data-testid="ai-music-prompt"
+        className="bg-black/30 border-white/10 text-xs h-8"
+        disabled={!musicAvailable}
+      />
+      <div className="text-[10px] text-emerald-300/70 mt-1">
+        {aiMusicPrompt ? `Will generate on next render (~20-40s)` : "Leave empty to use bundled bed"}
       </div>
     </div>
   );

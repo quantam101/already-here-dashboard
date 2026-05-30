@@ -22,7 +22,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from services.video import avatar, captions, composer, external, gen_assets, music, stock, tts
+from services.video import avatar, captions, composer, external, gen_assets, local_music, local_voice, music, stock, tts
 
 logger = logging.getLogger("video.engine")
 
@@ -119,11 +119,15 @@ async def _run_faceless_pipeline(db, job: dict) -> None:
         voice_ref_id = job.get("voice_ref_id")
         pollinations_voice = job.get("pollinations_voice")
         if voice_ref_id:
+            # Real local voice cloning via Coqui XTTS-v2 ($0, runs on CPU).
+            ref = gen_assets.voice_ref_path(voice_ref_id)
+            if not ref:
+                raise RuntimeError(f"voice reference {voice_ref_id!r} not found")
             try:
-                await _update(db, job_id, progress_pct=8, message=f"voice-cloning via XTTS-v2 ({voice_ref_id})")
-                await gen_assets.synthesize_cloned_voice(narration, voice_ref_id, wav_path)
+                await _update(db, job_id, progress_pct=8, message=f"local voice clone (Coqui XTTS-v2 ref={voice_ref_id})")
+                await local_voice.synthesize_cloned(narration, ref, wav_path)
             except Exception as e:
-                logger.warning("voice clone failed, falling back to Piper: %s", str(e)[:200])
+                logger.warning("local voice clone failed, falling back to Piper: %s", str(e)[:200])
                 await tts.synthesize(narration, wav_path, voice_id=job.get("voice_id"))
         elif pollinations_voice:
             try:
@@ -337,6 +341,10 @@ def capability_report() -> dict[str, Any]:
     hf_ok = _hf.is_configured()
     pollinations_ok = _poll.is_available()
     external_provider_ok = external.is_configured()
+    # Local Coqui XTTS-v2 + transformers MusicGen — REAL $0 implementations
+    # that run on CPU, no external API needed. Cold-start ~30-60s, then cached.
+    local_voice_ok = local_voice.is_available()
+    local_music_ok = local_music.is_available()
     return {
         "ffmpeg_installed": ffmpeg,
         "piper_installed": piper,
@@ -353,16 +361,13 @@ def capability_report() -> dict[str, Any]:
             "huggingface": hf_ok,
         },
         "ai_b_roll_available": pollinations_ok or hf_ok,
-        # NOTE (Feb 2026): HF pruned voice/music/video models from the free
-        # hf-inference tier. Only text-to-image + ASR remain free on HF.
-        # We surface what's *actually* available; Pollinations TTS provides a
-        # keyless free TTS path (expressive voices, no cloning).
-        "voice_cloning_available": False,  # XTTS-v2 no longer on free tier
+        # Local CPU-only implementations — TRULY $0 with no external dependencies.
+        "voice_cloning_available": local_voice_ok,  # Coqui XTTS-v2 local
+        "ai_music_generation_available": local_music_ok,  # transformers MusicGen local
+        "text_to_video_available": False,  # still requires GPU; not viable on CPU
+        "hf_image_generation_available": hf_ok,
         "pollinations_tts_available": pollinations_ok,
         "pollinations_tts_voices": ["alloy", "echo", "fable", "onyx", "nova", "shimmer"],
-        "ai_music_generation_available": False,  # MusicGen not on free tier
-        "text_to_video_available": False,  # AnimateDiff not on free tier
-        "hf_image_generation_available": hf_ok,
         "voice_refs_uploaded": [r["voice_ref_id"] for r in voice_refs],
         "modes_available": {
             "faceless": ffmpeg and piper and bool(voices),

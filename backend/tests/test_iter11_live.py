@@ -59,7 +59,9 @@ def test_video_config_exposes_new_free_provider_fields(s):
     # the operator may have plugged in a real token. Just assert it's bool.
     assert isinstance(data["free_providers"]["huggingface"], bool)
     assert data["ai_b_roll_available"] is True
-    assert data["voice_cloning_available"] is False
+    # Iter12: voice cloning now runs locally via Coqui XTTS-v2 — accept either
+    # state so the test is portable to envs without the local model installed.
+    assert isinstance(data["voice_cloning_available"], bool)
 
 
 # ---------- /api/video/free-providers ----------

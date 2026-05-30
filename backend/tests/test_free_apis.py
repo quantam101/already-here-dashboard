@@ -124,9 +124,12 @@ def test_capability_report_exposes_new_free_provider_fields():
     assert "huggingface" in fp
     # Pollinations is keyless so should always be true
     assert fp["pollinations_ai"] is True
-    # As of Feb 2026 these are hardcoded False because HF pruned them
-    assert report["voice_cloning_available"] is False
-    assert report["ai_music_generation_available"] is False
+    # Iter12: voice cloning + AI music are now REAL local implementations
+    # (Coqui XTTS-v2 + transformers MusicGen). Both should be True on a
+    # fresh install where torch + TTS + transformers all imported OK.
+    assert report["voice_cloning_available"] is True
+    assert report["ai_music_generation_available"] is True
+    # text-to-video still requires GPU; CPU-only path not viable yet.
     assert report["text_to_video_available"] is False
     # 6 Pollinations TTS voices
     assert set(report["pollinations_tts_voices"]) == {"alloy", "echo", "fable", "onyx", "nova", "shimmer"}

@@ -1,0 +1,11 @@
+1
+00:00:00,000 --> 00:00:02,820
+Stop wasting money today. Welcome to
+
+2
+00:00:02,820 --> 00:00:05,340
+the test render. This validates music
+
+3
+00:00:05,340 --> 00:00:08,340
+and adaptive captions. Subscribe for more.

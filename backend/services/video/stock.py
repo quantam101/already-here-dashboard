@@ -50,7 +50,9 @@ async def fetch_clip_for_shot(shot_text: str, duration_target: float = 5.0) -> P
       2. AI B-roll — Pollinations.ai (keyless) generates a 1080×1920 image,
          then ffmpeg Ken-Burns animates it into a clip.
       3. Hugging Face Inference API image (if token set) — same Ken-Burns path.
-      4. Solid-colour placeholder card via ffmpeg.
+      4. Final fallback: solid-colour placeholder card (only when explicitly
+         enabled via VIDEO_ALLOW_PLACEHOLDER=true). Default is to raise so the
+         operator never silently ships solid frames.
     """
     cache_key = hashlib.sha256(shot_text.encode("utf-8")).hexdigest()[:16]
     cached = CACHE_DIR / f"{cache_key}.mp4"
@@ -75,7 +77,8 @@ async def fetch_clip_for_shot(shot_text: str, duration_target: float = 5.0) -> P
                         except httpx.HTTPError as e:
                             logger.warning("download failed: %s", e)
 
-    # AI B-roll fallback — try Pollinations / HF before placeholder.
+    # AI B-roll — Pollinations / HF. This MUST succeed in production; we only
+    # fall through to placeholder if `VIDEO_ALLOW_PLACEHOLDER=true` is set.
     if os.environ.get("VIDEO_AI_BROLL", "true").lower() not in {"false", "0", "off"}:
         try:
             from services.video.ai_stock import fetch_ai_clip_for_shot
@@ -84,10 +87,17 @@ async def fetch_clip_for_shot(shot_text: str, duration_target: float = 5.0) -> P
                 logger.info("AI B-roll clip used for shot %r", shot_text[:40])
                 return ai_clip
         except Exception as e:
-            logger.warning("ai b-roll failed, falling back to placeholder: %s", str(e)[:160])
+            logger.warning("ai b-roll failed: %s", str(e)[:200])
 
-    # Final fallback — generate a solid-colour placeholder clip via ffmpeg
-    return await _make_placeholder_clip(shot_text, cache_key, duration_target)
+    if os.environ.get("VIDEO_ALLOW_PLACEHOLDER", "false").lower() in {"true", "1", "on"}:
+        return await _make_placeholder_clip(shot_text, cache_key, duration_target)
+
+    raise RuntimeError(
+        f"no real B-roll source available for shot {shot_text!r}: "
+        "Pollinations + HF both failed and VIDEO_ALLOW_PLACEHOLDER is off. "
+        "Either set PEXELS_API_KEY, ensure HUGGINGFACE_API_KEY is valid, "
+        "or set VIDEO_ALLOW_PLACEHOLDER=true to accept solid-colour fallbacks."
+    )
 
 
 async def _make_placeholder_clip(shot_text: str, cache_key: str, duration: float) -> Path:

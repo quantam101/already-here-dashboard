@@ -1,0 +1,10 @@
+{
+  "job_id": "vid-f012201469",
+  "mode": "avatar_lipsync",
+  "portrait": "/app/data/portraits/d30787e276a6.png",
+  "voice_id": null,
+  "watermark": "AI-generated",
+  "size_bytes": 647681,
+  "wav2lip_used": false,
+  "created_at": "2026-05-30T02:27:17.616079+00:00"
+}
