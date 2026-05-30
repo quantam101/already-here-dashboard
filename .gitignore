@@ -1,3 +1,12 @@
+# ── Emergent agent files (never commit) ──────────────────────────────────────
+.gitconfig
+.emergent/
+memory/
+test_reports/
+test_result.md
+design_guidelines.json
+tests/__init__.py
+
 # See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
 
 # IDE and editors
