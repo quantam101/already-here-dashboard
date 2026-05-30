@@ -110,22 +110,14 @@ def _build_compiled_policies(manifest: dict) -> list[PolicyPattern]:
 # Job state  (__slots__ on dataclass fields via direct declaration)
 # ---------------------------------------------------------------------------
 
-@dataclass
+@dataclass(slots=True)
 class JobContext:
-    """Isolated per-job state container. No global state shared between runs."""
+    """Isolated per-job state container. No global state shared between runs.
 
-    __slots__ = (
-        "job_id",
-        "directive",
-        "status",
-        "current_step",
-        "matrix_context",
-        "telemetry",
-        "error",
-        "result",
-        "created_at",
-        "updated_at",
-    )
+    Uses @dataclass(slots=True) — the correct Python 3.10+ approach for
+    zero-overhead slot allocation without the class-variable conflict that
+    arises from manually declaring __slots__ alongside dataclass defaults.
+    """
 
     job_id: str
     directive: str
@@ -141,13 +133,13 @@ class JobContext:
     def __post_init__(self):
         now = _now()
         if not self.created_at:
-            object.__setattr__(self, "created_at", now)
+            self.created_at = now
         if not self.updated_at:
-            object.__setattr__(self, "updated_at", now)
+            self.updated_at = now
         if not isinstance(self.matrix_context, dict):
-            object.__setattr__(self, "matrix_context", {})
+            self.matrix_context = {}
         if not isinstance(self.telemetry, list):
-            object.__setattr__(self, "telemetry", [])
+            self.telemetry = []
 
 
 # ---------------------------------------------------------------------------
@@ -166,7 +158,8 @@ def new_job_id() -> str:
 
 
 def _ctx_to_dict(ctx: JobContext) -> dict:
-    return {slot: getattr(ctx, slot) for slot in ctx.__slots__}
+    import dataclasses
+    return {f.name: getattr(ctx, f.name) for f in dataclasses.fields(ctx)}
 
 
 async def create_job(db, *, directive: str) -> dict:

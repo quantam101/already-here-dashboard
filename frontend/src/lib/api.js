@@ -226,6 +226,14 @@ export const lcacAPI = {
   scan: () => api.get("/lifelong-catch-correct/"),
 };
 
+// Sovereign AI agent — status, trigger, history, cache control
+export const sovereignAPI = {
+  status: () => api.get("/agents/sovereign/status"),
+  trigger: () => api.post("/agents/sovereign/trigger"),
+  history: (limit = 10) => api.get(`/agents/sovereign/history?limit=${limit}`),
+  clearCache: () => api.post("/agents/sovereign/clear-cache"),
+};
+
 // Voice Lab Multi-Channel Matrix Engine
 export const voiceLabAPI = {
   config: () => api.get("/voicelab/config"),
