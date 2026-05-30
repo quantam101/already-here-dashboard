@@ -17,9 +17,9 @@ from __future__ import annotations
 
 import os
 import time
+import urllib.request
 
 import pytest
-import urllib.request
 
 # Skip entire module if playwright isn't installed
 pytest.importorskip("playwright", reason="playwright not installed — skipping E2E tests")
