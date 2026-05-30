@@ -321,7 +321,7 @@ jobs:
     runs-on: ubuntu-latest
     if: |
       github.ref == 'refs/heads/main' &&
-      needs.regression-tests.result == 'success'
+      needs.integration-tests.result == 'success'
     environment: production
     steps:
       - uses: actions/checkout@v4
