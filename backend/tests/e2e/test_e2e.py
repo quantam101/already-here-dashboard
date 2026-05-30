@@ -47,6 +47,8 @@ def browser_context(browser: Browser):
 @pytest.fixture
 def page(browser_context):
     p = browser_context.new_page()
+    # Skip FirstRunWalkthrough overlay so navigation tests aren't blocked
+    p.add_init_script("localStorage.setItem('pe5_walkthrough_seen', 'true')")
     yield p
     p.close()
 
