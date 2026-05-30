@@ -13,7 +13,10 @@ Responsibilities:
 Public API:
 
     await llm_complete(system, user, *, max_tokens, temperature) -> str
-        Smart failover: Groq → Gemini → Mistral → DeepSeek → OpenRouter → …
+        Smart failover (all $0):
+          Ollama (local) → Groq (free API) → Gemini (free API) →
+          DeepSeek (free API) → Qwen (free API) → Mistral (free API) →
+          OpenRouter free models → Pollinations (always free, no key)
         Use this in all routes instead of run_cached(provider="gemini", …).
         Does NOT cache or track budget (stateless helper for agents/routes).
 
@@ -24,6 +27,17 @@ Public API:
 
     await get_today_usage(db) -> dict
     await check_daily_budget(db, *, expected_tokens=0) -> None  (raises 429)
+
+Free provider setup guide (all $0, no credit card):
+  OLLAMA_BASE_URL    → local Ollama server (run `ollama serve`)
+  OLLAMA_MODEL       → e.g. llama3.2:3b, gemma2:2b, qwen2.5:3b, deepseek-r1:1.5b
+  GROQ_API_KEY       → free at console.groq.com  (Llama 3.3 70B, 14 400 req/day)
+  GEMINI_API_KEY     → free at ai.google.dev     (Gemini 2.5 Flash, 1 500 req/day)
+  DEEPSEEK_API_KEY   → free tier at platform.deepseek.com
+  QWEN_API_KEY       → free tier at dashscope.aliyuncs.com
+  MISTRAL_API_KEY    → free tier at console.mistral.ai
+  OPENROUTER_API_KEY → free at openrouter.ai     (Llama/Gemma/Qwen free models)
+  Pollinations       → always available, zero config (gpt-4o-mini class, no key)
 """
 from __future__ import annotations
 
@@ -178,8 +192,11 @@ async def run_cached(
         raise HTTPException(
             status_code=503,
             detail=(
-                "No LLM provider key configured. Set one of: OPENAI_API_KEY, "
-                "ANTHROPIC_API_KEY, GEMINI_API_KEY, or LLM_API_KEY."
+                "No LLM provider configured. Free options (no credit card): "
+                "OLLAMA_BASE_URL (local), GROQ_API_KEY (console.groq.com), "
+                "GEMINI_API_KEY (ai.google.dev), OPENROUTER_API_KEY (openrouter.ai). "
+                "Pollinations keyless fallback is always available — check "
+                "LLM_POLLINATIONS_FALLBACK is not set to 'false'."
             ),
         )
 
@@ -304,38 +321,94 @@ async def daily_usage_history(db, days: int = 14) -> list[dict]:
 
 
 # ── llm_complete — stateless failover helper ──────────────────────────────────
+# Special sentinel values used in the provider tuple:
+#   provider == "ollama"        → use llm_completion(provider="ollama", …)
+#   provider == "pollinations"  → use llm_completion(provider="pollinations", …)
+#   api_key  == "__ollama__"    → ditto (legacy compat)
+_OLLAMA_SENTINEL = "__ollama__"
+_POLLINATIONS_SENTINEL = "__pollinations__"
+
 
 def _failover_providers() -> list[tuple[str, str, str]]:
-    """
-    Build the ordered provider list from available env vars.
-    Returns list of (provider_name, model_id, api_key).
-    Priority: Groq (fastest, free) → Gemini Flash → Mistral → DeepSeek → OpenRouter
-    """
-    providers: list[tuple[str, str, str]] = []
-    gr = os.environ.get("GROQ_API_KEY", "").strip()
-    lm = os.environ.get("EMERGENT_LLM_KEY", "").strip()
-    ms = os.environ.get("MISTRAL_API_KEY", "").strip()
-    ds = os.environ.get("DEEPSEEK_API_KEY", "").strip()
-    qw = os.environ.get("QWEN_API_KEY", "").strip()
-    or_ = os.environ.get("OPENROUTER_API_KEY", "").strip()
+    """Build the ordered free-provider list from available env vars.
 
+    Returns list of (provider_name, model_id, api_key_or_sentinel).
+
+    Priority (all $0):
+      1. Ollama       — local inference, zero latency, completely offline
+      2. Groq         — fastest cloud, very generous free tier
+      3. Gemini       — best quality free tier (1 500 req/day on flash)
+      4. DeepSeek     — excellent reasoning, free tier
+      5. Qwen         — great multilingual, free tier
+      6. Mistral      — solid European option, free tier
+      7. OpenRouter   — routes to Llama/Gemma/Qwen/DeepSeek free community models
+      8. Pollinations — always available, zero config (gpt-4o-mini class, keyless)
+    """
+    from services.llm_adapter import _ollama_base_url, _ollama_enabled, _ollama_models
+
+    providers: list[tuple[str, str, str]] = []
+
+    # 1. Ollama — local, keyless, highest priority when available
+    if _ollama_enabled():
+        base = _ollama_base_url()
+        for om in _ollama_models():
+            providers.append(("ollama", om, base))
+
+    # 2. Groq — free tier, fastest cloud inference
+    gr = os.environ.get("GROQ_API_KEY", "").strip()
     if gr:
-        providers.append(("groq",      "llama-3.3-70b-versatile", gr))
-        providers.append(("groq",      "llama-3.1-8b-instant",    gr))
-    if lm:
-        providers.append(("gemini",    "gemini-2.5-flash",        lm))
-    if ms:
-        providers.append(("mistral",   "mistral-small-latest",    ms))
-        providers.append(("codestral", "codestral-latest",        ms))
+        providers.append(("groq", "llama-3.3-70b-versatile", gr))
+        providers.append(("groq", "gemma2-9b-it",             gr))
+        providers.append(("groq", "llama-3.1-8b-instant",     gr))
+
+    # 3. Gemini — best free-tier quality (multiple free-quota buckets)
+    gm = (
+        os.environ.get("GEMINI_API_KEY", "")
+        or os.environ.get("GOOGLE_API_KEY", "")
+        or os.environ.get("EMERGENT_LLM_KEY", "")
+    ).strip()
+    if gm:
+        providers.append(("gemini", "gemini-2.5-flash",      gm))
+        providers.append(("gemini", "gemini-2.0-flash",      gm))
+        providers.append(("gemini", "gemini-2.5-flash-lite", gm))
+        providers.append(("gemini", "gemini-1.5-flash",      gm))
+
+    # 4. DeepSeek — very capable, free tier
+    ds = os.environ.get("DEEPSEEK_API_KEY", "").strip()
     if ds:
-        providers.append(("deepseek",  "deepseek-chat",           ds))
+        providers.append(("deepseek", "deepseek-chat",    ds))
+        providers.append(("deepseek", "deepseek-coder",   ds))
+
+    # 5. Qwen (Alibaba) — multilingual, free tier
+    qw = os.environ.get("QWEN_API_KEY", "").strip()
     if qw:
-        providers.append(("qwen",      "qwen-plus",               qw))
+        providers.append(("qwen", "qwen-plus",  qw))
+        providers.append(("qwen", "qwen-turbo", qw))
+
+    # 6. Mistral — free tier
+    ms = os.environ.get("MISTRAL_API_KEY", "").strip()
+    if ms:
+        providers.append(("mistral", "mistral-small-latest", ms))
+
+    # 7. OpenRouter — free community models (Llama, Gemma, Qwen, DeepSeek)
+    or_ = os.environ.get("OPENROUTER_API_KEY", "").strip()
     if or_:
-        providers.append(("openrouter", "openai/gpt-4o-mini",     or_))
-    if lm:
-        # Gemini 1.5 as last resort
-        providers.append(("gemini",    "gemini-1.5-flash",        lm))
+        free_models = [
+            "meta-llama/llama-3.2-3b-instruct:free",
+            "google/gemma-2-9b-it:free",
+            "qwen/qwen-2.5-7b-instruct:free",
+            "deepseek/deepseek-r1-distill-qwen-7b:free",
+            "mistralai/mistral-7b-instruct:free",
+        ]
+        for fm in free_models:
+            providers.append(("openrouter", fm, or_))
+
+    # 8. Pollinations — always available, no key, no quota
+    if os.environ.get("LLM_POLLINATIONS_FALLBACK", "true").lower() not in {"false", "0", "off"}:
+        providers.append(("pollinations", "openai",      _POLLINATIONS_SENTINEL))
+        providers.append(("pollinations", "openai-fast", _POLLINATIONS_SENTINEL))
+        providers.append(("pollinations", "mistral",     _POLLINATIONS_SENTINEL))
+
     return providers
 
 
@@ -347,30 +420,54 @@ async def llm_complete(
     temperature: float = 0.7,
     session_id: str = "llm-complete",
 ) -> str:
+    """Smart multi-provider LLM call with automatic failover (all $0 cost).
+
+    Tries providers in priority order:
+      Ollama (local) → Groq → Gemini → DeepSeek → Qwen → Mistral
+      → OpenRouter free models → Pollinations (always available, keyless)
+
+    Falls through to the next provider on any error (expired key, rate limit,
+    connection error). Pollinations is always the final backstop — the function
+    never returns 503 unless Pollinations is explicitly disabled.
+
+    Use this in routes/agents instead of hardcoding run_cached(provider="gemini").
+    Stateless: does NOT cache or track budget. Wrap with run_cached() for that.
     """
-    Smart multi-provider LLM call with automatic failover.
+    from services.llm_adapter import llm_completion
 
-    Tries providers in priority order (Groq first — fastest & free).
-    Falls through to the next provider on any error (expired key, rate limit, 4xx/5xx).
-
-    Use this in routes / agents instead of hardcoding run_cached(provider="gemini", …).
-    Does NOT use the distillation cache or budget tracker — it is stateless.
-    If you need caching, call run_cached() directly after this.
-
-    Raises HTTPException(502) only when ALL configured providers fail.
-    Raises HTTPException(503) when no providers are configured.
-    """
     providers = _failover_providers()
     if not providers:
         raise HTTPException(
             status_code=503,
-            detail="No LLM keys configured. Set GROQ_API_KEY or EMERGENT_LLM_KEY in .env.",
+            detail=(
+                "No LLM providers available. Set OLLAMA_BASE_URL, GROQ_API_KEY, "
+                "GEMINI_API_KEY, or OPENROUTER_API_KEY in .env. "
+                "Pollinations is always free — ensure LLM_POLLINATIONS_FALLBACK != false."
+            ),
         )
 
     last_error: Exception | None = None
     for provider, model, api_key in providers:
         try:
             logger.debug("llm_complete: trying provider=%s model=%s", provider, model)
+
+            # ── Ollama and Pollinations go through llm_adapter (litellm) ──
+            if provider in ("ollama", "pollinations"):
+                result = await llm_completion(
+                    provider=provider,
+                    model=model,
+                    system_msg=system,
+                    prompt=user,
+                    session_id=session_id,
+                    max_tokens=max_tokens,
+                    temperature=temperature,
+                )
+                if result:
+                    logger.info("llm_complete: success provider=%s model=%s", provider, model)
+                    return result
+                continue
+
+            # ── Cloud providers — LlmChat (Emergent SDK) ──────────────────
             import uuid as _uuid
             sid = f"{session_id}-{_uuid.uuid4().hex[:8]}"
             chat = LlmChat(api_key=api_key, session_id=sid, system_message=system)
@@ -379,6 +476,7 @@ async def llm_complete(
             if response:
                 logger.info("llm_complete: success provider=%s model=%s", provider, model)
                 return response
+
         except Exception as exc:
             last_error = exc
             logger.warning(

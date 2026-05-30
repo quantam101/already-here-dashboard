@@ -1,11 +1,28 @@
 """
-LLM adapter — vendor-neutral abstraction over OpenAI/Anthropic/Gemini using
-the open-source `litellm` library. Operators bring their own provider key.
+LLM adapter — vendor-neutral abstraction over OpenAI/Anthropic/Gemini/Ollama
+using the open-source `litellm` library.
+
+Free-first philosophy: every provider in this file costs $0.
+  - Ollama   — local inference (set OLLAMA_BASE_URL; runs Llama, Gemma, Qwen,
+                DeepSeek, Mistral, Phi locally at zero cost)
+  - Gemini   — Google free tier: ~1 500 req/day on gemini-2.5-flash (set GEMINI_API_KEY)
+  - OpenAI   — paid, but accepts OpenRouter key for free-tier routing
+  - Pollinations — keyless; always available as the final fallback (no config needed)
 
 Mock mode: if `LLM_MOCK_MODE=true` is set OR the configured key starts with
 `sk-mock-`, the adapter returns deterministic canned responses instead of
-hitting the real provider API. This lets buyers run the test suite + smoke-
-test the dashboard end-to-end without spending money on real LLM calls.
+hitting the real provider API. This lets the test suite + smoke runs work
+end-to-end without spending money on real LLM calls.
+
+Ollama quick-start (on a machine with >=4 GB RAM):
+  curl -fsSL https://ollama.ai/install.sh | sh
+  ollama pull llama3.2:3b        # 2.0 GB, fast
+  ollama pull gemma2:2b          # 1.6 GB, very fast
+  ollama pull qwen2.5:3b         # 2.3 GB, multilingual
+  ollama pull deepseek-r1:1.5b   # 1.1 GB, reasoning
+  # then set in backend/.env:
+  OLLAMA_BASE_URL=http://localhost:11434
+  OLLAMA_MODEL=llama3.2:3b
 """
 from __future__ import annotations
 
@@ -38,12 +55,83 @@ _PROVIDER_CONFIG: dict[str, dict[str, Any]] = {
         "model_template": "gemini/{model}",
         "env_keys": ["GEMINI_API_KEY", "GOOGLE_API_KEY", "LLM_API_KEY"],
     },
+    # Ollama: local inference, no key needed — uses OLLAMA_BASE_URL
+    "ollama": {
+        "model_template": "ollama/{model}",
+        "env_keys": [],
+    },
+    # OpenRouter: free-tier routing to Llama/Gemma/Qwen/DeepSeek community models
+    "openrouter": {
+        "model_template": "openrouter/{model}",
+        "env_keys": ["OPENROUTER_API_KEY"],
+    },
+    # Groq: free tier, fastest cloud inference
+    "groq": {
+        "model_template": "groq/{model}",
+        "env_keys": ["GROQ_API_KEY"],
+    },
+    # DeepSeek: very capable, free tier available
+    "deepseek": {
+        "model_template": "deepseek/{model}",
+        "env_keys": ["DEEPSEEK_API_KEY"],
+    },
+    # Qwen (Alibaba): multilingual, free tier
+    "qwen": {
+        "model_template": "qwen/{model}",
+        "env_keys": ["QWEN_API_KEY"],
+    },
+    # Mistral: free tier available
+    "mistral": {
+        "model_template": "mistral/{model}",
+        "env_keys": ["MISTRAL_API_KEY"],
+    },
 }
 
 
 class LLMProviderError(RuntimeError):
     pass
 
+
+# ---------------------------------------------------------------------------
+# Ollama helpers
+# ---------------------------------------------------------------------------
+
+def _ollama_base_url() -> str:
+    """Base URL for the local (or remote) Ollama server."""
+    return os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434").rstrip("/")
+
+
+def _ollama_enabled() -> bool:
+    """True when Ollama is explicitly opted-in via env or OLLAMA_BASE_URL is set."""
+    if os.environ.get("OLLAMA_BASE_URL"):
+        return True
+    return os.environ.get("OLLAMA_ENABLED", "").strip().lower() in ("1", "true", "yes", "on")
+
+
+def _ollama_models() -> list[str]:
+    """Ordered list of Ollama models to try (smallest/fastest first for the OCI server)."""
+    raw = os.environ.get("OLLAMA_MODELS", "").strip()
+    if raw:
+        return [m.strip() for m in raw.split(",") if m.strip()]
+    # Default preference order — override with OLLAMA_MODELS env
+    default_model = os.environ.get("OLLAMA_MODEL", "").strip()
+    fallbacks = [
+        "llama3.2:3b",   # 2.0 GB, solid all-rounder
+        "gemma2:2b",     # 1.6 GB, very fast, good quality
+        "qwen2.5:3b",    # 2.3 GB, multilingual
+        "deepseek-r1:1.5b",  # 1.1 GB, reasoning-focused
+        "llama3.2:1b",   # 0.7 GB, tiny fallback
+    ]
+    if default_model and default_model not in fallbacks:
+        return [default_model] + fallbacks
+    if default_model:
+        return [default_model] + [m for m in fallbacks if m != default_model]
+    return fallbacks
+
+
+# ---------------------------------------------------------------------------
+# Mock mode
+# ---------------------------------------------------------------------------
 
 def _mock_mode_active() -> bool:
     """True when we should short-circuit real LLM calls."""
@@ -60,13 +148,8 @@ def _mock_mode_active() -> bool:
 
 
 def _mock_response(system_msg: str, prompt: str) -> str:
-    """Deterministic canned response good enough for tests + smoke runs.
-
-    We tailor the output based on coarse signals in the prompt so downstream
-    parsers (script-format, proposal sections, book chapters) still succeed.
-    """
+    """Deterministic canned response good enough for tests + smoke runs."""
     p = (prompt or "")[:600].lower()
-    # Script generator expects HOOK:/SCRIPT:/CTA:/SHOTS:
     if "hook" in p and "shot" in p:
         return (
             "HOOK: 3-second pattern interrupt that demos the outcome\n"
@@ -77,7 +160,6 @@ def _mock_response(system_msg: str, prompt: str) -> str:
             "SHOTS: opening montage, talking head, screen capture, "
             "result reveal, before/after split, CTA card"
         )
-    # Proposal generator expects long-form prose with sections (>500 chars).
     if "proposal" in p or "grant" in p or "capability statement" in p:
         return (
             "## Executive Summary\n"
@@ -99,7 +181,6 @@ def _mock_response(system_msg: str, prompt: str) -> str:
             "cost guard, and audit trail wired end-to-end. Operator can flip to "
             "any real LLM provider with a single env-var change."
         )
-    # Advisor expects JSON with headline/next_action/rationale/confidence
     if ("json" in p and ("next action" in p or "snapshot" in p)) or "advisor" in p:
         return (
             '{"headline":"Publish one share-link campaign to one channel today",'
@@ -112,18 +193,31 @@ def _mock_response(system_msg: str, prompt: str) -> str:
             '"confidence":"medium",'
             '"owner_agent":"sales_execution"}'
         )
-    # Book chapter generator expects ~500 words of prose
     if "chapter" in p:
-        return (
-            "Chapter body generated in mock mode. " * 60
-        ).strip()
-    # Generic fallback — short summary keyed by prompt hash for determinism
+        return ("Chapter body generated in mock mode. " * 60).strip()
     h = hashlib.sha256(prompt.encode("utf-8")).hexdigest()[:8]
-    return f"[mock-mode-response:{h}] (set OPENAI_API_KEY / ANTHROPIC_API_KEY / GEMINI_API_KEY to get real output)"
+    return (
+        f"[mock-mode-response:{h}] — set OLLAMA_BASE_URL (local free), "
+        "GROQ_API_KEY (free), GEMINI_API_KEY (free), or OPENROUTER_API_KEY (free) "
+        "in backend/.env to get real AI output."
+    )
 
+
+# ---------------------------------------------------------------------------
+# Key / config helpers
+# ---------------------------------------------------------------------------
 
 def resolve_api_key(provider: str) -> str | None:
-    cfg = _PROVIDER_CONFIG.get(provider.lower())
+    """Return the API key for provider, or None if not configured.
+
+    Ollama never needs a key. Pollinations never needs a key.
+    """
+    p = provider.lower()
+    if p == "ollama":
+        return None  # keyless — uses api_base
+    if p == "pollinations":
+        return None  # keyless
+    cfg = _PROVIDER_CONFIG.get(p)
     if not cfg:
         return os.environ.get("LLM_API_KEY") or os.environ.get("EMERGENT_LLM_KEY")
     for env_name in cfg["env_keys"]:
@@ -141,16 +235,8 @@ def model_id(provider: str, model: str) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Free-tier fallback chain
+# Free-tier Gemini fallback cascade
 # ---------------------------------------------------------------------------
-# Each Gemini model has its OWN per-day free-tier quota bucket. When the
-# primary model (gemini-3-flash-preview = 20/day free) returns 429, cascade
-# through the cheaper-but-still-capable siblings before failing. Each
-# additional bucket buys ~250-1500 free requests/day at $0 cost.
-#
-# Order is intentional: best-quality first, then a chain of progressively
-# more generous free-tier buckets. Order can be overridden via
-# LLM_GEMINI_FALLBACK_MODELS env (comma-separated).
 _DEFAULT_GEMINI_FALLBACKS = [
     "gemini-2.5-flash",
     "gemini-2.0-flash",
@@ -160,7 +246,6 @@ _DEFAULT_GEMINI_FALLBACKS = [
 
 
 def _quota_exhausted(err_msg: str) -> bool:
-    """True when the upstream error is a hard daily quota / rate-limit hit."""
     m = err_msg.lower()
     return (
         "429" in m or "resource_exhausted" in m or "exceeded your current quota" in m
@@ -169,11 +254,6 @@ def _quota_exhausted(err_msg: str) -> bool:
 
 
 def _model_unavailable(err_msg: str) -> bool:
-    """True when the model is deprecated / unrecognised by upstream (404).
-
-    We treat this exactly like a quota hit: skip to the next fallback so
-    operators aren't blocked by Google deprecating a model in our chain.
-    """
     m = err_msg.lower()
     return (
         "404" in m and ("not_found" in m or "is not found" in m or "not found" in m)
@@ -187,6 +267,10 @@ def _gemini_fallbacks() -> list[str]:
     return list(_DEFAULT_GEMINI_FALLBACKS)
 
 
+# ---------------------------------------------------------------------------
+# Core completion — litellm-backed, handles Ollama + cloud providers
+# ---------------------------------------------------------------------------
+
 async def llm_completion(
     *,
     provider: str,
@@ -197,45 +281,91 @@ async def llm_completion(
     temperature: float = 0.7,
     max_tokens: int | None = None,
 ) -> str:
-    """Send a one-shot completion. Returns the response text.
+    """Send a one-shot completion via litellm. Returns the response text.
 
-    Resilience strategy (all free):
-      1. Retry transient upstream errors (503, connection resets) with
-         exponential backoff on the SAME model.
-      2. On a 429/quota error from a Gemini model, automatically cascade
-         through the free-tier fallback chain (each model = its own
-         daily bucket).
-      3. Permanent errors (auth, 4xx other than 429) bubble immediately.
+    Supports: Ollama (local), Gemini, OpenAI, Anthropic, Groq, DeepSeek,
+              Qwen, Mistral, OpenRouter, Pollinations.
+
+    Resilience:
+      1. Ollama: tries all configured models sequentially on failure.
+      2. Gemini: cascades through free-tier model buckets on 429.
+      3. All providers: exponential backoff on transient 503/connection errors.
+      4. Final fallback: Pollinations keyless text API (always available).
     """
     import asyncio
+
     if _mock_mode_active():
         return _mock_response(system_msg, prompt)
 
-    api_key = resolve_api_key(provider)
-    if not api_key:
+    p = provider.lower()
+    messages: list[dict[str, str]] = [
+        {"role": "system", "content": system_msg},
+        {"role": "user", "content": prompt},
+    ]
+
+    # ── Ollama (local/private, keyless) ──────────────────────────────────────
+    if p == "ollama":
+        base_url = _ollama_base_url()
+        models_to_try = [model] if model else _ollama_models()
+        last_ollama_err: Exception | None = None
+        for om in models_to_try:
+            full = f"ollama/{om}"
+            kwargs: dict[str, Any] = {
+                "model": full,
+                "messages": messages,
+                "api_base": base_url,
+                "temperature": temperature,
+            }
+            if max_tokens:
+                kwargs["max_tokens"] = max_tokens
+            logger.debug("llm_adapter (ollama): %s @ %s", full, base_url)
+            for attempt in range(2):
+                try:
+                    resp = await litellm.acompletion(**kwargs)
+                    return resp["choices"][0]["message"]["content"] or ""
+                except Exception as e:
+                    last_ollama_err = e
+                    msg = str(e).lower()
+                    if "connection" in msg or "refused" in msg or "timeout" in msg:
+                        if attempt == 0:
+                            await asyncio.sleep(1)
+                            continue
+                    logger.warning("ollama model=%s failed: %s", om, str(e)[:120])
+                    break  # try next model
         raise LLMProviderError(
-            f"No API key configured for provider='{provider}'. "
-            f"Set one of: " + ", ".join(_PROVIDER_CONFIG[provider]["env_keys"])
+            f"Ollama at {base_url} could not complete the request. "
+            f"Last error: {last_ollama_err}. "
+            f"Make sure Ollama is running and at least one model is pulled."
         )
 
-    # Build the model chain. Only Gemini gets the multi-model cascade — the
-    # other providers don't expose multiple free-tier buckets.
-    is_gemini = provider.lower() in ("gemini", "google")
+    # ── Pollinations (keyless, always free) ──────────────────────────────────
+    if p == "pollinations":
+        from services.free_apis import pollinations as _poll
+        out = await _poll.generate_text(prompt, model=model or "openai", system=system_msg)
+        if out:
+            return out
+        raise LLMProviderError("Pollinations text generation returned empty response")
+
+    # ── Cloud providers (all via litellm, need a key) ────────────────────────
+    api_key = resolve_api_key(provider)
+    if not api_key:
+        cfg = _PROVIDER_CONFIG.get(p)
+        env_hint = (", ".join(cfg["env_keys"]) if cfg else "LLM_API_KEY")
+        raise LLMProviderError(
+            f"No API key configured for provider='{provider}'. Set one of: {env_hint}"
+        )
+
+    is_gemini = p in ("gemini", "google")
     chain: list[str] = [model]
     if is_gemini:
         for fb in _gemini_fallbacks():
             if fb != model and fb not in chain:
                 chain.append(fb)
 
-    messages = [
-        {"role": "system", "content": system_msg},
-        {"role": "user", "content": prompt},
-    ]
     last_err: Exception | None = None
-
     for chain_idx, current_model in enumerate(chain):
         full_model = model_id(provider, current_model)
-        kwargs: dict[str, Any] = {
+        kwargs = {
             "model": full_model,
             "messages": messages,
             "api_key": api_key,
@@ -248,11 +378,11 @@ async def llm_completion(
 
         if chain_idx > 0:
             logger.warning(
-                "llm_adapter: primary quota hit, falling back to %s (chain %d/%d)",
+                "llm_adapter: quota hit, falling back to %s (%d/%d)",
                 full_model, chain_idx + 1, len(chain),
             )
         else:
-            logger.debug("llm_adapter call: %s session=%s", full_model, session_id)
+            logger.debug("llm_adapter: %s session=%s", full_model, session_id)
 
         for attempt in range(3):
             try:
@@ -270,15 +400,10 @@ async def llm_completion(
                     or "overloaded" in msg.lower() or "timeout" in msg.lower()
                     or "connection" in msg.lower()
                 )
-                # Quota OR deprecated model → break to try next fallback model.
                 if quota or unavailable:
                     reason = "quota exhausted" if quota else "model deprecated/404"
-                    logger.warning(
-                        "llm_adapter: model=%s %s: %s",
-                        full_model, reason, msg[:140],
-                    )
+                    logger.warning("llm_adapter: %s %s: %s", full_model, reason, msg[:140])
                     break
-                # Transient → retry same model (1s, 2s).
                 if transient and attempt < 2:
                     wait = 2 ** attempt
                     logger.warning(
@@ -287,56 +412,87 @@ async def llm_completion(
                     )
                     await asyncio.sleep(wait)
                     continue
-                # Permanent error → bubble.
                 raise
 
-    # All fallbacks exhausted. As a final $0 last resort, try Pollinations
-    # keyless text generation (no quota, no token). Disabled by setting
-    # LLM_POLLINATIONS_FALLBACK=false.
+    # All cloud fallbacks exhausted — try Pollinations as the final $0 backstop
     if (
-        is_gemini and last_err is not None
-        and _quota_exhausted(str(last_err))
+        last_err is not None
         and os.environ.get("LLM_POLLINATIONS_FALLBACK", "true").lower() not in {"false", "0", "off"}
     ):
         try:
             from services.free_apis import pollinations
             logger.warning(
-                "llm_adapter: every Gemini bucket exhausted, falling back to "
-                "Pollinations keyless text generation (free, no quota)."
+                "llm_adapter: all %s buckets exhausted, falling back to Pollinations (keyless)",
+                provider,
             )
-            out = await pollinations.generate_text(
-                prompt, model="openai", system=system_msg,
-            )
+            out = await pollinations.generate_text(prompt, model="openai", system=system_msg)
             if out:
                 return out
         except Exception as fe:
-            logger.warning("pollinations text fallback failed: %s", str(fe)[:200])
+            logger.warning("pollinations fallback failed: %s", str(fe)[:200])
 
     raise last_err or RuntimeError("llm_completion exhausted all fallback models")
 
 
+# ---------------------------------------------------------------------------
+# Utility — key / provider detection
+# ---------------------------------------------------------------------------
+
 def any_key_configured() -> bool:
+    """True when at least one real LLM provider is available.
+
+    'Available' includes:
+    - A configured API key for any cloud provider
+    - Ollama running locally (OLLAMA_BASE_URL set or OLLAMA_ENABLED=true)
+    - Pollinations (always free, no key needed) unless explicitly disabled
+    - Mock mode (for tests)
+    """
+    if _mock_mode_active():
+        return True
+    # Ollama: no key, just a running server
+    if _ollama_enabled():
+        return True
+    # Pollinations: always available unless explicitly disabled
+    if os.environ.get("LLM_POLLINATIONS_FALLBACK", "true").lower() not in {"false", "0", "off"}:
+        return True
+    # Cloud provider keys
     keys = (
         "OPENAI_API_KEY", "ANTHROPIC_API_KEY", "GEMINI_API_KEY",
         "GOOGLE_API_KEY", "LLM_API_KEY", "EMERGENT_LLM_KEY",
+        "GROQ_API_KEY", "DEEPSEEK_API_KEY", "QWEN_API_KEY",
+        "MISTRAL_API_KEY", "OPENROUTER_API_KEY",
     )
-    return any(os.environ.get(k) for k in keys) or _mock_mode_active()
+    return any(os.environ.get(k) for k in keys)
 
 
 def configured_providers() -> list[str]:
+    """List of active provider names for the /system/status display."""
     if _mock_mode_active():
         return ["mock"]
-    out = []
+    out: list[str] = []
+    # Local first
+    if _ollama_enabled():
+        out.append("ollama")
+    # Cloud keys
+    if os.environ.get("GROQ_API_KEY"):
+        out.append("groq")
+    if os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY"):
+        out.append("gemini")
+    if os.environ.get("DEEPSEEK_API_KEY"):
+        out.append("deepseek")
+    if os.environ.get("QWEN_API_KEY"):
+        out.append("qwen")
+    if os.environ.get("MISTRAL_API_KEY"):
+        out.append("mistral")
+    if os.environ.get("OPENROUTER_API_KEY"):
+        out.append("openrouter")
     if os.environ.get("OPENAI_API_KEY") or os.environ.get("LLM_API_KEY"):
         out.append("openai")
-    if os.environ.get("ANTHROPIC_API_KEY") or os.environ.get("LLM_API_KEY"):
+    if os.environ.get("ANTHROPIC_API_KEY"):
         out.append("anthropic")
-    if (
-        os.environ.get("GEMINI_API_KEY")
-        or os.environ.get("GOOGLE_API_KEY")
-        or os.environ.get("LLM_API_KEY")
-    ):
-        out.append("gemini")
     if os.environ.get("EMERGENT_LLM_KEY") and not out:
         out = ["openai", "anthropic", "gemini"]
+    # Pollinations is always available
+    if "pollinations" not in out:
+        out.append("pollinations")
     return out
