@@ -47,8 +47,15 @@ def browser_context(browser: Browser):
 @pytest.fixture
 def page(browser_context):
     p = browser_context.new_page()
-    # Skip FirstRunWalkthrough overlay so navigation tests aren't blocked
-    p.add_init_script("localStorage.setItem('pe5_walkthrough_seen', 'true')")
+    # Suppress both first-run overlays so navigation tests can click through:
+    #  - pe5_walkthrough_seen   → prevents FirstRunWalkthrough (z-9999 overlay)
+    #  - ah_quickstart_completed_v1 → prevents QuickstartWizard Dialog (z-50 overlay)
+    # The live server may be running an older build where the wizard auto-opens;
+    # setting both keys before React mounts ensures neither overlay intercepts clicks.
+    p.add_init_script(
+        "localStorage.setItem('pe5_walkthrough_seen', new Date().toISOString());"
+        "localStorage.setItem('ah_quickstart_completed_v1', new Date().toISOString());"
+    )
     yield p
     p.close()
 
