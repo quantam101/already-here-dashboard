@@ -62,8 +62,9 @@ google-auth-httplib2==0.4.0
 googleapis-common-protos==1.75.0
 proto-plus==1.28.0
 protobuf==4.25.9
-grpcio==1.80.0
-grpcio-status==1.71.2
+# grpcio / grpcio-status omitted — their >=5.x protobuf requirement
+# conflicts with google-ai-generativelanguage's 4.x pin.
+# Tests use REST transport (httpx), not gRPC.
 tiktoken==0.13.0
 tokenizers==0.22.2
 
