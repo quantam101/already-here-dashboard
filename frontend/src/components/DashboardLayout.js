@@ -27,6 +27,7 @@ import {
   X,
   Film,
   Radio,
+  Network,
 } from "lucide-react";
 
 const NAVIGATION = [
@@ -37,6 +38,7 @@ const NAVIGATION = [
   { name: "Content Factory", path: "/studio", icon: Sparkles, section: "operations" },
   { name: "Video Engine", path: "/video-studio", icon: Film, section: "operations" },
   { name: "Voice Lab", path: "/voice-lab", icon: Radio, section: "operations" },
+  { name: "D-ASI Matrix", path: "/dasi-matrix", icon: Network, section: "operations", highlight: true },
   { name: "Scout", path: "/scout", icon: Radar, section: "operations" },
   { name: "Proof of Work", path: "/proof-of-work", icon: Trophy, section: "revenue" },
   { name: "Pricing & Pay In", path: "/pricing", icon: CreditCard, section: "revenue" },

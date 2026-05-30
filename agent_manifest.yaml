@@ -1,0 +1,83 @@
+version: "4.0.0-ENTERPRISE"
+
+system_identity:
+  name: "Declarative Autonomous Swarm Intelligence (D-ASI)"
+  security_profile: "Zero-Trust Military Grade Isolation"
+  governance: "Immutable State Automation"
+
+operational_profile:
+  # Primary: DeepSeek-V3 (production-grade, 64K context, available on HF Inference API)
+  # Fallback: Qwen2.5-72B-Instruct (128K context, strong instruction-following)
+  primary_llm: "deepseek-ai/DeepSeek-V3"
+  fallback_llm: "Qwen/Qwen2.5-72B-Instruct"
+  temperature: 0.1
+  max_token_budget: 3072
+  # Number of model attempts (primary + fallback chain) before hard failure
+  circuit_breaker_threshold: 3
+  # Exponential backoff parameters
+  backoff_base: 2.0
+  backoff_jitter_max: 1.0   # Uniform(0, jitter_max) added per attempt
+
+swarm_matrix:
+  agents:
+    - id: "orchestrator_router"
+      role: "Strategic Multi-Agent Execution Path Planner"
+      priority: 1
+      system_prompt: |
+        You are the Master Controller. Process top-level operational criteria.
+        Deconstruct the input instructions into precise technical task lists.
+        Output strictly programmatic actions.
+        Do not use natural language introductions or commentary.
+
+    - id: "context_distiller"
+      role: "High-Density Semantic Condenser"
+      priority: 2
+      system_prompt: |
+        You are an advanced semantic compression layer.
+        Strip whitespace, padding tokens, conversational elements, and meta-text
+        from input contexts. Compress the payload down to explicit variables,
+        parameters, and logical states.
+
+    - id: "execution_unit"
+      role: "Production-Grade Code Blueprint Architect"
+      priority: 3
+      system_prompt: |
+        You are the System Architect. Synthesize input arrays directly into
+        full, un-truncated, production configurations or code files.
+        CRITICAL: Missing logic, commented-out sections, placeholders,
+        ellipses, or incomplete blocks will result in direct compile-time
+        system alerts. Output complete artifacts only.
+
+    - id: "adversarial_critic"
+      role: "Automated Policy Compliance Inspector"
+      priority: 4
+      system_prompt: |
+        You are the automated gatekeeper. Analyze the generated artifact for
+        structural completeness, validity, and absolute compliance.
+        Search for any sign of incompleteness, placeholders, or unfinished
+        logic blocks. If any flaws exist, return a structured failure report
+        detailing the exact line coordinates and violation type.
+        If the artifact is clean, emit exactly: VALIDATION_PASSED
+
+topology_map:
+  execution_sequence:
+    - step: 1
+      node: "orchestrator_router"
+      register_destination: "global_trajectory"
+    - step: 2
+      node: "context_distiller"
+      register_destination: "compressed_payload"
+    - step: 3
+      node: "execution_unit"
+      register_destination: "compiled_architecture"
+    - step: 4
+      node: "adversarial_critic"
+      register_destination: "validated_enterprise_output"
+
+security_policies:
+  - id: "SEC_ZERO_PLACEHOLDER_POLICY"
+    regex_pattern: '(?i)(\.\.\.|//\s*todo|/\*\s*insert|todo:|<placeholder>|missing_logic|your\s+code\s+here)'
+    enforcement_action: "abort_and_recompile"
+  - id: "SEC_INCOMPLETE_OUTPUT_POLICY"
+    regex_pattern: '(?i)(implement\s+this|fill\s+in|omitted\s+for\s+brevity|truncated\s+for|left\s+as\s+an?\s+exercise)'
+    enforcement_action: "abort_and_recompile"

@@ -21,6 +21,7 @@ import Books from "./pages/Books";
 import Secrets from "./pages/Secrets";
 import Sovereign from "./pages/Sovereign";
 import VoiceLab from "./pages/VoiceLab";
+import DASIMatrix from "./pages/DASIMatrix";
 import AuthGate from "./components/AuthGate";
 import { Toaster } from "sonner";
 
@@ -51,6 +52,7 @@ function App() {
               <Route path="secrets"       element={<Secrets />} />
               <Route path="sovereign"     element={<Sovereign />} />
               <Route path="voice-lab"    element={<VoiceLab />} />
+              <Route path="dasi-matrix"  element={<DASIMatrix />} />
             </Route>
             <Route path="/payment-success" element={<PaymentSuccess />} />
           </Routes>

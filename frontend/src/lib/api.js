@@ -236,3 +236,14 @@ export const voiceLabAPI = {
   downloadUrl: (id) => `${BACKEND_URL}/api/voicelab/jobs/${id}/download`,
   deleteJob: (id) => api.delete(`/voicelab/jobs/${id}`),
 };
+
+// D-ASI v4.0.0-ENTERPRISE — Declarative Autonomous Swarm Intelligence
+export const dasiAPI = {
+  health: () => api.get("/dasi/health"),
+  execute: (directive) => api.post("/dasi/matrix/execute", { directive }),
+  telemetry: (limit = 30) => api.get(`/dasi/matrix/telemetry?limit=${limit}`),
+  job: (id) => api.get(`/dasi/jobs/${id}`),
+  jobAudit: (id) => api.get(`/dasi/jobs/${id}/audit`),
+  resultUrl: (id) => `${BACKEND_URL}/api/dasi/jobs/${id}/result`,
+  deleteJob: (id) => api.delete(`/dasi/jobs/${id}`),
+};
