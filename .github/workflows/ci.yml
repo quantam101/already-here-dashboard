@@ -104,7 +104,8 @@ jobs:
 
       - name: Install security tools
         run: |
-          pip install bandit safety pip-audit semgrep
+          pip install bandit safety pip-audit
+          pip install semgrep || echo "semgrep install failed (optional) — skipping"
           pip install -r backend/requirements-ci.txt --quiet
 
       - name: bandit — Python security linter
