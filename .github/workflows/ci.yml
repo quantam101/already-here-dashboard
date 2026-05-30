@@ -339,11 +339,14 @@ jobs:
           OCI_HOST: ${{ secrets.OCI_HOST }}
           OCI_USER: ${{ secrets.OCI_USER }}
         run: |
-          ssh "${OCI_USER}@${OCI_HOST}" << 'ENDSSH'
+          ssh -o ServerAliveInterval=30 -o ServerAliveCountMax=20 -o ConnectTimeout=30 "${OCI_USER}@${OCI_HOST}" << 'ENDSSH'
             set -e
             cd /opt/command-os
             git pull origin main
-            sudo docker compose -f docker-compose.sqlite.yml build backend
+            # DOCKER_PROGRESS=plain outputs each layer line-by-line, keeping SSH alive during long pip install
+            export DOCKER_BUILDKIT=1
+            export BUILDKIT_PROGRESS=plain
+            sudo -E docker compose -f docker-compose.sqlite.yml build backend
             sudo docker compose -f docker-compose.sqlite.yml up -d backend
             # Wait for backend health
             for i in $(seq 1 12); do
