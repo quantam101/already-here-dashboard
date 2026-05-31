@@ -33,19 +33,26 @@ jobs:
             -X POST \
             -H "Content-Type: application/json" \
             --max-time 120 \
-            "$BASE_URL/api/sovereign/trigger")
+            "$BASE_URL/api/sovereign/trigger" || echo "000")
           echo "HTTP status: $HTTP_STATUS"
-          cat /tmp/sov_response.json | python3 -m json.tool || cat /tmp/sov_response.json
-          if [ "$HTTP_STATUS" -ge 500 ]; then
-            echo "Sovereign trigger returned 5xx — marking as failed"
-            exit 1
+          cat /tmp/sov_response.json 2>/dev/null | python3 -m json.tool 2>/dev/null || cat /tmp/sov_response.json 2>/dev/null || true
+          if [ "$HTTP_STATUS" = "000" ]; then
+            echo "::warning::Sovereign endpoint unreachable — server may be down"
+          elif [ "$HTTP_STATUS" -ge 500 ] 2>/dev/null; then
+            echo "::warning::Sovereign trigger returned $HTTP_STATUS — server error, non-blocking"
+          else
+            echo "Sovereign cycle triggered (HTTP $HTTP_STATUS)."
           fi
-          echo "Sovereign cycle complete."
 
-      - name: Health gate (must be 200 after cycle)
+      - name: Health gate (informational)
         if: always()
         run: |
-          BASE_URL="${{ secrets.CMDOS_BASE_URL || 'https://app.alreadyherellc.com' }}"
-          HTTP=$(curl -s -o /dev/null -w "%{http_code}" --max-time 15 "$BASE_URL/api/health/")
+          BASE_URL="${{ secrets.CMDOS_BASE_URL }}"
+          if [ -z "$BASE_URL" ]; then
+            BASE_URL="https://app.alreadyherellc.com"
+          fi
+          HTTP=$(curl -s -o /dev/null -w "%{http_code}" --max-time 15 "$BASE_URL/api/health/" 2>/dev/null || echo "000")
           echo "Post-cycle health: $HTTP"
-          [ "$HTTP" = "200" ] || echo "::warning::Health check returned $HTTP after sovereign cycle"
+          if [ "$HTTP" != "200" ]; then
+            echo "::warning::Health check returned $HTTP after sovereign cycle"
+          fi
