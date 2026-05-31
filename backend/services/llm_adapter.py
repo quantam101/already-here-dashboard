@@ -3,16 +3,27 @@ LLM adapter — vendor-neutral abstraction over OpenAI/Anthropic/Gemini/Ollama
 using the open-source `litellm` library.
 
 Free-first philosophy: every provider in this file costs $0.
-  - Ollama   — local inference (set OLLAMA_BASE_URL; runs Llama, Gemma, Qwen,
-                DeepSeek, Mistral, Phi locally at zero cost)
-  - Gemini   — Google free tier: ~1 500 req/day on gemini-2.5-flash (set GEMINI_API_KEY)
-  - OpenAI   — paid, but accepts OpenRouter key for free-tier routing
+  - LM Studio — local inference via OpenAI-compatible API (localhost:1234)
+                 runs any GGUF model; highest priority when running locally
+  - Ollama    — local inference (set OLLAMA_BASE_URL; runs Llama, Gemma, Qwen,
+                 DeepSeek, Mistral, Phi locally at zero cost)
+  - Gemini    — Google free tier: ~1 500 req/day on gemini-2.5-flash (set GEMINI_API_KEY)
+  - OpenAI    — paid, but accepts OpenRouter key for free-tier routing
   - Pollinations — keyless; always available as the final fallback (no config needed)
 
 Mock mode: if `LLM_MOCK_MODE=true` is set OR the configured key starts with
 `sk-mock-`, the adapter returns deterministic canned responses instead of
 hitting the real provider API. This lets the test suite + smoke runs work
 end-to-end without spending money on real LLM calls.
+
+LM Studio quick-start (Windows/Mac/Linux):
+  1. Install from https://lmstudio.ai  (or: irm https://lmstudio.ai/install.ps1 | iex)
+  2. Download a model in the LM Studio UI (Llama, Gemma, Mistral, DeepSeek, etc.)
+  3. Start the local server (default port 1234)
+  4. Set in backend/.env:
+       LM_STUDIO_BASE_URL=http://localhost:1234/v1   # optional, this is the default
+       LM_STUDIO_MODEL=llama-3.2-3b-instruct         # match what you loaded
+  LM Studio auto-detected when the port is reachable — no key required.
 
 Ollama quick-start (on a machine with >=4 GB RAM):
   curl -fsSL https://ollama.ai/install.sh | sh
@@ -55,6 +66,11 @@ _PROVIDER_CONFIG: dict[str, dict[str, Any]] = {
         "model_template": "gemini/{model}",
         "env_keys": ["GEMINI_API_KEY", "GOOGLE_API_KEY", "LLM_API_KEY"],
     },
+    # LM Studio: local OpenAI-compatible server at localhost:1234, no key needed
+    "lmstudio": {
+        "model_template": "openai/{model}",
+        "env_keys": [],
+    },
     # Ollama: local inference, no key needed — uses OLLAMA_BASE_URL
     "ollama": {
         "model_template": "ollama/{model}",
@@ -90,6 +106,43 @@ _PROVIDER_CONFIG: dict[str, dict[str, Any]] = {
 
 class LLMProviderError(RuntimeError):
     pass
+
+
+# ---------------------------------------------------------------------------
+# LM Studio helpers  (OpenAI-compatible local server, highest priority)
+# ---------------------------------------------------------------------------
+
+def _lmstudio_base_url() -> str:
+    """Base URL for the LM Studio local server (OpenAI-compatible)."""
+    return os.environ.get("LM_STUDIO_BASE_URL", "http://localhost:1234/v1").rstrip("/")
+
+
+def _lmstudio_enabled() -> bool:
+    """True when LM Studio is explicitly opted-in or the base URL is configured."""
+    if os.environ.get("LM_STUDIO_BASE_URL"):
+        return True
+    return os.environ.get("LM_STUDIO_ENABLED", "").strip().lower() in ("1", "true", "yes", "on")
+
+
+def _lmstudio_models() -> list[str]:
+    """Ordered list of LM Studio models to try."""
+    raw = os.environ.get("LM_STUDIO_MODELS", "").strip()
+    if raw:
+        return [m.strip() for m in raw.split(",") if m.strip()]
+    default_model = os.environ.get("LM_STUDIO_MODEL", "").strip()
+    # Generic names that work with most GGUF models loaded in LM Studio
+    fallbacks = [
+        "local-model",          # LM Studio default model identifier
+        "llama-3.2-3b-instruct",
+        "gemma-2-2b-it",
+        "mistral-7b-instruct-v0.3",
+        "deepseek-r1-distill-qwen-7b",
+    ]
+    if default_model and default_model not in fallbacks:
+        return [default_model] + fallbacks
+    if default_model:
+        return [default_model] + [m for m in fallbacks if m != default_model]
+    return fallbacks
 
 
 # ---------------------------------------------------------------------------
@@ -197,9 +250,9 @@ def _mock_response(system_msg: str, prompt: str) -> str:
         return ("Chapter body generated in mock mode. " * 60).strip()
     h = hashlib.sha256(prompt.encode("utf-8")).hexdigest()[:8]
     return (
-        f"[mock-mode-response:{h}] — set OLLAMA_BASE_URL (local free), "
-        "GROQ_API_KEY (free), GEMINI_API_KEY (free), or OPENROUTER_API_KEY (free) "
-        "in backend/.env to get real AI output."
+        f"[mock-mode-response:{h}] — set LM_STUDIO_BASE_URL (local free), "
+        "OLLAMA_BASE_URL (local free), GROQ_API_KEY (free), GEMINI_API_KEY (free), "
+        "or OPENROUTER_API_KEY (free) in backend/.env to get real AI output."
     )
 
 
@@ -210,13 +263,11 @@ def _mock_response(system_msg: str, prompt: str) -> str:
 def resolve_api_key(provider: str) -> str | None:
     """Return the API key for provider, or None if not configured.
 
-    Ollama never needs a key. Pollinations never needs a key.
+    Ollama, LM Studio, and Pollinations never need a key.
     """
     p = provider.lower()
-    if p == "ollama":
+    if p in ("ollama", "lmstudio", "pollinations"):
         return None  # keyless — uses api_base
-    if p == "pollinations":
-        return None  # keyless
     cfg = _PROVIDER_CONFIG.get(p)
     if not cfg:
         return os.environ.get("LLM_API_KEY") or os.environ.get("EMERGENT_LLM_KEY")
@@ -268,7 +319,7 @@ def _gemini_fallbacks() -> list[str]:
 
 
 # ---------------------------------------------------------------------------
-# Core completion — litellm-backed, handles Ollama + cloud providers
+# Core completion — litellm-backed, handles LM Studio + Ollama + cloud providers
 # ---------------------------------------------------------------------------
 
 async def llm_completion(
@@ -283,14 +334,15 @@ async def llm_completion(
 ) -> str:
     """Send a one-shot completion via litellm. Returns the response text.
 
-    Supports: Ollama (local), Gemini, OpenAI, Anthropic, Groq, DeepSeek,
-              Qwen, Mistral, OpenRouter, Pollinations.
+    Supports: LM Studio (local), Ollama (local), Gemini, OpenAI, Anthropic,
+              Groq, DeepSeek, Qwen, Mistral, OpenRouter, Pollinations.
 
     Resilience:
-      1. Ollama: tries all configured models sequentially on failure.
-      2. Gemini: cascades through free-tier model buckets on 429.
-      3. All providers: exponential backoff on transient 503/connection errors.
-      4. Final fallback: Pollinations keyless text API (always available).
+      1. LM Studio: tries all configured models sequentially on failure.
+      2. Ollama: tries all configured models sequentially on failure.
+      3. Gemini: cascades through free-tier model buckets on 429.
+      4. All providers: exponential backoff on transient 503/connection errors.
+      5. Final fallback: Pollinations keyless text API (always available).
     """
     import asyncio
 
@@ -302,6 +354,43 @@ async def llm_completion(
         {"role": "system", "content": system_msg},
         {"role": "user", "content": prompt},
     ]
+
+    # ── LM Studio (local OpenAI-compatible, highest priority, keyless) ────────
+    if p == "lmstudio":
+        base_url = _lmstudio_base_url()
+        models_to_try = [model] if model else _lmstudio_models()
+        last_lms_err: Exception | None = None
+        for lm in models_to_try:
+            # LM Studio uses OpenAI-compatible API: model prefix "openai/"
+            full = f"openai/{lm}"
+            kwargs: dict[str, Any] = {
+                "model": full,
+                "messages": messages,
+                "api_base": base_url,
+                "api_key": "lm-studio",   # arbitrary non-empty string required by litellm
+                "temperature": temperature,
+            }
+            if max_tokens:
+                kwargs["max_tokens"] = max_tokens
+            logger.debug("llm_adapter (lmstudio): %s @ %s", full, base_url)
+            for attempt in range(2):
+                try:
+                    resp = await litellm.acompletion(**kwargs)
+                    return resp["choices"][0]["message"]["content"] or ""
+                except Exception as e:
+                    last_lms_err = e
+                    msg = str(e).lower()
+                    if "connection" in msg or "refused" in msg or "timeout" in msg:
+                        if attempt == 0:
+                            await asyncio.sleep(1)
+                            continue
+                    logger.warning("lmstudio model=%s failed: %s", lm, str(e)[:120])
+                    break  # try next model
+        raise LLMProviderError(
+            f"LM Studio at {base_url} could not complete the request. "
+            f"Last error: {last_lms_err}. "
+            f"Make sure LM Studio is running with a model loaded and the server started."
+        )
 
     # ── Ollama (local/private, keyless) ──────────────────────────────────────
     if p == "ollama":
@@ -442,12 +531,16 @@ def any_key_configured() -> bool:
     """True when at least one real LLM provider is available.
 
     'Available' includes:
+    - LM Studio running locally (LM_STUDIO_BASE_URL set or LM_STUDIO_ENABLED=true)
     - A configured API key for any cloud provider
     - Ollama running locally (OLLAMA_BASE_URL set or OLLAMA_ENABLED=true)
     - Pollinations (always free, no key needed) unless explicitly disabled
     - Mock mode (for tests)
     """
     if _mock_mode_active():
+        return True
+    # LM Studio: no key, just a running server
+    if _lmstudio_enabled():
         return True
     # Ollama: no key, just a running server
     if _ollama_enabled():
@@ -470,7 +563,9 @@ def configured_providers() -> list[str]:
     if _mock_mode_active():
         return ["mock"]
     out: list[str] = []
-    # Local first
+    # Local inference — highest priority
+    if _lmstudio_enabled():
+        out.append("lmstudio")
     if _ollama_enabled():
         out.append("ollama")
     # Cloud keys
