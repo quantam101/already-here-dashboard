@@ -14,7 +14,7 @@ Public API:
 
     await llm_complete(system, user, *, max_tokens, temperature) -> str
         Smart failover (all $0):
-          Ollama (local) → Groq (free API) → Gemini (free API) →
+          LM Studio (local) → Ollama (local) → Groq (free API) → Gemini (free API) →
           DeepSeek (free API) → Qwen (free API) → Mistral (free API) →
           OpenRouter free models → Pollinations (always free, no key)
         Use this in all routes instead of run_cached(provider="gemini", …).
@@ -29,6 +29,8 @@ Public API:
     await check_daily_budget(db, *, expected_tokens=0) -> None  (raises 429)
 
 Free provider setup guide (all $0, no credit card):
+  LM_STUDIO_BASE_URL → local LM Studio server (start server in LM Studio UI)
+  LM_STUDIO_MODEL    → model name shown in LM Studio (e.g. llama-3.2-3b-instruct)
   OLLAMA_BASE_URL    → local Ollama server (run `ollama serve`)
   OLLAMA_MODEL       → e.g. llama3.2:3b, gemma2:2b, qwen2.5:3b, deepseek-r1:1.5b
   GROQ_API_KEY       → free at console.groq.com  (Llama 3.3 70B, 14 400 req/day)
@@ -335,33 +337,43 @@ def _failover_providers() -> list[tuple[str, str, str]]:
     Returns list of (provider_name, model_id, api_key_or_sentinel).
 
     Priority (all $0):
-      1. Ollama       — local inference, zero latency, completely offline
-      2. Groq         — fastest cloud, very generous free tier
-      3. Gemini       — best quality free tier (1 500 req/day on flash)
-      4. DeepSeek     — excellent reasoning, free tier
-      5. Qwen         — great multilingual, free tier
-      6. Mistral      — solid European option, free tier
-      7. OpenRouter   — routes to Llama/Gemma/Qwen/DeepSeek free community models
-      8. Pollinations — always available, zero config (gpt-4o-mini class, keyless)
+      1. LM Studio    — local OpenAI-compatible server, zero latency, completely offline
+      2. Ollama       — local inference, zero latency, completely offline
+      3. Groq         — fastest cloud, very generous free tier
+      4. Gemini       — best quality free tier (1 500 req/day on flash)
+      5. DeepSeek     — excellent reasoning, free tier
+      6. Qwen         — great multilingual, free tier
+      7. Mistral      — solid European option, free tier
+      8. OpenRouter   — routes to Llama/Gemma/Qwen/DeepSeek free community models
+      9. Pollinations — always available, zero config (gpt-4o-mini class, keyless)
     """
-    from services.llm_adapter import _ollama_base_url, _ollama_enabled, _ollama_models
+    from services.llm_adapter import (
+        _lmstudio_base_url, _lmstudio_enabled, _lmstudio_models,
+        _ollama_base_url, _ollama_enabled, _ollama_models,
+    )
 
     providers: list[tuple[str, str, str]] = []
 
-    # 1. Ollama — local, keyless, highest priority when available
+    # 1. LM Studio — local OpenAI-compatible server, keyless, highest priority
+    if _lmstudio_enabled():
+        lms_base = _lmstudio_base_url()
+        for lm in _lmstudio_models():
+            providers.append(("lmstudio", lm, lms_base))
+
+    # 2. Ollama — local, keyless
     if _ollama_enabled():
         base = _ollama_base_url()
         for om in _ollama_models():
             providers.append(("ollama", om, base))
 
-    # 2. Groq — free tier, fastest cloud inference
+    # 3. Groq — free tier, fastest cloud inference
     gr = os.environ.get("GROQ_API_KEY", "").strip()
     if gr:
         providers.append(("groq", "llama-3.3-70b-versatile", gr))
         providers.append(("groq", "gemma2-9b-it",             gr))
         providers.append(("groq", "llama-3.1-8b-instant",     gr))
 
-    # 3. Gemini — best free-tier quality (multiple free-quota buckets)
+    # 4. Gemini — best free-tier quality (multiple free-quota buckets)
     gm = (
         os.environ.get("GEMINI_API_KEY", "")
         or os.environ.get("GOOGLE_API_KEY", "")
@@ -373,24 +385,24 @@ def _failover_providers() -> list[tuple[str, str, str]]:
         providers.append(("gemini", "gemini-2.5-flash-lite", gm))
         providers.append(("gemini", "gemini-1.5-flash",      gm))
 
-    # 4. DeepSeek — very capable, free tier
+    # 5. DeepSeek — very capable, free tier
     ds = os.environ.get("DEEPSEEK_API_KEY", "").strip()
     if ds:
         providers.append(("deepseek", "deepseek-chat",    ds))
         providers.append(("deepseek", "deepseek-coder",   ds))
 
-    # 5. Qwen (Alibaba) — multilingual, free tier
+    # 6. Qwen (Alibaba) — multilingual, free tier
     qw = os.environ.get("QWEN_API_KEY", "").strip()
     if qw:
         providers.append(("qwen", "qwen-plus",  qw))
         providers.append(("qwen", "qwen-turbo", qw))
 
-    # 6. Mistral — free tier
+    # 7. Mistral — free tier
     ms = os.environ.get("MISTRAL_API_KEY", "").strip()
     if ms:
         providers.append(("mistral", "mistral-small-latest", ms))
 
-    # 7. OpenRouter — free community models (Llama, Gemma, Qwen, DeepSeek)
+    # 8. OpenRouter — free community models (Llama, Gemma, Qwen, DeepSeek)
     or_ = os.environ.get("OPENROUTER_API_KEY", "").strip()
     if or_:
         free_models = [
@@ -403,7 +415,7 @@ def _failover_providers() -> list[tuple[str, str, str]]:
         for fm in free_models:
             providers.append(("openrouter", fm, or_))
 
-    # 8. Pollinations — always available, no key, no quota
+    # 9. Pollinations — always available, no key, no quota
     if os.environ.get("LLM_POLLINATIONS_FALLBACK", "true").lower() not in {"false", "0", "off"}:
         providers.append(("pollinations", "openai",      _POLLINATIONS_SENTINEL))
         providers.append(("pollinations", "openai-fast", _POLLINATIONS_SENTINEL))
@@ -451,8 +463,8 @@ async def llm_complete(
         try:
             logger.debug("llm_complete: trying provider=%s model=%s", provider, model)
 
-            # ── Ollama and Pollinations go through llm_adapter (litellm) ──
-            if provider in ("ollama", "pollinations"):
+            # ── Local providers (LM Studio, Ollama) and Pollinations go through llm_adapter (litellm) ──
+            if provider in ("lmstudio", "ollama", "pollinations"):
                 result = await llm_completion(
                     provider=provider,
                     model=model,
