@@ -14,9 +14,8 @@ Public API:
 
     await llm_complete(system, user, *, max_tokens, temperature) -> str
         Smart failover (all $0):
-          LM Studio (local) → Ollama (local) → Groq (free API) → Gemini (free API) →
-          DeepSeek (free API) → Qwen (free API) → Mistral (free API) →
-          OpenRouter free models → Pollinations (always free, no key)
+          LM Studio (local) → Ollama (local) → Groq → HuggingFace → Gemini →
+          DeepSeek → Qwen → Mistral → OpenRouter free models → Pollinations (keyless)
         Use this in all routes instead of run_cached(provider="gemini", …).
         Does NOT cache or track budget (stateless helper for agents/routes).
 
@@ -29,17 +28,19 @@ Public API:
     await check_daily_budget(db, *, expected_tokens=0) -> None  (raises 429)
 
 Free provider setup guide (all $0, no credit card):
-  LM_STUDIO_BASE_URL → local LM Studio server (start server in LM Studio UI)
-  LM_STUDIO_MODEL    → model name shown in LM Studio (e.g. llama-3.2-3b-instruct)
-  OLLAMA_BASE_URL    → local Ollama server (run `ollama serve`)
-  OLLAMA_MODEL       → e.g. llama3.2:3b, gemma2:2b, qwen2.5:3b, deepseek-r1:1.5b
-  GROQ_API_KEY       → free at console.groq.com  (Llama 3.3 70B, 14 400 req/day)
-  GEMINI_API_KEY     → free at ai.google.dev     (Gemini 2.5 Flash, 1 500 req/day)
-  DEEPSEEK_API_KEY   → free tier at platform.deepseek.com
-  QWEN_API_KEY       → free tier at dashscope.aliyuncs.com
-  MISTRAL_API_KEY    → free tier at console.mistral.ai
-  OPENROUTER_API_KEY → free at openrouter.ai     (Llama/Gemma/Qwen free models)
-  Pollinations       → always available, zero config (gpt-4o-mini class, no key)
+  LM_STUDIO_BASE_URL    → local LM Studio server (start server in LM Studio UI)
+  LM_STUDIO_MODEL       → model name shown in LM Studio (e.g. llama-3.2-3b-instruct)
+  OLLAMA_BASE_URL       → local Ollama server (run `ollama serve`)
+  OLLAMA_MODEL          → e.g. llama3.2:3b, gemma2:2b, qwen2.5:3b, deepseek-r1:1.5b
+  GROQ_API_KEY          → free at console.groq.com  (Llama 3.3 70B, 14 400 req/day)
+  HUGGINGFACE_API_KEY   → free at huggingface.co/settings/tokens (thousands of models)
+  HF_LLM_MODELS         → comma-sep model list override (default: Llama-3.2-3B, Phi-3.5)
+  GEMINI_API_KEY        → free at ai.google.dev     (Gemini 2.5 Flash, 1 500 req/day)
+  DEEPSEEK_API_KEY      → free tier at platform.deepseek.com
+  QWEN_API_KEY          → free tier at dashscope.aliyuncs.com
+  MISTRAL_API_KEY       → free tier at console.mistral.ai
+  OPENROUTER_API_KEY    → free at openrouter.ai     (Llama/Gemma/Qwen free models)
+  Pollinations          → always available, zero config (gpt-4o-mini class, no key)
 """
 from __future__ import annotations
 
@@ -377,6 +378,20 @@ def _failover_providers() -> list[tuple[str, str, str]]:
         providers.append(("groq", "gemma2-9b-it",             gr))
         providers.append(("groq", "llama-3.1-8b-instant",     gr))
 
+    # 3.5. HuggingFace — free cloud inference, thousands of open models
+    hf = (
+        os.environ.get("HUGGINGFACE_API_KEY", "").strip()
+        or os.environ.get("HF_TOKEN", "").strip()
+    )
+    if hf:
+        hf_llm_models = [
+            "meta-llama/Llama-3.2-3B-Instruct",
+            "microsoft/Phi-3.5-mini-instruct",
+            "mistralai/Mistral-7B-Instruct-v0.3",
+        ]
+        for hm in hf_llm_models:
+            providers.append(("huggingface", hm, hf))
+
     # 4. Gemini — best free-tier quality (multiple free-quota buckets)
     gm = (
         os.environ.get("GEMINI_API_KEY", "")
@@ -467,8 +482,8 @@ async def llm_complete(
         try:
             logger.debug("llm_complete: trying provider=%s model=%s", provider, model)
 
-            # ── Local providers (LM Studio, Ollama) and Pollinations go through llm_adapter (litellm) ──
-            if provider in ("lmstudio", "ollama", "pollinations"):
+            # ── Local + free-API providers go through llm_adapter (litellm) ──
+            if provider in ("lmstudio", "ollama", "huggingface", "pollinations"):
                 result = await llm_completion(
                     provider=provider,
                     model=model,

@@ -101,6 +101,11 @@ _PROVIDER_CONFIG: dict[str, dict[str, Any]] = {
         "model_template": "mistral/{model}",
         "env_keys": ["MISTRAL_API_KEY"],
     },
+    # HuggingFace Inference API: free tier, OpenAI-compatible endpoint
+    "huggingface": {
+        "model_template": "openai/{model}",
+        "env_keys": ["HUGGINGFACE_API_KEY", "HF_TOKEN"],
+    },
 }
 
 
@@ -180,6 +185,38 @@ def _ollama_models() -> list[str]:
     if default_model:
         return [default_model] + [m for m in fallbacks if m != default_model]
     return fallbacks
+
+
+# ---------------------------------------------------------------------------
+# HuggingFace Inference API helpers (free, OpenAI-compatible endpoint)
+# ---------------------------------------------------------------------------
+
+def _huggingface_api_key() -> str | None:
+    """Return HuggingFace token, or None if not configured."""
+    return (
+        os.environ.get("HUGGINGFACE_API_KEY", "").strip()
+        or os.environ.get("HF_TOKEN", "").strip()
+        or None
+    )
+
+
+def _huggingface_llm_models() -> list[str]:
+    """Ordered list of HuggingFace LLM models to try for text inference."""
+    raw = os.environ.get("HF_LLM_MODELS", "").strip()
+    if raw:
+        return [m.strip() for m in raw.split(",") if m.strip()]
+    primary = os.environ.get("HF_LLM_MODEL", "").strip()
+    defaults = [
+        "meta-llama/Llama-3.2-3B-Instruct",    # fast, small, good general quality
+        "microsoft/Phi-3.5-mini-instruct",       # very efficient 3.8B
+        "mistralai/Mistral-7B-Instruct-v0.3",   # reliable 7B
+        "HuggingFaceH4/zephyr-7b-beta",          # chat-tuned, consistent
+    ]
+    if primary and primary not in defaults:
+        return [primary] + defaults
+    if primary:
+        return [primary] + [m for m in defaults if m != primary]
+    return defaults
 
 
 # ---------------------------------------------------------------------------
@@ -425,6 +462,45 @@ async def llm_completion(
             f"Ollama at {base_url} could not complete the request. "
             f"Last error: {last_ollama_err}. "
             f"Make sure Ollama is running and at least one model is pulled."
+        )
+
+    # ── HuggingFace Inference API (free, OpenAI-compatible) ─────────────────
+    if p == "huggingface":
+        hf_key = _huggingface_api_key()
+        if not hf_key:
+            raise LLMProviderError(
+                "HuggingFace not configured. Set HUGGINGFACE_API_KEY or HF_TOKEN. "
+                "Free token at https://huggingface.co/settings/tokens."
+            )
+        models_to_try = [model] if model else _huggingface_llm_models()
+        last_hf_err: Exception | None = None
+        for hm in models_to_try:
+            hf_base = f"https://api-inference.huggingface.co/models/{hm}/v1"
+            kwargs: dict[str, Any] = {
+                "model": f"openai/{hm}",
+                "messages": messages,
+                "api_base": hf_base,
+                "api_key": hf_key,
+                "temperature": temperature,
+            }
+            if max_tokens:
+                kwargs["max_tokens"] = max_tokens
+            logger.debug("llm_adapter (huggingface): %s", hm)
+            try:
+                resp = await litellm.acompletion(**kwargs)
+                return resp["choices"][0]["message"]["content"] or ""
+            except Exception as e:
+                last_hf_err = e
+                msg = str(e).lower()
+                # 503 = model loading, 429 = rate-limited → try next model
+                if any(x in msg for x in ("503", "429", "loading", "rate")):
+                    logger.warning("hf model=%s transient error, trying next: %s", hm, str(e)[:80])
+                    continue
+                logger.warning("hf model=%s failed: %s", hm, str(e)[:120])
+                continue  # always try next model
+        raise LLMProviderError(
+            f"HuggingFace: all models failed. Last error: {last_hf_err}. "
+            "Set HF_LLM_MODELS to override the model list."
         )
 
     # ── Pollinations (keyless, always free) ──────────────────────────────────
