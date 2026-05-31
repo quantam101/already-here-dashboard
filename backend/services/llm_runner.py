@@ -348,8 +348,12 @@ def _failover_providers() -> list[tuple[str, str, str]]:
       9. Pollinations — always available, zero config (gpt-4o-mini class, keyless)
     """
     from services.llm_adapter import (
-        _lmstudio_base_url, _lmstudio_enabled, _lmstudio_models,
-        _ollama_base_url, _ollama_enabled, _ollama_models,
+        _lmstudio_base_url,
+        _lmstudio_enabled,
+        _lmstudio_models,
+        _ollama_base_url,
+        _ollama_enabled,
+        _ollama_models,
     )
 
     providers: list[tuple[str, str, str]] = []
