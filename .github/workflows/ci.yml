@@ -38,6 +38,7 @@ env:
   AUTO_CYCLE_ENABLED: "false"
   STRIPE_API_KEY: sk_test_emergent   # safe test stub — never a real key
   REACT_APP_BACKEND_URL: ${{ secrets.REACT_APP_BACKEND_URL || 'https://app.alreadyherellc.com' }}
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true  # opt into Node.js 24 before June 16, 2026 deadline
 
 #─────────────────────────────────────────────────────────────────────────────
 # JOB 1 — Static Analysis (ruff + mypy + isort + flake8)
@@ -369,12 +370,16 @@ jobs:
         env:
           OCI_HOST: ${{ secrets.OCI_HOST }}
           OCI_USER: ${{ secrets.OCI_USER }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           ssh -o StrictHostKeyChecking=no -o ConnectTimeout=15 \
               -o ServerAliveInterval=20 -o ServerAliveCountMax=30 \
-              "${OCI_USER}@${OCI_HOST}" bash << 'ENDSSH'
+              "${OCI_USER}@${OCI_HOST}" \
+              env GITHUB_TOKEN="${GITHUB_TOKEN}" bash << 'ENDSSH'
             set -e
             cd /opt/command-os
+            # Authenticate git with the Actions token so pull never blocks on credentials
+            git remote set-url origin "https://x-access-token:${GITHUB_TOKEN}@github.com/quantam101/already-here-dashboard.git"
             git pull origin main
 
             # Backend: rebuild + restart (frontend built inside Docker image)
