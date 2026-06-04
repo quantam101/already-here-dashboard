@@ -290,8 +290,7 @@ async def generate_counteroffer(req: CounterOfferRequest, request: Request):
     counteroffer_text = (
         f"Thank you for the opportunity on '{title}'. "
         f"My rate for this work is $65/hr with a 2-hour minimum ($130 total){travel_clause}. "
-        f"I accept work in the $45–$65/hr range — please let me know if we can meet at $65/hr "
-        f"and I'll get it on the schedule right away."
+        f"Please confirm and I'll get it scheduled."
     )
 
     # Try to enhance with LLM if available
@@ -300,8 +299,9 @@ async def generate_counteroffer(req: CounterOfferRequest, request: Request):
         from services.llm_runner import run_cached
         prompt = (
             f"Write a professional, brief work order counteroffer for '{title}' from {company}. "
-            f"Rate range: $45-$65/hr. Target: $65/hr. 2-hour minimum ($130 total){travel_clause}. "
-            "Keep it under 3 sentences. Be direct and professional. Do not guarantee income."
+            f"State only: $65/hr, 2-hour minimum ($130 total){travel_clause}. "
+            "Keep it under 3 sentences. Be direct and professional. "
+            "Never mention a rate range or floor — only quote $65/hr."
         )
         llm_text = await run_cached(
             db, "auto", "auto",
