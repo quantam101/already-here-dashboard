@@ -48,6 +48,7 @@ from routes import (
     gmail_scanner,
     growth_vault,
     product_factory,
+    content_sync,
 )
 from services.scheduler_service import start_scheduler, stop_scheduler
 
@@ -168,6 +169,7 @@ api_router.include_router(cash_command.router, prefix="/cash-command", tags=["ca
 api_router.include_router(gmail_scanner.router, prefix="/gmail", tags=["gmail"])
 api_router.include_router(growth_vault.router, prefix="/growth-vault", tags=["growth-vault"])
 api_router.include_router(product_factory.router, prefix="/products", tags=["products"])
+api_router.include_router(content_sync.router, prefix="/content-sync", tags=["content-sync"])
 
 app.include_router(api_router)
 
