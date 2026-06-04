@@ -29,9 +29,10 @@ work_orders:
   platforms: [Gmail, Field Nation, WorkMarket]
   base_market: Phoenix AZ
   radius_miles: 60
-  minimum_hourly: 65
+  rate_floor_hourly: 45       # below this = avoid
+  rate_target_hourly: 65      # ideal rate, counteroffer aims here
   minimum_hours: 2
-  minimum_total: 130
+  minimum_total: 130          # 2h x $65 equivalent floor
   preferred_categories:
     - IT support
     - POS

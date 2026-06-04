@@ -75,9 +75,10 @@ PREFERRED_CATEGORIES = {
     "door lock installation", "appliance repair", "pest spraying", "weed spraying",
 }
 
-MINIMUM_HOURLY = 65.0
-MINIMUM_HOURS = 2.0
-MINIMUM_TOTAL = 130.0
+MINIMUM_HOURLY = 45.0   # floor — below this is avoid
+TARGET_HOURLY  = 65.0   # ideal rate — counteroffer aims for this
+MINIMUM_HOURS  = 2.0
+MINIMUM_TOTAL  = 130.0  # 2h × $65 floor for flat-fee comparison
 RADIUS_MILES = 60.0
 LONG_DISTANCE_MIN_RATE = 175.0
 
@@ -103,16 +104,18 @@ def _score_work_order(wo: Dict[str, Any]) -> tuple[int, str]:
         score -= 10
         flags.append("non_preferred_category")
 
-    # --- Rate scoring ---
+    # --- Rate scoring ($45 floor, $65 target) ---
     if rate_type == "hourly":
         effective_total = rate * max(hours, MINIMUM_HOURS)
-        if rate >= MINIMUM_HOURLY and effective_total >= MINIMUM_TOTAL:
+        if rate >= TARGET_HOURLY:                             # $65+ → strong accept
             score += 20
-        elif rate >= MINIMUM_HOURLY:
-            score += 5
-            flags.append("low_hours")
-        else:
-            score -= 25
+        elif rate >= 55:                                       # $55-64 → acceptable
+            score += 10
+        elif rate >= MINIMUM_HOURLY:                          # $45-54 → counteroffer up
+            score -= 5
+            flags.append("below_target_rate")
+        else:                                                  # under $45 → avoid
+            score -= 30
             flags.append("weak_rate")
     elif rate_type == "flat":
         effective_total = rate
@@ -286,8 +289,9 @@ async def generate_counteroffer(req: CounterOfferRequest, request: Request):
 
     counteroffer_text = (
         f"Thank you for the opportunity on '{title}'. "
-        f"My rate for this type of work is $65/hr with a 2-hour minimum ($130 total){travel_clause}. "
-        f"Please confirm if this works and I'll get it scheduled."
+        f"My rate for this work is $65/hr with a 2-hour minimum ($130 total){travel_clause}. "
+        f"I accept work in the $45–$65/hr range — please let me know if we can meet at $65/hr "
+        f"and I'll get it on the schedule right away."
     )
 
     # Try to enhance with LLM if available
@@ -296,8 +300,8 @@ async def generate_counteroffer(req: CounterOfferRequest, request: Request):
         from services.llm_runner import run_cached
         prompt = (
             f"Write a professional, brief work order counteroffer for '{title}' from {company}. "
-            f"My minimum rate: $65/hr, 2-hour minimum ($130 total){travel_clause}. "
-            "Keep it under 3 sentences. Be direct and professional."
+            f"Rate range: $45-$65/hr. Target: $65/hr. 2-hour minimum ($130 total){travel_clause}. "
+            "Keep it under 3 sentences. Be direct and professional. Do not guarantee income."
         )
         llm_text = await run_cached(
             db, "auto", "auto",
