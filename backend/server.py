@@ -45,6 +45,9 @@ from routes import (
     voicelab,
     work_orders,
     cash_command,
+    gmail_scanner,
+    growth_vault,
+    product_factory,
 )
 from services.scheduler_service import start_scheduler, stop_scheduler
 
@@ -162,6 +165,9 @@ api_router.include_router(dasi.router, prefix="/dasi", tags=["dasi"])
 api_router.include_router(sovereign.router, prefix="/sovereign", tags=["sovereign"])
 api_router.include_router(work_orders.router, prefix="/work-orders", tags=["work-orders"])
 api_router.include_router(cash_command.router, prefix="/cash-command", tags=["cash-command"])
+api_router.include_router(gmail_scanner.router, prefix="/gmail", tags=["gmail"])
+api_router.include_router(growth_vault.router, prefix="/growth-vault", tags=["growth-vault"])
+api_router.include_router(product_factory.router, prefix="/products", tags=["products"])
 
 app.include_router(api_router)
 

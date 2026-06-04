@@ -24,6 +24,8 @@ import VoiceLab from "./pages/VoiceLab";
 import DASIMatrix from "./pages/DASIMatrix";
 import WorkOrders from "./pages/WorkOrders";
 import CashCommand from "./pages/CashCommand";
+import GrowthVault from "./pages/GrowthVault";
+import ProductFactory from "./pages/ProductFactory";
 import AuthGate from "./components/AuthGate";
 import { FirstRunWalkthrough } from "./components/FirstRunWalkthrough";
 import { Toaster } from "sonner";
@@ -57,8 +59,10 @@ function App() {
               <Route path="sovereign"     element={<Sovereign />} />
               <Route path="voice-lab"    element={<VoiceLab />} />
               <Route path="dasi-matrix"  element={<DASIMatrix />} />
-              <Route path="work-orders"  element={<WorkOrders />} />
-              <Route path="cash-command" element={<CashCommand />} />
+              <Route path="work-orders"    element={<WorkOrders />} />
+              <Route path="cash-command"   element={<CashCommand />} />
+              <Route path="growth-vault"   element={<GrowthVault />} />
+              <Route path="products"       element={<ProductFactory />} />
             </Route>
             <Route path="/payment-success" element={<PaymentSuccess />} />
           </Routes>
