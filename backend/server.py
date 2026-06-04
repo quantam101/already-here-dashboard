@@ -39,6 +39,7 @@ from routes import (
     revenue_equation,
     scout,
     secrets,
+    sovereign,
     system,
     video,
     voicelab,
@@ -156,6 +157,7 @@ api_router.include_router(video.router, prefix="/video", tags=["video"])
 api_router.include_router(hooks.router, prefix="/hooks", tags=["hooks"])
 api_router.include_router(voicelab.router, prefix="/voicelab", tags=["voicelab"])
 api_router.include_router(dasi.router, prefix="/dasi", tags=["dasi"])
+api_router.include_router(sovereign.router, prefix="/sovereign", tags=["sovereign"])
 
 app.include_router(api_router)
 
