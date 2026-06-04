@@ -1,0 +1,68 @@
+system:
+  name: Already Here Growth Command OS
+  version: "4.0"
+  owner: Already Here LLC
+  operator: Stephen Franklin
+  operating_model: local_first_resilient
+  literal_zero_downtime_claim: false
+
+runtime:
+  offline_first: true
+  encrypted_local_storage: true
+  queued_sync: true
+  graceful_degradation: true
+  air_gapped_mode: true
+  no_single_point_of_failure: true
+
+security:
+  static_client_api_keys_allowed: false
+  server_side_secret_vault: true
+  token_exchange_required: true
+  scoped_credentials: true
+  api_key_rotation: true
+  audit_log_required: true
+  approval_gates_required: true
+  secret_scanning_required: true
+  dependency_scanning_required: true
+
+work_orders:
+  platforms: [Gmail, Field Nation, WorkMarket]
+  base_market: Phoenix AZ
+  radius_miles: 60
+  minimum_hourly: 65
+  minimum_hours: 2
+  minimum_total: 130
+  preferred_categories:
+    - IT support
+    - POS
+    - AV
+    - access point
+    - cabling
+    - smart hands
+    - printer support
+    - computer repair
+    - laptop repair
+    - TV repair
+    - TV mounting
+    - camera installation
+    - Ring installation
+    - door lock installation
+    - appliance repair
+    - pest spraying
+    - weed spraying
+  avoid:
+    - fixed_fee_under_130
+    - long_distance_under_175
+    - diagnostic_liability_under_130
+    - unpaid_travel
+    - unclear_scope
+    - missing_parts_confirmation
+    - regulated_work_without_verification
+  actions:
+    strong_match: notify_now
+    weak_rate: draft_counteroffer
+    bad_margin: flag_avoid
+    same_day: escalate
+    next_day: prioritize
+    accept_work_order: approval_required
+    send_counteroffer: approval_required
