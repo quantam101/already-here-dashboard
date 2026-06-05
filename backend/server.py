@@ -40,6 +40,7 @@ from routes import (
     product_factory,
     proposals,
     publishing,
+    resilient_runtime,
     revenue,
     revenue_equation,
     scout,
@@ -170,6 +171,7 @@ api_router.include_router(gmail_scanner.router, prefix="/gmail", tags=["gmail"])
 api_router.include_router(growth_vault.router, prefix="/growth-vault", tags=["growth-vault"])
 api_router.include_router(product_factory.router, prefix="/products", tags=["products"])
 api_router.include_router(content_sync.router, prefix="/content-sync", tags=["content-sync"])
+api_router.include_router(resilient_runtime.router, prefix="/resilient-runtime", tags=["resilient-runtime"])
 
 app.include_router(api_router)
 
@@ -178,7 +180,7 @@ app.add_middleware(
     allow_credentials=True,
     allow_origins=os.environ.get("CORS_ORIGINS", "*").split(","),
     allow_methods=["*"],
-    allow_headers=["*"],
+    allow_headers=["*"]
 )
 
 logging.basicConfig(
