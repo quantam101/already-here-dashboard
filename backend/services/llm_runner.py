@@ -510,7 +510,7 @@ async def llm_complete(
         return gateway_result
 
     last_error: Exception | None = None
-    for provider, model, api_key in providers:
+    for provider, model, _api_key in providers:
         try:
             logger.debug("llm_complete: trying provider=%s model=%s", provider, model)
 
