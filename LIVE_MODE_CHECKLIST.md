@@ -1,6 +1,6 @@
 # Stripe Live-Mode Go-Live Checklist
 
-You are switching from `sk_test_emergent` (the placeholder) to your real Stripe keys to start collecting real money. This is the **exact** order to do it in. Stop on any failure.
+You are switching from `sk_test_[removed] (the placeholder) to your real Stripe keys to start collecting real money. This is the **exact** order to do it in. Stop on any failure.
 
 > **Backend safety gate:** If you set a `sk_live_...` key but **forget to set** `STRIPE_WEBHOOK_SECRET`, the backend will **refuse** to create any new checkout (returns HTTP 503). This prevents silent revenue loss while you're still mid-setup. The gate is in `routes/payments.py::create_checkout`.
 
@@ -35,7 +35,7 @@ sudo nano /opt/command-os/backend/.env
 Replace:
 
 ```env
-STRIPE_API_KEY="sk_test_emergent"
+STRIPE_API_KEY="sk_test_[removed]"
 ```
 
 with:
@@ -154,7 +154,7 @@ After major env changes (rotating keys, swapping webhook secret), re-run the smo
 If anything misbehaves, instantly revert to test mode:
 
 ```bash
-sudo sed -i 's|^STRIPE_API_KEY=.*|STRIPE_API_KEY="sk_test_emergent"|' /opt/command-os/backend/.env
+sudo sed -i 's|^STRIPE_API_KEY=.*|STRIPE_API_KEY="sk_test_[removed]"|' /opt/command-os/backend/.env
 sudo docker compose -f /opt/command-os/docker-compose.sqlite.yml restart backend
 ```
 
@@ -175,7 +175,7 @@ Live charges already collected are unaffected — they remain in your Stripe bal
 
 ## Where this is enforced in code
 
-- **Mode detection:** `backend/routes/payments.py::_stripe_mode()` (sk_live → live, sk_test/sk_test_emergent → test)
+- **Mode detection:** `backend/routes/payments.py::_stripe_mode()` (sk_live → live, sk_test/sk_test_[removed] → test)
 - **Safety gate:** `backend/routes/payments.py::create_checkout()` — raises 503 if live without webhook secret
-- **Webhook handler:** `backend/routes/payments.py::stripe_webhook()` — verifies signature via emergentintegrations SDK
+- **Webhook handler:** `backend/routes/payments.py::stripe_webhook()` — verifies signature via [removed] SDK
 - **Readiness probe:** `GET /api/payments/readiness` — returns checklist + gating issues

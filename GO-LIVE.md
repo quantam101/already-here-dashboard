@@ -144,7 +144,7 @@ If anything goes sideways post-go-live:
 ```bash
 # Revert Stripe to test mode (live charges already collected unaffected)
 ssh ubuntu@<ip>
-sudo sed -i 's|^STRIPE_API_KEY=.*|STRIPE_API_KEY="sk_test_emergent"|' /opt/command-os/backend/.env
+sudo sed -i 's|^STRIPE_API_KEY=.*|STRIPE_API_KEY="sk_test_[removed]"|' /opt/command-os/backend/.env
 sudo docker compose -f /opt/command-os/docker-compose.sqlite.yml restart backend
 ```
 
@@ -164,5 +164,5 @@ sudo docker compose -f /opt/command-os/docker-compose.sqlite.yml restart backend
 | Caddy reverse proxy | $0 |
 | GoDaddy domain (paid annually) | $1.50 |
 | Stripe (pay-per-transaction only) | $0 base |
-| Emergent LLM Key (Cost Guard enforced) | depends on `LLM_DAILY_TOKEN_CAP` |
+| [removed] LLM Key (Cost Guard enforced) | depends on `LLM_DAILY_TOKEN_CAP` |
 | **Total fixed cost** | **~$1.50/month** |

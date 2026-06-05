@@ -48,7 +48,7 @@ Once in:
 
 ```bash
 # 1. Export your env BEFORE running the bootstrap (keys stay on the server)
-export EMERGENT_LLM_KEY="sk-emergent-..."      # ask Emergent Profile → Universal Key
+export [removed]"sk-[removed]"      # ask [removed] Profile → Universal Key
 export STRIPE_API_KEY="sk_live_..."             # from dashboard.stripe.com/apikeys
 export OPERATOR_EMAIL="your@email.com"          # ONLY this email can log in
 
@@ -129,7 +129,7 @@ The dashboard now lives on your home screen as a real app icon, green theme, "Co
 ## Switching back to test Stripe / disabling auth
 
 Edit `/opt/command-os/backend/.env`:
-- `STRIPE_API_KEY=sk_test_emergent` (test mode)
+- `STRIPE_API_KEY=sk_test_[removed] (test mode)
 - comment out / blank `OPERATOR_EMAIL=` (auth falls open)
 
 Then `docker compose restart backend`.

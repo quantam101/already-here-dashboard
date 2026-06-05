@@ -105,8 +105,8 @@ sudo nano /opt/command-os/backend/.env
 ```
 
 Fill in the three blanks (operator will provide values):
-- `EMERGENT_LLM_KEY="sk-emergent-..."` — from operator (Emergent Universal Key)
-- `STRIPE_API_KEY="sk_test_emergent"` — keep this for now (test mode)
+- `[removed]"sk-[removed]"` — from operator ([removed] Universal Key)
+- `STRIPE_API_KEY="sk_test_[removed]"` — keep this for now (test mode)
 - `OPERATOR_EMAIL="alreadyherellc@gmail.com"` — or whatever Google email operator wants
 
 Save (Ctrl+O, Enter, Ctrl+X). Restart:
@@ -173,9 +173,9 @@ Browser: `https://alreadyherellc.com` → Google login → sign in as the OPERAT
 
 ## Operator handoff items needed from operator
 
-1. Their **fresh** Emergent LLM key (operator may need to rotate first — instructions: https://app.emergent.sh → Profile → Universal Key)
+1. Their **fresh** [removed] LLM key (operator may need to rotate first — instructions: https://app.[removed] → Profile → Universal Key)
 2. The Google email they want to log in with (for `OPERATOR_EMAIL`)
-3. Stripe API key — `sk_test_emergent` is fine for go-live, swap to `sk_live_...` later
+3. Stripe API key — `sk_test_[removed] is fine for go-live, swap to `sk_live_...` later
 4. (Optional) Stripe webhook signing secret if switching to live mode
 
 ## Contact

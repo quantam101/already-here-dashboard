@@ -251,8 +251,8 @@ Key knobs:
    ```
    Add:
    ```env
-   EMERGENT_LLM_KEY=sk-emergent-...
-   STRIPE_API_KEY=sk_test_emergent
+   [removed]
+   STRIPE_API_KEY=sk_test_[removed]
    OPERATOR_EMAIL=alreadyherellc@gmail.com
    ```
    ```bash
@@ -333,11 +333,11 @@ the ledger tracks progress toward $25K — all while you sleep.
 |-----|----------|---------|---------|
 | `STORAGE_BACKEND` | Yes | `mongodb` | `sqlite` or `mongodb` |
 | `SQLITE_PATH` | SQLite only | `/app/backend/data/command_os.db` | DB file |
-| `EMERGENT_LLM_KEY` | Yes | — | Gemini + Claude unified key |
-| `STRIPE_API_KEY` | Payments | `sk_test_emergent` | Test or live key |
+| `[removed] | Yes | — | Gemini + Claude unified key |
+| `STRIPE_API_KEY` | Payments | `sk_test_[removed] | Test or live key |
 | `STRIPE_WEBHOOK_SECRET` | Live mode | — | Required for live checkout |
 | `OPERATOR_EMAIL` | Auth gate | open | Lock dashboard to one Google account |
-| `EMERGENT_LLM_KEY` | All LLM | — | Universal key (Gemini, Claude) |
+| `[removed] | All LLM | — | Universal key (Gemini, Claude) |
 | `LLM_DAILY_TOKEN_CAP` | Optional | `0` (∞) | Hard daily token ceiling |
 | `AUTO_PUBLISH` | Optional | `false` | Set `true` for autonomous publishing |
 | `CONTENT_REPO_TOKEN` | Publishing | — | GitHub PAT for content repo |
@@ -406,7 +406,7 @@ ssh ubuntu@<IP> "cd /opt/command-os && sudo git pull && sudo docker compose -f d
 
 | Symptom | Check first | Resolution |
 |---------|-------------|-----------|
-| Sovereign returns 503 | `EMERGENT_LLM_KEY` not set | Add to `.env`, restart backend |
+| Sovereign returns 503 | `[removed] not set | Add to `.env`, restart backend |
 | GuardAgent failing | Container not self-reachable | Set `SELF_BASE_URL=http://backend:8001` in docker env |
 | ScoutAgent 0 new results | All URLs already seen in 48h window | Normal behavior — try after 48h or add new sources to manifest |
 | ContentAgent timeout | Gemini slow under load | Increase `agents[content-agent].timeout_seconds` in manifest |
@@ -461,7 +461,7 @@ already-here-dashboard/
 | Sovereign status | https://alreadyherellc.com/api/sovereign/status |
 | API docs | https://alreadyherellc.com/api/docs |
 | Stripe | https://dashboard.stripe.com |
-| Emergent LLM key | https://app.emergent.sh → Profile → Universal Key |
+| [removed] LLM key | https://app.[removed] → Profile → Universal Key |
 | GoDaddy DNS | https://goto.godaddy.com → My Products → DNS |
 | OCI console | https://cloud.oracle.com |
 | Dev.to settings | https://dev.to/settings/extensions |

@@ -66,8 +66,8 @@ sudo nano /opt/command-os/backend/.env
 Fill in the three fields:
 
 ```env
-EMERGENT_LLM_KEY="sk-emergent-..."           # from Emergent → Profile → Universal Key
-STRIPE_API_KEY="sk_test_emergent"            # keep test for now; flip to sk_live_... later
+[removed]"sk-[removed]"           # from [removed] → Profile → Universal Key
+STRIPE_API_KEY="sk_test_[removed]"            # keep test for now; flip to sk_live_... later
 OPERATOR_EMAIL="alreadyherellc@gmail.com"    # locks dashboard to this Google account
 ```
 

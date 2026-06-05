@@ -110,8 +110,8 @@ sudo nano /opt/command-os/backend/.env
 Edit these three lines (use arrow keys to navigate, type to edit):
 
 ```
-EMERGENT_LLM_KEY="sk-emergent-PASTE_YOUR_FRESH_KEY"
-STRIPE_API_KEY="sk_test_emergent"
+[removed]"sk-[removed]"
+STRIPE_API_KEY="sk_test_[removed]"
 OPERATOR_EMAIL="your@email.com"
 ```
 
