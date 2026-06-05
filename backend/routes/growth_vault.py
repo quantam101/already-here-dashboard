@@ -10,9 +10,8 @@ from __future__ import annotations
 import logging
 import sqlite3
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import List, Optional
 
 from fastapi import APIRouter, Request
 from pydantic import BaseModel
@@ -66,16 +65,16 @@ _ensure_table()
 
 class CaptureRequest(BaseModel):
     title: str
-    description: Optional[str] = ""
-    category: Optional[str] = "resource"
-    source_url: Optional[str] = ""
-    tags: Optional[str] = ""
+    description: str | None = ""
+    category: str | None = "resource"
+    source_url: str | None = ""
+    tags: str | None = ""
 
 
 class DistillRequest(BaseModel):
-    url: Optional[str] = ""
-    text: Optional[str] = ""
-    title: Optional[str] = ""
+    url: str | None = ""
+    text: str | None = ""
+    title: str | None = ""
 
 
 # ---------------------------------------------------------------------------
@@ -86,7 +85,7 @@ class DistillRequest(BaseModel):
 async def capture_idea(req: CaptureRequest):
     """Save a new idea/tool/opportunity to the Growth Vault."""
     category = req.category if req.category in VALID_CATEGORIES else "resource"
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
     entry_id = str(uuid.uuid4())
 
     with _get_conn() as conn:
@@ -107,7 +106,7 @@ async def capture_idea(req: CaptureRequest):
 
 
 @router.get("")
-async def list_vault(category: Optional[str] = None, limit: int = 100):
+async def list_vault(category: str | None = None, limit: int = 100):
     """List all vault entries, optionally filtered by category."""
     with _get_conn() as conn:
         if category and category != "all":
@@ -184,7 +183,7 @@ async def distill_entry(req: DistillRequest, request: Request):
     except Exception as e:
         log.warning("LLM distill skipped: %s", e)
 
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
     entry_id = str(uuid.uuid4())
 
     with _get_conn() as conn:

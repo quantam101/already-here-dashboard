@@ -14,15 +14,15 @@ import os
 import re
 import sqlite3
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from email.header import decode_header
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
-from fastapi import APIRouter, Request
-from pydantic import BaseModel
+from fastapi import APIRouter
 
-from routes.work_orders import _score_work_order, _get_conn as _wo_get_conn
+from routes.work_orders import _get_conn as _wo_get_conn
+from routes.work_orders import _score_work_order
 
 log = logging.getLogger(__name__)
 
@@ -174,7 +174,7 @@ def _scan_imap() -> List[Dict[str, Any]]:
 # Parsing helpers (reuse logic similar to work_orders parse-email)
 # ---------------------------------------------------------------------------
 
-def _find_dollar(text: str) -> Optional[float]:
+def _find_dollar(text: str) -> float | None:
     m = re.search(r"\$\s?([\d,]+(?:\.\d{1,2})?)", text)
     if m:
         return float(m.group(1).replace(",", ""))
@@ -184,12 +184,12 @@ def _find_dollar(text: str) -> Optional[float]:
     return None
 
 
-def _find_hours(text: str) -> Optional[float]:
+def _find_hours(text: str) -> float | None:
     m = re.search(r"([\d.]+)\s*(?:hour|hr)", text, re.I)
     return float(m.group(1)) if m else None
 
 
-def _find_miles(text: str) -> Optional[float]:
+def _find_miles(text: str) -> float | None:
     m = re.search(r"([\d.]+)\s*mile", text, re.I)
     return float(m.group(1)) if m else None
 
@@ -242,7 +242,7 @@ def _parse_email_to_wo(em: Dict[str, Any]) -> Dict[str, Any]:
     sender = em.get("sender", "")
     combined = subject + "\n" + body
 
-    lines = [l.strip() for l in combined.split("\n") if l.strip()]
+    lines = [line.strip() for line in combined.split("\n") if line.strip()]
     title = subject[:120] if subject else (lines[0][:120] if lines else "Work Order")
 
     company = ""
@@ -279,7 +279,7 @@ def _parse_email_to_wo(em: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def _save_work_order(wo: Dict[str, Any], score: int, recommendation: str) -> None:
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
     approval_required = int(recommendation == "accept")
     with _wo_get_conn() as conn:
         conn.execute("""
@@ -299,7 +299,7 @@ def _save_work_order(wo: Dict[str, Any], score: int, recommendation: str) -> Non
 
 
 def _update_status(emails_found: int, orders_scored: int) -> None:
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
     with _get_conn() as conn:
         conn.execute("""
             UPDATE gmail_scanner_status

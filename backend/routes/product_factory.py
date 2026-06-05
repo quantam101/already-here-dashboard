@@ -10,9 +10,8 @@ from __future__ import annotations
 import logging
 import sqlite3
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Optional
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
@@ -202,7 +201,7 @@ def _seed_products() -> None:
         },
     ]
 
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
     with _get_conn() as conn:
         for p in seeds:
             conn.execute("""
@@ -224,11 +223,11 @@ _seed_products()
 
 class ProductCreateRequest(BaseModel):
     title: str
-    product_type: Optional[str] = "guide"
-    description: Optional[str] = ""
-    content: Optional[str] = ""
-    price_usd: Optional[float] = 0.0
-    audience: Optional[str] = ""
+    product_type: str | None = "guide"
+    description: str | None = ""
+    content: str | None = ""
+    price_usd: float | None = 0.0
+    audience: str | None = ""
 
 
 # ---------------------------------------------------------------------------
@@ -247,7 +246,7 @@ async def create_product(req: ProductCreateRequest):
     # Enforce: pricing always requires approval
     approval_required = 1 if price > 0 else 1  # always 1 per spec
 
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
     product_id = str(uuid.uuid4())
 
     with _get_conn() as conn:
@@ -269,7 +268,7 @@ async def create_product(req: ProductCreateRequest):
 
 
 @router.get("")
-async def list_products(status: Optional[str] = None, limit: int = 100):
+async def list_products(status: str | None = None, limit: int = 100):
     """List all product specs, optionally filtered by status."""
     with _get_conn() as conn:
         if status and status in VALID_STATUSES:

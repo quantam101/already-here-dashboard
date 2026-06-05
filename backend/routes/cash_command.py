@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import logging
 import sqlite3
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any, Dict, List
 
@@ -31,7 +31,7 @@ def _wo_conn() -> sqlite3.Connection:
 async def _get_revenue_7d(db) -> float:
     """Pull 7-day revenue from the main DB (MongoDB or SQLite)."""
     try:
-        seven_days_ago = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
+        seven_days_ago = (datetime.now(UTC) - timedelta(days=7)).isoformat()
         # Try MongoDB-style access first
         if hasattr(db, "revenue_events"):
             cursor = db.revenue_events.find(
@@ -124,7 +124,7 @@ async def get_cash_command(request: Request):
     avoid_wo = [w for w in pending if (w.get("score") or 0) < 50]
 
     return {
-        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "generated_at": datetime.now(UTC).isoformat(),
         "work_orders_pending": {
             "total": len(pending),
             "strong_match": len(strong),

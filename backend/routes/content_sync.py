@@ -11,9 +11,8 @@ from __future__ import annotations
 
 import sqlite3
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Optional
 
 from fastapi import APIRouter
 from pydantic import BaseModel
@@ -69,19 +68,19 @@ _ensure_tables()
 
 class TopicQueueIn(BaseModel):
     topic: str
-    source: Optional[str] = "manual"
-    source_id: Optional[str] = None
-    priority: Optional[int] = 5
+    source: str | None = "manual"
+    source_id: str | None = None
+    priority: int | None = 5
 
 
 class PublishedArticle(BaseModel):
     title: str
-    topic: Optional[str] = ""
-    canonical_url: Optional[str] = ""
-    devto_url: Optional[str] = ""
-    medium_url: Optional[str] = ""
-    hashnode_url: Optional[str] = ""
-    platforms: Optional[list] = []
+    topic: str | None = ""
+    canonical_url: str | None = ""
+    devto_url: str | None = ""
+    medium_url: str | None = ""
+    hashnode_url: str | None = ""
+    platforms: list | None = []
 
 
 # ── Endpoints ──────────────────────────────────────────────────────────────
@@ -93,8 +92,6 @@ async def get_queued_topics(limit: int = 5):
     Returns highest-priority queued topics, falling back to Growth Vault ideas.
     """
     topics = []
-    now = datetime.now(timezone.utc).isoformat()
-
     with _conn() as c:
         rows = c.execute(
             "SELECT * FROM topic_queue WHERE status='queued' ORDER BY priority ASC, created_at ASC LIMIT ?",
@@ -136,7 +133,7 @@ async def log_published(article: PublishedArticle):
     ProfitEngine calls this after every successful publish.
     Logs the article and marks the topic as used if it came from the queue.
     """
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
     article_id = str(uuid.uuid4())
 
     with _conn() as c:
@@ -172,7 +169,7 @@ async def get_published_log(limit: int = 20):
 @router.post("/queue-topic")
 async def queue_topic(req: TopicQueueIn):
     """Manually add a topic to the ProfitEngine content queue."""
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
     topic_id = str(uuid.uuid4())
     with _conn() as c:
         c.execute(

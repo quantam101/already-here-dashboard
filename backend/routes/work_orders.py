@@ -11,11 +11,11 @@ from __future__ import annotations
 import logging
 import sqlite3
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Request
 from pydantic import BaseModel
 
 log = logging.getLogger(__name__)
@@ -170,28 +170,28 @@ def _score_work_order(wo: Dict[str, Any]) -> tuple[int, str]:
 # Pydantic models
 # ---------------------------------------------------------------------------
 class WorkOrderIn(BaseModel):
-    id: Optional[str] = None
-    source: Optional[str] = "manual"
-    raw_text: Optional[str] = ""
-    title: Optional[str] = ""
-    company: Optional[str] = ""
-    location: Optional[str] = ""
-    rate_offered: Optional[float] = 0.0
-    rate_type: Optional[str] = "unknown"
-    estimated_hours: Optional[float] = 0.0
-    travel_miles: Optional[float] = 0.0
-    category: Optional[str] = ""
+    id: str | None = None
+    source: str | None = "manual"
+    raw_text: str | None = ""
+    title: str | None = ""
+    company: str | None = ""
+    location: str | None = ""
+    rate_offered: float | None = 0.0
+    rate_type: str | None = "unknown"
+    estimated_hours: float | None = 0.0
+    travel_miles: float | None = 0.0
+    category: str | None = ""
 
 
 class CounterOfferRequest(BaseModel):
-    work_order_id: Optional[str] = None
-    work_order: Optional[WorkOrderIn] = None
-    travel_miles: Optional[float] = 0.0
+    work_order_id: str | None = None
+    work_order: WorkOrderIn | None = None
+    travel_miles: float | None = 0.0
 
 
 class ParseEmailRequest(BaseModel):
     email_body: str
-    source: Optional[str] = "gmail"
+    source: str | None = "gmail"
 
 
 # ---------------------------------------------------------------------------
@@ -208,7 +208,7 @@ async def score_work_order(wo: WorkOrderIn):
     score, recommendation = _score_work_order(wo_dict)
     approval_required = recommendation in ("accept",)
 
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
     wo_dict.update(
         score=score,
         recommendation=recommendation,
@@ -242,7 +242,7 @@ async def score_work_order(wo: WorkOrderIn):
 
 
 @router.get("/queue")
-async def get_queue(status: Optional[str] = None, limit: int = 50):
+async def get_queue(status: str | None = None, limit: int = 50):
     """Return work orders, optionally filtered by status."""
     with _get_conn() as conn:
         if status:
@@ -316,7 +316,7 @@ async def generate_counteroffer(req: CounterOfferRequest, request: Request):
 
     # Persist if we have a WO ID
     if req.work_order_id:
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         with _get_conn() as conn:
             conn.execute(
                 "UPDATE work_orders SET counteroffer_text=?, status='countered', updated_at=? WHERE id=?",
@@ -337,10 +337,10 @@ async def parse_email(req: ParseEmailRequest):
     import re
 
     body = req.email_body
-    body_lower = body.lower()
+    body.lower()
 
     # Simple heuristic extraction
-    def _find_dollar(text: str) -> Optional[float]:
+    def _find_dollar(text: str) -> float | None:
         m = re.search(r"\$\s?([\d,]+(?:\.\d{1,2})?)", text)
         if m:
             return float(m.group(1).replace(",", ""))
@@ -349,11 +349,11 @@ async def parse_email(req: ParseEmailRequest):
             return float(m.group(1).replace(",", ""))
         return None
 
-    def _find_hours(text: str) -> Optional[float]:
+    def _find_hours(text: str) -> float | None:
         m = re.search(r"([\d.]+)\s*(?:hour|hr)", text, re.I)
         return float(m.group(1)) if m else None
 
-    def _find_miles(text: str) -> Optional[float]:
+    def _find_miles(text: str) -> float | None:
         m = re.search(r"([\d.]+)\s*mile", text, re.I)
         return float(m.group(1)) if m else None
 
@@ -390,7 +390,7 @@ async def parse_email(req: ParseEmailRequest):
         return "unknown"
 
     # Extract title — first non-empty line or subject-like line
-    lines = [l.strip() for l in body.split("\n") if l.strip()]
+    lines = [line.strip() for line in body.split("\n") if line.strip()]
     title = lines[0][:120] if lines else "Work Order"
 
     # Extract company from "From:" line or similar
