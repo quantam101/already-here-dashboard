@@ -33,7 +33,7 @@ os.environ.setdefault("SYSTEM_MODE", "test")
 os.environ.setdefault("COST_GUARD_ENABLED", "true")
 os.environ.setdefault("ZERO_SPEND_MODE", "true")
 os.environ.setdefault("AUTO_CYCLE_ENABLED", "false")
-os.environ.setdefault("STRIPE_API_KEY", "sk_test_emergent")
+os.environ.setdefault("STRIPE_API_KEY", "sk_test_placeholder")
 os.environ.setdefault("EMERGENT_LLM_KEY", "")
 
 # ── Live URL (integration / e2e via requests) ──────────────────────────────────

@@ -101,7 +101,7 @@ class TestSystemStatusIntegration:
     def test_status_does_not_leak_secrets(self, client):
         skip_no_app(client)
         body = client.get("/api/system/status").text.lower()
-        for needle in ("sk_test_", "sk_live_", "whsec_", "sk-emergent-"):
+        for needle in ("sk_test_", "sk_live_", "whsec_", "sk-mock-"):
             assert needle not in body, f"Secret prefix leaked: {needle}"
 
     def test_stripe_mode_is_test_in_test_env(self, client):

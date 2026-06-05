@@ -36,7 +36,7 @@ env:
   COST_GUARD_ENABLED: "true"
   ZERO_SPEND_MODE: "true"
   AUTO_CYCLE_ENABLED: "false"
-  STRIPE_API_KEY: sk_test_emergent   # safe test stub — never a real key
+  STRIPE_API_KEY: sk_test_placeholder   # safe test stub — never a real key
   REACT_APP_BACKEND_URL: ${{ secrets.REACT_APP_BACKEND_URL || 'https://app.alreadyherellc.com' }}
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true  # opt into Node.js 24 before June 16, 2026 deadline
 
@@ -214,7 +214,7 @@ jobs:
         env:
           STORAGE_BACKEND: sqlite
           SQLITE_PATH: /tmp/ci_test.db
-          STRIPE_API_KEY: sk_test_emergent
+          STRIPE_API_KEY: sk_test_placeholder
         run: |
           pytest tests/integration/ \
             -v \

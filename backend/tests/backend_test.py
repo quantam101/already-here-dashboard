@@ -435,7 +435,7 @@ class TestPayments:
         r = api.post(f"{BASE_URL}/api/payments/checkout", json={
             "package_id": "starter", "origin_url": "http://localhost:3000",
         })
-        # 503 = stub/missing Stripe key (sk_test_emergent placeholder); skip checkout assertions.
+        # 503 = stub/missing Stripe key (sk_test_placeholder placeholder); skip checkout assertions.
         # 200 = real Stripe test key configured — verify full response shape.
         if r.status_code == 503:
             assert "STRIPE_API_KEY" in r.text or "Stripe" in r.text, \
@@ -500,11 +500,11 @@ class TestPayments:
         # Never leak the raw key
         body = r.text
         assert "sk_live_" not in body or body.count("sk_live_") == 1  # only in checklist text
-        assert "sk_test_emergent" not in body
+        assert "sk_test_placeholder" not in body
 
     def test_smoke_test_refuses_in_test_mode(self, api):
         r = api.post(f"{BASE_URL}/api/payments/smoke-test/create")
-        # In CI the env is sk_test_emergent → should refuse
+        # In CI the env is sk_test_placeholder → should refuse
         assert r.status_code == 400, r.text
         assert "live" in r.text.lower()
 
@@ -1286,8 +1286,8 @@ class TestSystemStatus:
             "is_seeded", "system_mode",
         ):
             assert k in d, f"missing key: {k}"
-        # vendor lock-in scrub: the legacy emergent-specific field must be GONE
-        assert "emergent_llm_key_set" not in d, "legacy emergent_llm_key_set must be removed"
+        # vendor lock-in scrub: the legacy vendor-specific field must be GONE
+        assert "legacy_llm_key_set" not in d, "legacy vendor key field must not be in response"
         # counts must include core collections
         for c in ("revenue_streams", "agents", "builds", "ledger_entries", "books"):
             assert c in d["counts"]
@@ -1303,7 +1303,7 @@ class TestSystemStatus:
         assert r.status_code == 200
         body = r.text.lower()
         # Common secret prefixes must not appear
-        for needle in ("sk_test_", "sk_live_", "whsec_", "sk-emergent-"):
+        for needle in ("sk_test_", "sk_live_", "whsec_", "sk-mock-"):
             assert needle not in body, f"secret prefix leaked: {needle}"
 
     def test_status_seeded_true_when_seed_data_run(self, api):

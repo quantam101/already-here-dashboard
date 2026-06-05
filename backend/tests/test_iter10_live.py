@@ -12,7 +12,7 @@ import time
 
 import requests
 
-BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "https://gmaos-control.preview.emergentagent.com").rstrip("/")
+BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "https://app.alreadyherellc.com").rstrip("/")
 
 
 # ---------- Video config / music catalogue ----------

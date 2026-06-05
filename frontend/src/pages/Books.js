@@ -345,7 +345,7 @@ export default function Books() {
             <p className="font-semibold text-amber-200">LLM is in MOCK MODE — books will contain placeholder text.</p>
             <p className="text-amber-200/80 text-xs mt-1 leading-relaxed">
               Your <code className="bg-black/40 px-1 py-0.5 rounded">LLM_API_KEY</code> in <code>backend/.env</code> is a placeholder
-              (<code>sk-mock-…</code> or <code>sk-emergent-…</code>). Real content needs a real provider key.
+              (<code>sk-mock-…</code> or <code>sk-test-…</code>). Real content needs a real provider key.
               Swap it for a Google AI Studio (free tier), Anthropic, or OpenAI key and restart the backend.
               Audiobook MP3 generation also works in mock mode — the placeholder text will just be read aloud.
             </p>

@@ -34,7 +34,6 @@ docopt==0.6.2
 ecdsa==0.19.2
 einops==0.8.2
 email-validator==2.3.0
-# emergentintegrations: local shim in backend/emergentintegrations/ replaces this private package
 fastapi==0.110.1
 faster-whisper==1.2.1
 fastuuid==0.14.0
@@ -79,7 +78,7 @@ ko-speech-tools==0.1.0
 lazy-loader==0.5
 librosa==0.11.0
 librt==0.11.0
-litellm @ https://customer-assets.emergentagent.com/internal-asset/library/litellm-1.80.0-py3-none-any.whl#sha256=adf398c513273de9341f61822296c6b2145f7f2dc4a69daf3ac04829f5bde3f8
+litellm>=1.80.0
 llvmlite==0.47.0
 Markdown==3.10.2
 markdown-it-py==4.2.0

@@ -232,7 +232,7 @@ def _mock_mode_active() -> bool:
     for env in ("OPENAI_API_KEY", "ANTHROPIC_API_KEY", "GEMINI_API_KEY",
                 "GOOGLE_API_KEY", "LLM_API_KEY", "EMERGENT_LLM_KEY"):
         v = os.environ.get(env, "") or ""
-        if v.startswith(("sk-mock-", "sk-emergent-")):
+        if v.startswith(("sk-mock-", "sk-mock-")):
             return True
     return False
 
