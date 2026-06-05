@@ -48,7 +48,7 @@ import logging
 import os
 from datetime import UTC, datetime
 
-from emergentintegrations.llm.chat import LlmChat, UserMessage
+import httpx as _httpx
 from fastapi import HTTPException
 
 from services.distillation_service import (
@@ -64,6 +64,32 @@ from services.llm_adapter import (
 )
 
 logger = logging.getLogger("llm_runner")
+
+# ── Hypervisor Gateway helper ──────────────────────────────────────────────────
+_GATEWAY_URL  = os.environ.get("GATEWAY_URL", "").rstrip("/")
+_GATEWAY_KEY  = os.environ.get("LITELLM_MASTER_KEY", "")
+
+
+async def _call_gateway(system: str, user: str, max_tokens: int = 1500) -> str | None:
+    """Route through the LiteLLM hypervisor gateway (port 4000) when running.
+    Returns None silently if gateway is not configured or unreachable."""
+    if not _GATEWAY_URL:
+        return None
+    headers = {"Authorization": f"Bearer {_GATEWAY_KEY}"} if _GATEWAY_KEY else {}
+    payload = {
+        "model": "autonomous-intelligence-mesh",
+        "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
+        "max_tokens": max_tokens,
+        "temperature": 0.1,
+    }
+    try:
+        async with _httpx.AsyncClient(timeout=20.0) as client:
+            resp = await client.post(f"{_GATEWAY_URL}/v1/chat/completions", json=payload, headers=headers)
+            if resp.status_code == 200:
+                return resp.json()["choices"][0]["message"]["content"].strip()
+    except Exception as exc:
+        logger.debug("Gateway unavailable (falling through to direct providers): %s", exc)
+    return None
 
 BUDGET_COLLECTION = "llm_budget"
 
@@ -477,36 +503,29 @@ async def llm_complete(
             ),
         )
 
+    # Try hypervisor gateway first — handles all routing internally
+    gateway_result = await _call_gateway(system, user, max_tokens)
+    if gateway_result:
+        logger.info("llm_complete: success via hypervisor gateway")
+        return gateway_result
+
     last_error: Exception | None = None
     for provider, model, api_key in providers:
         try:
             logger.debug("llm_complete: trying provider=%s model=%s", provider, model)
 
-            # ── Local + free-API providers go through llm_adapter (litellm) ──
-            if provider in ("lmstudio", "ollama", "huggingface", "pollinations"):
-                result = await llm_completion(
-                    provider=provider,
-                    model=model,
-                    system_msg=system,
-                    prompt=user,
-                    session_id=session_id,
-                    max_tokens=max_tokens,
-                    temperature=temperature,
-                )
-                if result:
-                    logger.info("llm_complete: success provider=%s model=%s", provider, model)
-                    return result
-                continue
-
-            # ── Cloud providers — LlmChat (Emergent SDK) ──────────────────
-            import uuid as _uuid
-            sid = f"{session_id}-{_uuid.uuid4().hex[:8]}"
-            chat = LlmChat(api_key=api_key, session_id=sid, system_message=system)
-            chat.with_model(provider, model)
-            response = await chat.send_message(UserMessage(text=user))
-            if response:
+            result = await llm_completion(
+                provider=provider,
+                model=model,
+                system_msg=system,
+                prompt=user,
+                session_id=session_id,
+                max_tokens=max_tokens,
+                temperature=temperature,
+            )
+            if result:
                 logger.info("llm_complete: success provider=%s model=%s", provider, model)
-                return response
+                return result
 
         except Exception as exc:
             last_error = exc
