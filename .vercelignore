@@ -1,0 +1,17 @@
+node_modules
+.next
+.git
+.pytest_cache
+.ruff_cache
+.continue
+.vercel
+__pycache__
+*.pyc
+*.db
+*.sqlite
+*.zip
+*.tar
+*.tar.gz
+*.tgz
+test_reports
+memory
