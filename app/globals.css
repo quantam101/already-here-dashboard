@@ -42,4 +42,9 @@ input, select { width: 100%; margin: 7px 0; padding: 12px 14px; color: var(--tex
 .match { grid-template-columns: 1fr auto; }
 .match p, .match small { grid-column: 1 / -1; margin: 0; color: var(--muted); }
 .match b { font-size: 28px; color: var(--accent); }
+.opsPanel { display: flex; justify-content: space-between; gap: 16px; align-items: center; margin-bottom: 16px; }
+.opsCopy { color: var(--muted); margin: 6px 0 0; }
+.opsLinks { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
+.opsLinks a { color: #00111a; background: var(--accent); border: 1px solid var(--accent); border-radius: 12px; padding: 10px 12px; font-weight: 900; text-decoration: none; }
 @media (max-width: 820px) { .hero, .two, .stats { grid-template-columns: 1fr; display: grid; } .statusCard { min-width: 0; } }
+@media (max-width: 820px) { .opsPanel { display: grid; } .opsLinks { justify-content: flex-start; } }

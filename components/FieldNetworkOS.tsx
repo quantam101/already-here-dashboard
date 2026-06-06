@@ -133,6 +133,20 @@ export default function FieldNetworkOS() {
         <Metric label="Retainer Targets" value={state.clients.filter((c) => c.retainerStatus !== 'active').length} />
       </section>
 
+      <section className="panel opsPanel">
+        <div>
+          <p className="eyebrow">ProfitEngine backbone</p>
+          <h2>Production Agent Mesh</h2>
+          <p className="opsCopy">Live proof-first revenue ops, signed edge failover, mesh readiness, and profitability gates.</p>
+        </div>
+        <div className="opsLinks">
+          <a href="https://profitenginev5.vercel.app/api/health" target="_blank" rel="noreferrer">Health</a>
+          <a href="https://profitenginev5.vercel.app/api/enterprise-mesh" target="_blank" rel="noreferrer">Mesh</a>
+          <a href="https://profitenginev5.vercel.app/api/edge-failover" target="_blank" rel="noreferrer">Failover</a>
+          <a href="https://profitenginev5.vercel.app/api/profitability" target="_blank" rel="noreferrer">Profitability</a>
+        </div>
+      </section>
+
       <section className="grid two">
         <div className="panel">
           <h2>Opt-In Technician Intake</h2>
