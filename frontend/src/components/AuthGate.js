@@ -3,6 +3,8 @@ import { useLocation } from "react-router-dom";
 import { authAPI } from "../lib/api";
 import { toast } from "sonner";
 
+const PUBLIC_PATHS = new Set(["/pricing", "/waitlist", "/payment-success"]);
+
 function LoginScreen({ onSuccess }) {
   const [token, setToken] = useState("");
   const [name, setName] = useState("");
@@ -81,6 +83,7 @@ function LoginScreen({ onSuccess }) {
 export default function AuthGate({ children }) {
   const [state, setState] = useState({ checked: false, required: false, authed: false });
   const location = useLocation();
+  const isPublicPath = PUBLIC_PATHS.has(location.pathname);
 
   const refresh = async () => {
     try {
@@ -123,6 +126,10 @@ export default function AuthGate({ children }) {
     })();
     return () => { cancelled = true; };
   }, [location.pathname]);
+
+  if (isPublicPath) {
+    return children;
+  }
 
   if (!state.checked) {
     return (

@@ -124,6 +124,12 @@ export const paymentsAPI = {
   stats: () => api.get("/payments/stats"),
 };
 
+export const waitlistAPI = {
+  create: (data) => api.post("/waitlist/", data),
+  stats: () => api.get("/waitlist/stats"),
+  list: (params) => api.get("/waitlist/", { params }),
+};
+
 export const analyticsAPI = {
   dashboard: () => api.get("/analytics/dashboard"),
   funnel: () => api.get("/analytics/funnel"),

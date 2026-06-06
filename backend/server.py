@@ -48,6 +48,7 @@ from routes import (
     sovereign,
     system,
     voicelab,
+    waitlist,
     work_orders,
 )
 from services.scheduler_service import start_scheduler, stop_scheduler
@@ -149,6 +150,7 @@ api_router.include_router(scout.router, prefix="/scout", tags=["scout"])
 api_router.include_router(proposals.router, prefix="/proposals", tags=["proposals"])
 api_router.include_router(cycle.router, prefix="/cycle", tags=["cycle"])
 api_router.include_router(payments.router, prefix="/payments", tags=["payments"])
+api_router.include_router(waitlist.router, prefix="/waitlist", tags=["waitlist"])
 api_router.include_router(analytics.router, prefix="/analytics", tags=["analytics"])
 api_router.include_router(advisor.router, prefix="/advisor", tags=["advisor"])
 api_router.include_router(auth.router, prefix="/auth", tags=["auth"])
