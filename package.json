@@ -1,0 +1,26 @@
+{
+  "name": "already-here-field-network-os",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "typecheck": "tsc --noEmit",
+    "verify": "npm run typecheck && npm run lint && npm run build"
+  },
+  "dependencies": {
+    "next": "15.3.4",
+    "react": "19.0.0",
+    "react-dom": "19.0.0"
+  },
+  "devDependencies": {
+    "typescript": "5.8.3",
+    "eslint": "9.29.0",
+    "eslint-config-next": "15.3.4",
+    "@types/node": "24.0.3",
+    "@types/react": "19.1.8",
+    "@types/react-dom": "19.1.6"
+  }
+}
