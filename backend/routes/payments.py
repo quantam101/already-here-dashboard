@@ -10,6 +10,7 @@ Successful paid checkouts automatically write a ledger entry into revenue_ledger
 under a "rev-saas" stream, so the $25K Proof-of-Work meter increments on REAL
 revenue. This is the bridge between the dashboard and actual cash.
 """
+import asyncio
 import os
 import uuid
 from datetime import UTC, datetime
@@ -224,7 +225,9 @@ async def create_checkout(payload: CheckoutCreateRequest, http_request: Request,
         },
     )
     try:
-        session = await stripe_checkout.create_checkout_session(req)
+        session = await asyncio.wait_for(stripe_checkout.create_checkout_session(req), timeout=20)
+    except TimeoutError as e:
+        raise HTTPException(status_code=504, detail="Stripe checkout timed out. Try again in a moment.") from e
     except Exception as e:
         err_str = str(e).lower()
         if "authentication" in err_str or "invalid api key" in err_str or "no api key" in err_str or "stripe_api_key" in err_str:
@@ -458,7 +461,7 @@ async def smoke_test_create(http_request: Request, db=Depends(get_db)):
             "source": "command_os_smoke_test",
         },
     )
-    session = await stripe_checkout.create_checkout_session(req)
+    session = await asyncio.wait_for(stripe_checkout.create_checkout_session(req), timeout=20)
 
     await db.payment_transactions.insert_one({
         "id": f"smoke-{uuid.uuid4().hex[:10]}",
