@@ -1,3 +1,5 @@
+import os
+import uuid
 from datetime import UTC, datetime
 from typing import List
 
@@ -17,6 +19,8 @@ from services.audit_service import log_audit_event
 
 router = APIRouter()
 
+PUBLIC_BASE_URL = os.environ.get("PUBLIC_BASE_URL", "https://app.alreadyherellc.com").rstrip("/")
+
 
 class ContentIdeaCreate(BaseModel):
     title: str
@@ -31,6 +35,13 @@ class ContentIdeaCreate(BaseModel):
 async def get_db():
     from server import db
     return db
+
+
+def _is_direct_publish_connector(connector: dict) -> bool:
+    """Return true when a connector can publish without a manual export pack."""
+    if connector.get("cost_class") == "free_local" and connector.get("credential_status") == "configured":
+        return True
+    return connector.get("cost_class") == "free_external" and bool(connector.get("api_authenticated"))
 
 # Content Ideas
 @router.post("/ideas/", response_model=ContentIdea)
@@ -142,7 +153,7 @@ async def schedule_post(post: dict, db=Depends(get_db)):
         raise HTTPException(status_code=400, detail=f"No connector configured for {post_obj.platform}")
 
     # Determine publishing method based on connector status
-    if connector['cost_class'] in ['free_local', 'free_external'] and connector['api_authenticated']:
+    if _is_direct_publish_connector(connector):
         post_obj.publishing_method = "direct_api"
     else:
         post_obj.publishing_method = "manual_export"
@@ -198,6 +209,89 @@ async def generate_export_pack(post_id: str, db=Depends(get_db)):
     )
 
     return {"export_pack_path": export_path, "message": "Export pack ready for manual upload"}
+
+
+@router.post("/schedule/{post_id}/publish")
+async def publish_scheduled_post(post_id: str, db=Depends(get_db)):
+    post = await db.scheduled_posts.find_one({"id": post_id}, {"_id": 0})
+    if not post:
+        raise HTTPException(status_code=404, detail="Scheduled post not found")
+
+    connector = await db.platform_connectors.find_one({"platform": post["platform"]}, {"_id": 0})
+    if not connector:
+        raise HTTPException(status_code=400, detail=f"No connector configured for {post['platform']}")
+    if not _is_direct_publish_connector(connector):
+        raise HTTPException(
+            status_code=400,
+            detail=f"{post['platform']} is not authenticated for direct publishing; use export pack",
+        )
+    if post["platform"] != PlatformEnum.BLOG:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Direct publishing for {post['platform']} requires its OAuth/API credentials",
+        )
+
+    now = datetime.now(UTC).isoformat()
+    content_id = post.get("content_id") or f"blog-{post_id}"
+    if content_id.startswith("manual-"):
+        content_id = f"blog-{post_id}"
+    published_url = f"{PUBLIC_BASE_URL}/api/content/{content_id}"
+
+    content_doc = {
+        "id": content_id,
+        "title": post.get("title") or "Published blog post",
+        "content_type": "blog",
+        "body": post["caption"],
+        "status": "published",
+        "platform": "blog",
+        "revenue_stream_id": post.get("metadata", {}).get("stream_id"),
+        "generated_by": "scheduled_publisher",
+        "published_at": now,
+        "metadata": {
+            **post.get("metadata", {}),
+            "scheduled_post_id": post_id,
+            "published_url": published_url,
+            "hashtags": post.get("hashtags", []),
+        },
+        "created_at": post.get("created_at", now),
+        "updated_at": now,
+    }
+    existing = await db.content.find_one({"id": content_id}, {"_id": 0})
+    if existing:
+        await db.content.update_one({"id": content_id}, {"$set": content_doc})
+    else:
+        await db.content.insert_one(content_doc)
+
+    await db.scheduled_posts.update_one(
+        {"id": post_id},
+        {"$set": {
+            "status": "published",
+            "publishing_method": "direct_api",
+            "published_url": published_url,
+            "published_at": now,
+            "updated_at": now,
+        }},
+    )
+
+    record = {
+        "id": f"pub-{uuid.uuid4().hex[:10]}",
+        "stream_id": post.get("metadata", {}).get("stream_id") or "rev-001",
+        "platform": "blog",
+        "title": post.get("title") or content_doc["title"],
+        "content_id": content_id,
+        "idea_id": post.get("metadata", {}).get("idea_id"),
+        "status": "posted",
+        "post_url": published_url,
+        "notes": f"Direct local blog publish from scheduled post {post_id}",
+        "metrics": {},
+        "posted_at": now,
+        "verified_at": None,
+        "created_at": now,
+        "updated_at": now,
+    }
+    await db.publishing_log.insert_one(record)
+    await log_audit_event(db, "post.published", "system", "publish", "scheduled_post", post_id)
+    return {"ok": True, "post_id": post_id, "content_id": content_id, "published_url": published_url}
 
 # Analytics
 @router.get("/analytics/", response_model=List[ContentAnalytics])
