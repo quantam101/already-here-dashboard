@@ -47,7 +47,6 @@ from routes import (
     secrets,
     sovereign,
     system,
-    video,
     voicelab,
     work_orders,
 )
@@ -84,7 +83,8 @@ async def lifespan(app: FastAPI):
 
     # Pre-warm heavy local generative models so first render isn't slow.
     # Default ON; disable with VIDEO_PREWARM=false (for tight-memory hosts).
-    if os.environ.get("VIDEO_PREWARM", "true").lower() not in {"false", "0", "off"}:
+    video_prewarm_default = "false" if STORAGE_BACKEND == "sqlite" else "true"
+    if os.environ.get("VIDEO_PREWARM", video_prewarm_default).lower() not in {"false", "0", "off"}:
         import asyncio as _aio
         _aio.create_task(_prewarm_local_models())
 
@@ -160,7 +160,6 @@ api_router.include_router(lcac.router, prefix="/lifelong-catch-correct", tags=["
 api_router.include_router(distillation.router, prefix="/distillation", tags=["distillation"])
 api_router.include_router(governance.router, prefix="/governance", tags=["governance"])
 api_router.include_router(revenue_equation.router, prefix="/revenue-equation", tags=["revenue-equation"])
-api_router.include_router(video.router, prefix="/video", tags=["video"])
 api_router.include_router(hooks.router, prefix="/hooks", tags=["hooks"])
 api_router.include_router(voicelab.router, prefix="/voicelab", tags=["voicelab"])
 api_router.include_router(dasi.router, prefix="/dasi", tags=["dasi"])
