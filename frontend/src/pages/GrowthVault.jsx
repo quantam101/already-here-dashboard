@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 
 const CATEGORIES = ['all', 'tool', 'product_idea', 'opportunity', 'prompt', 'template', 'resource'];
 const CATEGORY_COLORS = {
@@ -20,9 +20,7 @@ export default function GrowthVault() {
   const [distilling, setDistilling] = useState(false);
   const [form, setForm] = useState({ title: '', description: '', category: 'tool', source_url: '', tags: '' });
 
-  useEffect(() => { fetchEntries(); }, [filter]);
-
-  async function fetchEntries() {
+  const fetchEntries = useCallback(async () => {
     setLoading(true);
     try {
       const q = filter !== 'all' ? `?category=${filter}` : '';
@@ -31,7 +29,9 @@ export default function GrowthVault() {
       setEntries(d.entries || d || []);
     } catch { setEntries([]); }
     setLoading(false);
-  }
+  }, [filter]);
+
+  useEffect(() => { fetchEntries(); }, [fetchEntries]);
 
   async function handleCapture(e) {
     e.preventDefault();
