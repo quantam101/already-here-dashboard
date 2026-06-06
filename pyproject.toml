@@ -33,6 +33,7 @@ ignore = [
     "UP006",  # use list[] instead of List[] — pydantic compat
     "UP007",  # use X|Y instead of Union[X,Y] — pydantic compat
     "UP035",  # deprecated imports — pydantic compat
+    "UP038",  # isinstance tuple style is clearer and avoids runtime union edge cases in CI
     "S101",   # use of assert — needed in tests
     "S105",   # hardcoded password — false positives in env-var code
     "S106",   # hardcoded password — false positives
