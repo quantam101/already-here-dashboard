@@ -2,7 +2,7 @@
 
 Owned by Already Here LLC.
 
-This repository contains the production PWA foundation for the Already Here LLC technician network, dispatch command center, retainer tracker, compliant opportunity mesh, deterministic matching engine, offline queue, and audit workflow.
+This repository contains the production PWA foundation for the Already Here LLC technician network, dispatch command center, retainer tracker, compliant opportunity mesh, deterministic matching engine, prime-network readiness system, automated-income planner, offline queue, and audit workflow.
 
 ## Current Capabilities
 
@@ -16,10 +16,15 @@ This repository contains the production PWA foundation for the Already Here LLC 
 - Compliant opportunity mesh for break/fix, retainer, teaming, dispatch, hauling, and procurement targets.
 - A/B/C/Avoid opportunity grading against Already Here LLC rate floors and dispatch minimums.
 - Proceed / Counter / Discard decision states for lead suppression and follow-through.
+- Monthly revenue stack targeting $25,000 through active work, retainers, projects, dispatch margin, and automated assets.
+- Automated and semi-passive productized income queue.
+- Prime contractor readiness panel for vendor packet, compliance, coverage, and national capacity milestones.
 - Audit event capture.
 - Sync queue capture for future Oracle backend sync.
 - Strict TypeScript configuration.
+- Node test coverage for the revenue model.
 - CI verification workflow.
+- Vercel production configuration.
 - Hardened HTTP response headers.
 
 ## Commands
@@ -38,6 +43,14 @@ Primary backend target: Oracle Cloud.
 
 DNS authority: GoDaddy.
 
+The Vercel build command is configured as:
+
+```bash
+npm run verify
+```
+
+This means deployment must pass typecheck, lint, revenue-model tests, and the production Next.js build.
+
 See `docs/deployment.md` and `docs/oracle-schema.md`.
 
 ## Security Rule
@@ -47,3 +60,7 @@ No private API keys, credentials, payment secrets, cloud credentials, or tokens 
 ## Lead Mesh Compliance Rule
 
 This system does not bypass logins, CAPTCHAs, robots policies, account terms, or platform access controls. Opportunity intake must come from authorized email, official portals, public procurement notices, partner channels, or manual review of public listings. High-risk actions such as bid submission, counter submission, email outreach, credential changes, payments, and contract acceptance require manual approval.
+
+## Operating Model
+
+Morning work funds the system. The system removes Stephen as the bottleneck by capturing technician capacity, QA evidence, repeat clients, and dispatch margin.
