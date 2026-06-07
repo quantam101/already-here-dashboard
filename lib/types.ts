@@ -8,7 +8,11 @@ export type Skill =
   | 'printer'
   | 'smart_hands'
   | 'computer'
-  | 'low_voltage';
+  | 'low_voltage'
+  | 'data_center'
+  | 'healthcare_device'
+  | 'procurement'
+  | 'retainer';
 
 export type WorkOrderStatus =
   | 'new'
@@ -24,6 +28,34 @@ export type WorkOrderStatus =
   | 'invoiced'
   | 'paid'
   | 'canceled';
+
+export type OpportunityCategory =
+  | 'break_fix'
+  | 'retainer'
+  | 'procurement'
+  | 'teaming'
+  | 'field_dispatch'
+  | 'hauling'
+  | 'admin';
+
+export type LeadSourceType =
+  | 'authorized_email'
+  | 'official_portal'
+  | 'public_procurement'
+  | 'partner_channel'
+  | 'manual_public_listing';
+
+export type LeadDecisionStatus =
+  | 'new'
+  | 'review'
+  | 'proceed'
+  | 'counter'
+  | 'discard'
+  | 'submitted'
+  | 'won'
+  | 'lost';
+
+export type LeadGrade = 'A' | 'B' | 'C' | 'Avoid';
 
 export interface Technician {
   id: string;
@@ -69,6 +101,34 @@ export interface WorkOrder {
   urgency: 'same_day' | 'next_day' | 'scheduled';
 }
 
+export interface LeadOpportunity {
+  id: string;
+  capturedAt: string;
+  source: string;
+  sourceType: LeadSourceType;
+  category: OpportunityCategory;
+  organization: string;
+  title: string;
+  url?: string;
+  location: string;
+  metro: string;
+  deadline?: string;
+  requiredSkills: Skill[];
+  expectedValue: number;
+  estimatedHours: number;
+  effectiveHourly: number;
+  minimumAcceptableValue: number;
+  grade: LeadGrade;
+  confidence: number;
+  decisionStatus: LeadDecisionStatus;
+  riskFlags: string[];
+  counterRequired: boolean;
+  nextAction: string;
+  counterMessage: string;
+  complianceMode: string;
+  notes: string;
+}
+
 export interface MatchResult {
   technician: Technician;
   score: number;
@@ -99,6 +159,7 @@ export interface FieldNetworkState {
   technicians: Technician[];
   clients: ClientAccount[];
   workOrders: WorkOrder[];
+  leadOpportunities: LeadOpportunity[];
   auditLog: AuditEvent[];
   syncQueue: SyncEvent[];
 }
