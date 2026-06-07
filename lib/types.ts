@@ -56,6 +56,10 @@ export type LeadDecisionStatus =
   | 'lost';
 
 export type LeadGrade = 'A' | 'B' | 'C' | 'Avoid';
+export type SkillDepth = 'basic' | 'intermediate' | 'advanced' | 'lead';
+export type JobComplexity = 'simple' | 'standard' | 'complex' | 'large_project';
+export type DispatchRole = 'helper' | 'field_tech' | 'specialist' | 'project_lead';
+export type TeamBuildAction = 'solo_dispatch' | 'pair_with_lead' | 'build_project_team' | 'reserve_for_better_fit';
 
 export interface Technician {
   id: string;
@@ -67,6 +71,14 @@ export interface Technician {
   postalCode: string;
   travelRadiusMiles: number;
   skills: Skill[];
+  skillDepth?: SkillDepth;
+  preferredDispatchRole?: DispatchRole;
+  leadEligible?: boolean;
+  multiStateLeadEligible?: boolean;
+  mentorshipEligible?: boolean;
+  certifications?: string[];
+  degrees?: string[];
+  additionalSkills?: string[];
   tools: string[];
   hourlyRate: number;
   availability: 'available' | 'limited' | 'unavailable';
@@ -94,6 +106,11 @@ export interface WorkOrder {
   location: string;
   metro: string;
   requiredSkills: Skill[];
+  complexity?: JobComplexity;
+  teamSize?: number;
+  requiresLead?: boolean;
+  multiStateProject?: boolean;
+  preserveSeniorCapacity?: boolean;
   status: WorkOrderStatus;
   scheduledFor: string;
   budget: number;
@@ -133,6 +150,17 @@ export interface MatchResult {
   technician: Technician;
   score: number;
   reasons: string[];
+  riskFlags: string[];
+  recommendedRole: DispatchRole;
+  teamBuildAction: TeamBuildAction;
+}
+
+export interface TeamRecommendation {
+  workOrder: WorkOrder;
+  lead?: MatchResult;
+  fieldTechs: MatchResult[];
+  supportTechs: MatchResult[];
+  summary: string;
   riskFlags: string[];
 }
 
