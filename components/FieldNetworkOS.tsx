@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import RevenuePanel from './RevenuePanel';
 import { rankTechnicians } from '../lib/matching';
 import { emptyState, loadState, saveState } from '../lib/store';
 import { initialClients, initialTechnicians, initialWorkOrders } from '../lib/sample-data';
@@ -117,7 +118,7 @@ export default function FieldNetworkOS() {
         <div>
           <p className="eyebrow">Already Here LLC</p>
           <h1>Field Network OS</h1>
-          <p className="subhead">Technician network, dispatch matching, retainer tracking, offline queue, and audit control.</p>
+          <p className="subhead">Technician network, dispatch matching, retainer tracking, opportunity ranking, offline queue, and audit control.</p>
         </div>
         <div className="statusCard">
           <span className={online ? 'pill good' : 'pill warn'}>{online ? 'Cloud reachable' : 'Offline failover active'}</span>
@@ -133,19 +134,7 @@ export default function FieldNetworkOS() {
         <Metric label="Retainer Targets" value={state.clients.filter((c) => c.retainerStatus !== 'active').length} />
       </section>
 
-      <section className="panel opsPanel">
-        <div>
-          <p className="eyebrow">ProfitEngine backbone</p>
-          <h2>Production Agent Mesh</h2>
-          <p className="opsCopy">Live proof-first revenue ops, signed edge failover, mesh readiness, and profitability gates.</p>
-        </div>
-        <div className="opsLinks">
-          <a href="https://profitenginev5.vercel.app/api/health" target="_blank" rel="noreferrer">Health</a>
-          <a href="https://profitenginev5.vercel.app/api/enterprise-mesh" target="_blank" rel="noreferrer">Mesh</a>
-          <a href="https://profitenginev5.vercel.app/api/edge-failover" target="_blank" rel="noreferrer">Failover</a>
-          <a href="https://profitenginev5.vercel.app/api/profitability" target="_blank" rel="noreferrer">Profitability</a>
-        </div>
-      </section>
+      <RevenuePanel />
 
       <section className="grid two">
         <div className="panel">
