@@ -159,7 +159,7 @@ export interface FieldNetworkState {
   technicians: Technician[];
   clients: ClientAccount[];
   workOrders: WorkOrder[];
-  leadOpportunities: LeadOpportunity[];
+  leadOpportunities?: LeadOpportunity[];
   auditLog: AuditEvent[];
   syncQueue: SyncEvent[];
 }
