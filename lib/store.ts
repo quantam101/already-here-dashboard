@@ -9,6 +9,7 @@ export const emptyState: FieldNetworkState = {
   technicians: [],
   clients: [],
   workOrders: [],
+  leadOpportunities: [],
   auditLog: [],
   syncQueue: []
 };
@@ -19,7 +20,7 @@ export async function loadState(): Promise<FieldNetworkState> {
   return new Promise((resolve, reject) => {
     const tx = db.transaction(STORE_NAME, 'readonly');
     const request = tx.objectStore(STORE_NAME).get(STATE_KEY);
-    request.onsuccess = () => resolve((request.result as FieldNetworkState | undefined) ?? emptyState);
+    request.onsuccess = () => resolve(hydrateState((request.result as Partial<FieldNetworkState> | undefined) ?? emptyState));
     request.onerror = () => reject(request.error);
   });
 }
@@ -29,10 +30,21 @@ export async function saveState(state: FieldNetworkState): Promise<void> {
   const db = await openDb();
   return new Promise((resolve, reject) => {
     const tx = db.transaction(STORE_NAME, 'readwrite');
-    tx.objectStore(STORE_NAME).put(state, STATE_KEY);
+    tx.objectStore(STORE_NAME).put(hydrateState(state), STATE_KEY);
     tx.oncomplete = () => resolve();
     tx.onerror = () => reject(tx.error);
   });
+}
+
+function hydrateState(state: Partial<FieldNetworkState>): FieldNetworkState {
+  return {
+    technicians: state.technicians ?? [],
+    clients: state.clients ?? [],
+    workOrders: state.workOrders ?? [],
+    leadOpportunities: state.leadOpportunities ?? [],
+    auditLog: state.auditLog ?? [],
+    syncQueue: state.syncQueue ?? []
+  };
 }
 
 function openDb(): Promise<IDBDatabase> {
