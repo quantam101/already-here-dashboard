@@ -16,7 +16,8 @@ This repository contains the production PWA foundation for the Already Here LLC 
 - Compliant opportunity mesh for break/fix, retainer, teaming, dispatch, hauling, and procurement targets.
 - A/B/C/Avoid opportunity grading against Already Here LLC rate floors and dispatch minimums.
 - Proceed / Counter / Discard decision states for lead suppression and follow-through.
-- Monthly revenue stack targeting $25,000 through active work, retainers, projects, dispatch margin, and automated assets.
+- Owner/company monthly income floor targeting $25,000 before technician expansion upside.
+- Technician-capacity expansion model adding roughly $1,500 to $4,000 per qualified technician per month depending on level, reliability, and experience.
 - Automated and semi-passive productized income queue.
 - Prime contractor readiness panel for vendor packet, compliance, coverage, and national capacity milestones.
 - Audit event capture.
@@ -26,6 +27,18 @@ This repository contains the production PWA foundation for the Already Here LLC 
 - CI verification workflow.
 - Vercel production configuration.
 - Hardened HTTP response headers.
+
+## Revenue Model
+
+The $25,000 target is the Already Here LLC owner/company income floor. It is not the ceiling and it is not dependent on adding technicians.
+
+Technician expansion is tracked as upside:
+
+| Technician level | Monthly upside per tech | Use case |
+|---|---:|---|
+| Starter / developing tech | $1,500 | Low-liability smart-hands, swaps, site checks, and assisted closeouts |
+| Reliable experienced tech | $2,500 | Independent break/fix, POS, AP swaps, network support, and clean closeouts |
+| Senior / specialized tech | $4,000 | Data center, healthcare device support, access control, low-voltage, and rollout leadership |
 
 ## Commands
 
