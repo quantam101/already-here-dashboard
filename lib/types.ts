@@ -1,5 +1,6 @@
 export type Skill =
   | 'networking'
+  | 'project_management'
   | 'pos'
   | 'av'
   | 'access_control'
@@ -33,6 +34,7 @@ export type OpportunityCategory =
   | 'break_fix'
   | 'retainer'
   | 'procurement'
+  | 'project_management'
   | 'teaming'
   | 'field_dispatch'
   | 'hauling'
