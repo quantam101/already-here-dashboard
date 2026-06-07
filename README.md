@@ -16,8 +16,8 @@ This repository contains the production PWA foundation for the Already Here LLC 
 - Compliant opportunity mesh for break/fix, retainer, teaming, dispatch, hauling, and procurement targets.
 - A/B/C/Avoid opportunity grading against Already Here LLC rate floors and dispatch minimums.
 - Proceed / Counter / Discard decision states for lead suppression and follow-through.
-- Owner/company monthly income floor targeting $25,000 before technician expansion upside.
-- Technician-capacity expansion model adding roughly $1,500 to $4,000 per qualified technician per month depending on level, reliability, and experience.
+- Owner/company monthly income floor targeting $25,000 before technician-network upside.
+- Negotiable technician contribution model estimating Already Here LLC income lift based on location, demand, negotiated payout, client price, skill level, reliability, and routed work volume.
 - Automated and semi-passive productized income queue.
 - Prime contractor readiness panel for vendor packet, compliance, coverage, and national capacity milestones.
 - Audit event capture.
@@ -32,13 +32,15 @@ This repository contains the production PWA foundation for the Already Here LLC 
 
 The $25,000 target is the Already Here LLC owner/company income floor. It is not the ceiling and it is not dependent on adding technicians.
 
-Technician expansion is tracked as upside:
+Technician expansion is tracked as estimated company-income upside, not a fixed pay rate or fixed promise. Technician pay is negotiable per tech, per market, per job, and per scope.
 
-| Technician level | Monthly upside per tech | Use case |
+| Contribution profile | Estimated Already Here LLC income lift per tech/month | When it applies |
 |---|---:|---|
-| Starter / developing tech | $1,500 | Low-liability smart-hands, swaps, site checks, and assisted closeouts |
-| Reliable experienced tech | $2,500 | Independent break/fix, POS, AP swaps, network support, and clean closeouts |
-| Senior / specialized tech | $4,000 | Data center, healthcare device support, access control, low-voltage, and rollout leadership |
+| Low-volume / developing market | $500–$1,500 | Secondary markets, rural routes, limited demand, or early-market testing |
+| Standard metro / reliable coverage | $1,500–$4,000 | Normal planning range when enough profitable work can be routed consistently |
+| High-demand / specialized market | $4,000–$8,000 | Dense metros, urgent coverage lanes, specialized skills, and strong client pricing |
+
+Actual income lift depends on client bill rate, negotiated tech payout, route density, location, urgency premium, repeat volume, QA quality, closeout reliability, and how much work Already Here LLC can push through the technician.
 
 ## Commands
 
