@@ -1,7 +1,7 @@
 export const TARGET_OWNER_MONTHLY_INCOME = 25000;
 export const TARGET_MONTHLY_REVENUE = TARGET_OWNER_MONTHLY_INCOME;
 
-export type TechnicianLevel = 'starter' | 'solid' | 'elite';
+export type TechnicianContributionProfile = 'low_volume' | 'standard_market' | 'high_demand';
 
 export interface RevenueModelInput {
   dailyActiveIncome: number;
@@ -38,25 +38,30 @@ export interface PassiveIncomeAsset {
   monthlyTarget: number;
 }
 
-export interface TechnicianExpansionBand {
-  level: TechnicianLevel;
+export interface TechnicianContributionEstimate {
+  profile: TechnicianContributionProfile;
   label: string;
-  monthlyUpsidePerTech: number;
-  profile: string;
-  operatingRule: string;
+  estimatedCompanyIncomeMin: number;
+  estimatedCompanyIncomeMax: number;
+  locationLogic: string;
+  workVolumeLogic: string;
+  marginLogic: string;
 }
 
-export interface TechnicianExpansionScenario {
+export interface TechnicianContributionScenario {
   technicianCount: number;
-  level: TechnicianLevel;
+  profile: TechnicianContributionProfile;
 }
 
-export interface TechnicianExpansionResult {
+export interface TechnicianContributionResult {
   technicianCount: number;
-  level: TechnicianLevel;
-  monthlyUpsidePerTech: number;
-  addedMonthlyUpside: number;
-  totalWithOwnerCompanyIncome: number;
+  profile: TechnicianContributionProfile;
+  estimatedCompanyIncomeMin: number;
+  estimatedCompanyIncomeMax: number;
+  addedMonthlyIncomeMin: number;
+  addedMonthlyIncomeMax: number;
+  totalWithOwnerCompanyIncomeMin: number;
+  totalWithOwnerCompanyIncomeMax: number;
 }
 
 export const defaultRevenueModel: RevenueModelInput = {
@@ -102,36 +107,42 @@ export const monthlyRevenuePlan: RevenueLine[] = [
   }
 ];
 
-export const technicianExpansionBands: TechnicianExpansionBand[] = [
+export const technicianContributionEstimates: TechnicianContributionEstimate[] = [
   {
-    level: 'starter',
-    label: 'Starter / developing tech',
-    monthlyUpsidePerTech: 1500,
-    profile: 'Basic smart-hands, printer/POS swaps, simple cabling, photos, site checks, and assisted closeouts.',
-    operatingRule: 'Use for low-liability work with strict checklists and tighter QA review.'
+    profile: 'low_volume',
+    label: 'Low-volume / developing market estimate',
+    estimatedCompanyIncomeMin: 500,
+    estimatedCompanyIncomeMax: 1500,
+    locationLogic: 'Secondary markets, rural routes, thin demand, low repeat volume, or markets still being proven.',
+    workVolumeLogic: 'A few dispatches per month, mostly simple work or overflow coverage.',
+    marginLogic: 'Negotiated per tech and per job; lower volume means lower predictable company lift.'
   },
   {
-    level: 'solid',
-    label: 'Reliable experienced tech',
-    monthlyUpsidePerTech: 2500,
-    profile: 'Independent break/fix, POS, AP swaps, access-control assist, network support, and clean closeouts.',
-    operatingRule: 'Route repeat work and client-safe dispatches where margin and reliability are proven.'
+    profile: 'standard_market',
+    label: 'Standard metro / reliable coverage estimate',
+    estimatedCompanyIncomeMin: 1500,
+    estimatedCompanyIncomeMax: 4000,
+    locationLogic: 'Usable planning range for normal metro coverage where there is enough recurring work to route consistently.',
+    workVolumeLogic: 'Enough dispatches, retainers, and repeat-client work to create measurable monthly Already Here LLC net income.',
+    marginLogic: 'Depends on client bill rate, negotiated tech payout, closeout quality, travel friction, urgency premium, and volume.'
   },
   {
-    level: 'elite',
-    label: 'Senior / specialized tech',
-    monthlyUpsidePerTech: 4000,
-    profile: 'Data center, healthcare device support, advanced network work, access control, low-voltage, and rollout leadership.',
-    operatingRule: 'Reserve for high-margin or sensitive work where experience protects the client relationship.'
+    profile: 'high_demand',
+    label: 'High-demand / specialized market estimate',
+    estimatedCompanyIncomeMin: 4000,
+    estimatedCompanyIncomeMax: 8000,
+    locationLogic: 'Dense metros, urgent coverage lanes, specialized skills, data center, healthcare, access control, low-voltage, or rollout work.',
+    workVolumeLogic: 'Higher utilization, stronger repeat demand, and better client pricing can push upside above the normal planning range.',
+    marginLogic: 'Only valid when Already Here LLC controls client pricing, QA, scope, and dispatch reliability.'
   }
 ];
 
-export const technicianExpansionScenarios: TechnicianExpansionScenario[] = [
-  { technicianCount: 5, level: 'starter' },
-  { technicianCount: 5, level: 'solid' },
-  { technicianCount: 5, level: 'elite' },
-  { technicianCount: 10, level: 'solid' },
-  { technicianCount: 25, level: 'solid' }
+export const technicianContributionScenarios: TechnicianContributionScenario[] = [
+  { technicianCount: 5, profile: 'low_volume' },
+  { technicianCount: 5, profile: 'standard_market' },
+  { technicianCount: 10, profile: 'standard_market' },
+  { technicianCount: 5, profile: 'high_demand' },
+  { technicianCount: 25, profile: 'standard_market' }
 ];
 
 export const passiveIncomeAssets: PassiveIncomeAsset[] = [
@@ -172,19 +183,23 @@ export function calculateMonthlyRevenue(input: RevenueModelInput = defaultRevenu
   };
 }
 
-export function calculateTechnicianExpansion(
-  scenario: TechnicianExpansionScenario,
+export function calculateTechnicianContribution(
+  scenario: TechnicianContributionScenario,
   ownerCompanyIncome = calculateMonthlyRevenue(defaultRevenueModel).ownerCompanyIncome
-): TechnicianExpansionResult {
-  const band = technicianExpansionBands.find((item) => item.level === scenario.level) ?? technicianExpansionBands[1];
-  const addedMonthlyUpside = scenario.technicianCount * band.monthlyUpsidePerTech;
+): TechnicianContributionResult {
+  const estimate = technicianContributionEstimates.find((item) => item.profile === scenario.profile) ?? technicianContributionEstimates[1];
+  const addedMonthlyIncomeMin = scenario.technicianCount * estimate.estimatedCompanyIncomeMin;
+  const addedMonthlyIncomeMax = scenario.technicianCount * estimate.estimatedCompanyIncomeMax;
 
   return {
     technicianCount: scenario.technicianCount,
-    level: scenario.level,
-    monthlyUpsidePerTech: band.monthlyUpsidePerTech,
-    addedMonthlyUpside,
-    totalWithOwnerCompanyIncome: ownerCompanyIncome + addedMonthlyUpside
+    profile: scenario.profile,
+    estimatedCompanyIncomeMin: estimate.estimatedCompanyIncomeMin,
+    estimatedCompanyIncomeMax: estimate.estimatedCompanyIncomeMax,
+    addedMonthlyIncomeMin,
+    addedMonthlyIncomeMax,
+    totalWithOwnerCompanyIncomeMin: ownerCompanyIncome + addedMonthlyIncomeMin,
+    totalWithOwnerCompanyIncomeMax: ownerCompanyIncome + addedMonthlyIncomeMax
   };
 }
 
@@ -198,9 +213,9 @@ export function getRevenueModeLabel(mode: RevenueLine['mode']): string {
   return labels[mode];
 }
 
-export function getTechnicianBandLabel(level: TechnicianLevel): string {
-  const band = technicianExpansionBands.find((item) => item.level === level);
-  return band?.label ?? 'Technician capacity';
+export function getTechnicianContributionLabel(profile: TechnicianContributionProfile): string {
+  const estimate = technicianContributionEstimates.find((item) => item.profile === profile);
+  return estimate?.label ?? 'Technician contribution estimate';
 }
 
 export function formatCurrency(value: number): string {
