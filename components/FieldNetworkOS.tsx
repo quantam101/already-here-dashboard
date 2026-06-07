@@ -1,13 +1,30 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import AutomatedIncomePanel from './AutomatedIncomePanel';
+import PrimeNetworkPanel from './PrimeNetworkPanel';
 import RevenuePanel from './RevenuePanel';
 import { rankTechnicians } from '../lib/matching';
 import { emptyState, loadState, saveState } from '../lib/store';
 import { initialClients, initialTechnicians, initialWorkOrders } from '../lib/sample-data';
 import type { AuditEvent, FieldNetworkState, Skill, Technician, WorkOrder } from '../lib/types';
 
-const skills: Skill[] = ['networking', 'pos', 'av', 'access_control', 'cabling', 'wireless', 'printer', 'smart_hands', 'computer', 'low_voltage'];
+const skills: Skill[] = [
+  'networking',
+  'pos',
+  'av',
+  'access_control',
+  'cabling',
+  'wireless',
+  'printer',
+  'smart_hands',
+  'computer',
+  'low_voltage',
+  'data_center',
+  'healthcare_device',
+  'procurement',
+  'retainer'
+];
 
 export default function FieldNetworkOS() {
   const [state, setState] = useState<FieldNetworkState>(emptyState);
@@ -55,6 +72,7 @@ export default function FieldNetworkOS() {
 
   const selectedWorkOrder = state.workOrders.find((wo) => wo.id === selectedWorkOrderId) ?? state.workOrders[0];
   const matches = useMemo(() => (selectedWorkOrder ? rankTechnicians(selectedWorkOrder, state.technicians) : []), [selectedWorkOrder, state.technicians]);
+  const activeWorkOrders = state.workOrders.filter((wo) => wo.status !== 'paid' && wo.status !== 'canceled').length;
 
   function addTechnician() {
     if (!techName.trim() || !techEmail.trim()) return;
@@ -119,7 +137,7 @@ export default function FieldNetworkOS() {
         <div>
           <p className="eyebrow">Already Here LLC</p>
           <h1>Field Network OS</h1>
-          <p className="subhead">Technician network, dispatch matching, retainer tracking, opportunity ranking, offline queue, and audit control.</p>
+          <p className="subhead">Technician network, dispatch matching, retainer tracking, opportunity ranking, prime-network readiness, automated income, offline queue, and audit control.</p>
         </div>
         <div className="statusCard">
           <span className={online ? 'pill good' : 'pill warn'}>{online ? 'Cloud reachable' : 'Offline failover active'}</span>
@@ -132,10 +150,13 @@ export default function FieldNetworkOS() {
         <Metric label="Technicians" value={state.technicians.length} />
         <Metric label="Clients" value={state.clients.length} />
         <Metric label="Work Orders" value={state.workOrders.length} />
+        <Metric label="Active WOs" value={activeWorkOrders} />
         <Metric label="Retainer Targets" value={state.clients.filter((c) => c.retainerStatus !== 'active').length} />
       </section>
 
       <RevenuePanel />
+      <AutomatedIncomePanel />
+      <PrimeNetworkPanel technicianCount={state.technicians.length} clientCount={state.clients.length} workOrderCount={state.workOrders.length} />
 
       <section className="grid two">
         <div className="panel">
