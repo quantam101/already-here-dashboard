@@ -31,6 +31,7 @@ export default function FieldNetworkOS() {
           technicians: initialTechnicians,
           clients: initialClients,
           workOrders: initialWorkOrders,
+          leadOpportunities: [],
           auditLog: [audit('system', 'seeded local operating database', 'system', 'bootstrap')],
           syncQueue: []
         };
