@@ -2,12 +2,17 @@
 
 import {
   TARGET_OWNER_MONTHLY_INCOME,
+  VERIFIED_SKILL_PREMIUM_MAX,
+  VERIFIED_SKILL_PREMIUM_MIN,
+  calculateDispatchMargin,
   calculateMonthlyRevenue,
   calculateTechnicianContribution,
   defaultRevenueModel,
+  dispatchMarginExamples,
   formatCurrency,
   getRevenueModeLabel,
   getTechnicianContributionLabel,
+  jobRatePolicies,
   monthlyRevenuePlan,
   passiveIncomeAssets,
   technicianContributionEstimates,
@@ -20,6 +25,7 @@ export default function AutomatedIncomePanel() {
     ? `${formatCurrency(projection.gapToTarget)} owner-income gap remaining`
     : `${formatCurrency(Math.abs(projection.gapToTarget))} owner-income surplus before technician-network upside`;
   const contributionResults = technicianContributionScenarios.map((scenario) => calculateTechnicianContribution(scenario, projection.ownerCompanyIncome));
+  const marginResults = dispatchMarginExamples.map((example) => ({ example, result: calculateDispatchMargin(example) }));
 
   return (
     <section className="grid two incomeGrid">
@@ -49,9 +55,45 @@ export default function AutomatedIncomePanel() {
       </div>
 
       <div className="panel">
+        <p className="eyebrow">Rate and payout control</p>
+        <h2>Job Rate First, Tech Payout Second</h2>
+        <p className="opsCopy">Already Here LLC sets the client/job rate by job type and market first. Technician payout is then negotiated inside the margin, with verified certifications, degrees, licenses, tools, and additional skills able to justify roughly {formatCurrency(VERIFIED_SKILL_PREMIUM_MIN)}–{formatCurrency(VERIFIED_SKILL_PREMIUM_MAX)} more per hour when the job supports it.</p>
+
+        <div className="assetList">
+          {jobRatePolicies.map((policy) => (
+            <article className="asset" key={policy.label}>
+              <strong>{policy.label}</strong>
+              <span>{policy.pricingRule}</span>
+              <small>{policy.techPayoutRule}</small>
+              <small>{policy.locationRule}</small>
+            </article>
+          ))}
+        </div>
+      </div>
+
+      <div className="panel">
+        <p className="eyebrow">Dispatch margin examples</p>
+        <h2>Company Income = Margin × Volume</h2>
+        <p className="opsCopy">These examples show the calculation structure. Actual rates stay configurable by job, location, demand, urgency, scope, and negotiated technician payout.</p>
+
+        <div className="planList expansionScenarios">
+          {marginResults.map(({ example, result }) => (
+            <article className="planItem" key={`${example.clientBillRateHourly}-${example.technicianBasePayoutHourly}-${example.verifiedSkillPremiumHourly}`}>
+              <div>
+                <strong>{formatCurrency(example.clientBillRateHourly)}/hr client rate · {example.jobsPerMonth} jobs/month</strong>
+                <span>Tech payout {formatCurrency(result.effectiveTechPayoutHourly)}/hr after premium</span>
+              </div>
+              <b>{formatCurrency(result.monthlyCompanyIncomeLift)}</b>
+              <p>{formatCurrency(result.grossMarginHourly)}/hr margin · {formatCurrency(result.grossMarginPerJob)} per job · {result.marginIsViable ? 'viable margin' : 'not viable'}</p>
+            </article>
+          ))}
+        </div>
+      </div>
+
+      <div className="panel">
         <p className="eyebrow">Technician network upside</p>
         <h2>Company Net Contribution Estimates</h2>
-        <p className="opsCopy">These are not technician pay rates. Tech payout is negotiated per technician, job, skill, location, and volume. The estimate is the possible monthly Already Here LLC income lift after routing enough profitable work through that technician.</p>
+        <p className="opsCopy">These are planning estimates for Already Here LLC income lift, not technician pay rates. The actual lift depends on our client rate, negotiated tech payout, location, route density, work volume, urgency, QA, and repeat demand.</p>
 
         <div className="assetList">
           {technicianContributionEstimates.map((estimate) => (
