@@ -11,14 +11,14 @@ export const initialTechnicians: Technician[] = [
     metro: 'Phoenix',
     postalCode: '85281',
     travelRadiusMiles: 60,
-    skills: ['networking', 'pos', 'wireless', 'printer', 'computer', 'smart_hands', 'low_voltage', 'access_control', 'av', 'cabling', 'data_center', 'healthcare_device', 'procurement', 'retainer'],
+    skills: ['project_management', 'networking', 'pos', 'wireless', 'printer', 'computer', 'smart_hands', 'low_voltage', 'access_control', 'av', 'cabling', 'data_center', 'healthcare_device', 'procurement', 'retainer'],
     skillDepth: 'lead',
     preferredDispatchRole: 'project_lead',
     leadEligible: true,
     multiStateLeadEligible: true,
     mentorshipEligible: true,
     certifications: ['U.S. Army 31U Signal Support Systems Specialist'],
-    additionalSkills: ['crew leadership', 'multi-site rollout leadership', 'healthcare field service', 'data center support', 'access control'],
+    additionalSkills: ['project management', 'crew leadership', 'multi-site rollout leadership', 'healthcare field service', 'data center support', 'access control'],
     tools: ['laptop', 'console cable', 'patch cables', 'hotspot', 'hand tools', 'labeler'],
     hourlyRate: 65,
     availability: 'available',
@@ -36,7 +36,7 @@ export const initialClients: ClientAccount[] = [
     contactName: 'Stephen Franklin',
     email: 'alreadyherellc@gmail.com',
     phone: 'available-on-file',
-    segment: 'Break/fix, retainer, procurement, and subcontractor coverage',
+    segment: 'Break/fix, retainer, procurement, project management, and subcontractor coverage',
     retainerStatus: 'active',
     monthlyTarget: 5000
   }
@@ -65,7 +65,7 @@ export const initialWorkOrders: WorkOrder[] = [
     title: 'Multi-state network and access-control rollout lead request',
     location: 'Southwest regional rollout',
     metro: 'Phoenix',
-    requiredSkills: ['networking', 'access_control', 'low_voltage', 'smart_hands'],
+    requiredSkills: ['project_management', 'networking', 'access_control', 'low_voltage', 'smart_hands'],
     complexity: 'large_project',
     teamSize: 4,
     requiresLead: true,
@@ -101,23 +101,36 @@ export const initialLeadOpportunities: LeadOpportunity[] = [
     title: 'Arizona HPE, data center, and smart-hands preferred field coverage',
     location: 'Arizona statewide with Phoenix priority',
     metro: 'Phoenix',
-    requiredSkills: ['data_center', 'networking', 'smart_hands', 'computer'],
+    requiredSkills: ['project_management', 'data_center', 'networking', 'smart_hands', 'computer'],
     expectedValue: 5000,
     estimatedHours: 40,
-    notes: 'Position for guaranteed Arizona coverage block and urgent dispatch premium.'
+    notes: 'Position for guaranteed Arizona coverage block, project coordination, and urgent dispatch premium.'
   }),
   buildLeadOpportunity({
     source: 'Local procurement monitor',
     sourceType: 'public_procurement',
     category: 'procurement',
     organization: 'City and state procurement pipeline',
-    title: 'Small-quote IT break/fix, low-voltage, and on-call field services roster',
+    title: 'Small-quote IT break/fix, low-voltage, project management, and on-call field services roster',
     location: 'Phoenix, Mesa, Chandler, Tempe, Scottsdale, Glendale, Peoria, Surprise',
     metro: 'Phoenix',
-    requiredSkills: ['procurement', 'networking', 'low_voltage', 'wireless', 'printer', 'computer'],
+    requiredSkills: ['project_management', 'procurement', 'networking', 'low_voltage', 'wireless', 'printer', 'computer'],
     expectedValue: 25000,
     estimatedHours: 120,
     deadline: 'rolling',
-    notes: 'Target procurePHX, Arizona Procurement Portal, city vendor rosters, SBE/VBE recognition, and informal quote paths.'
+    notes: 'Target procurePHX, Arizona Procurement Portal, city vendor rosters, SBE/VBE recognition, informal quote paths, and PM-led field execution.'
+  }),
+  buildLeadOpportunity({
+    source: 'Project management opportunity scan',
+    sourceType: 'manual_public_listing',
+    category: 'project_management',
+    organization: 'Phoenix technical PM contract pipeline',
+    title: 'IT, technical, mission-critical, and rollout project management work',
+    location: 'Phoenix, Tempe, Mesa, Chandler, Scottsdale, remote when profitable',
+    metro: 'Phoenix',
+    requiredSkills: ['project_management', 'networking', 'data_center', 'procurement', 'retainer'],
+    expectedValue: 10000,
+    estimatedHours: 80,
+    notes: 'Track PM contracts, technical PM roles, rollout coordination, construction/data-center PM, public sector IT PM, and retainer-style PM coverage.'
   })
 ];
