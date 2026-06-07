@@ -13,6 +13,10 @@ This repository contains the production PWA foundation for the Already Here LLC 
 - Offline failover state indicator.
 - Deterministic technician matching engine.
 - Work order creation and match ranking.
+- Right-fit dispatch: do not waste senior technicians on mediocre/simple work unless no better fit exists.
+- Senior technician preservation for complex, high-margin, sensitive, large-project, or leadership work.
+- Project-lead matching for larger jobs, multi-state projects, rollouts, and team coordination.
+- Team builder logic for combining helper, field tech, specialist, and project-lead roles.
 - Compliant opportunity mesh for break/fix, retainer, teaming, dispatch, hauling, and procurement targets.
 - A/B/C/Avoid opportunity grading against Already Here LLC rate floors and dispatch minimums.
 - Proceed / Counter / Discard decision states for lead suppression and follow-through.
@@ -25,7 +29,7 @@ This repository contains the production PWA foundation for the Already Here LLC 
 - Audit event capture.
 - Sync queue capture for future Oracle backend sync.
 - Strict TypeScript configuration.
-- Node test coverage for the revenue model.
+- Node test coverage for the revenue model and dispatch matcher.
 - CI verification workflow.
 - Vercel production configuration.
 - Hardened HTTP response headers.
@@ -58,6 +62,20 @@ Technician expansion is tracked as estimated company-income upside, not a fixed 
 
 Actual income lift depends on client bill rate, negotiated tech payout, route density, location, urgency premium, repeat volume, QA quality, closeout reliability, and how much work Already Here LLC can push through the technician.
 
+## Dispatch Logic
+
+The matcher does not automatically assign the highest-skilled available technician. It uses right-fit dispatch.
+
+| Work type | Preferred assignment |
+|---|---|
+| Simple or mediocre work | Basic/intermediate right-fit tech, preserving senior capacity |
+| Standard field work | Intermediate field tech or specialist when margin supports it |
+| Complex/sensitive work | Advanced specialist or lead-qualified technician |
+| Larger project | Project lead plus right-fit field/support techs |
+| Multi-state rollout | Multi-state lead plus local right-fit technicians in each market |
+
+Senior technicians should become team leads, project leads, trainers, or state/region coordinators when the project size and margin justify it. Networking and combining technicians expands the database, creates team depth, and reduces dependence on one operator.
+
 ## Commands
 
 ```bash
@@ -80,7 +98,7 @@ The Vercel build command is configured as:
 npm run verify
 ```
 
-This means deployment must pass typecheck, lint, revenue-model tests, and the production Next.js build.
+This means deployment must pass typecheck, lint, revenue-model tests, dispatch matching tests, and the production Next.js build.
 
 See `docs/deployment.md` and `docs/oracle-schema.md`.
 
