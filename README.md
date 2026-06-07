@@ -17,7 +17,9 @@ This repository contains the production PWA foundation for the Already Here LLC 
 - A/B/C/Avoid opportunity grading against Already Here LLC rate floors and dispatch minimums.
 - Proceed / Counter / Discard decision states for lead suppression and follow-through.
 - Owner/company monthly income floor targeting $25,000 before technician-network upside.
-- Negotiable technician contribution model estimating Already Here LLC income lift based on location, demand, negotiated payout, client price, skill level, reliability, and routed work volume.
+- Job-rate-first revenue model: Already Here LLC sets the client/job rate by job type, market, urgency, complexity, and risk before technician payout is negotiated.
+- Negotiable technician payout model with verified certifications, degrees, licenses, tools, and additional skills able to justify roughly $20–$30/hr above baseline when margin supports it.
+- Technician contribution model estimating Already Here LLC income lift based on location, demand, negotiated payout, client price, skill level, reliability, and routed work volume.
 - Automated and semi-passive productized income queue.
 - Prime contractor readiness panel for vendor packet, compliance, coverage, and national capacity milestones.
 - Audit event capture.
@@ -32,7 +34,21 @@ This repository contains the production PWA foundation for the Already Here LLC 
 
 The $25,000 target is the Already Here LLC owner/company income floor. It is not the ceiling and it is not dependent on adding technicians.
 
-Technician expansion is tracked as estimated company-income upside, not a fixed pay rate or fixed promise. Technician pay is negotiable per tech, per market, per job, and per scope.
+The pricing order is:
+
+1. Set the Already Here LLC client/job rate based on job type, location, urgency, complexity, risk, SLA, travel, and whether the work is hourly, flat-rate, retainer, project, or dispatch coverage.
+2. Negotiate technician payout per tech, per market, per job, and per scope.
+3. Apply a verified-skill premium only when justified by actual certifications, degrees, licenses, specialized tools, or additional skills needed for the work.
+4. Approve dispatch only when company margin, client quality, and repeat-work potential remain viable.
+
+Company income is calculated as:
+
+```text
+client charge - technician payout - travel/admin/platform/QA/non-labor costs = Already Here LLC margin
+Already Here LLC margin x profitable work volume = monthly company income lift
+```
+
+Technician expansion is tracked as estimated company-income upside, not a fixed pay rate or fixed promise.
 
 | Contribution profile | Estimated Already Here LLC income lift per tech/month | When it applies |
 |---|---:|---|
