@@ -1,16 +1,36 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import { rankLeadOpportunities, summarizeLeadMesh } from '../lib/lead-mesh';
+import { initialLeadOpportunities } from '../lib/sample-data';
 import type { LeadDecisionStatus, LeadOpportunity } from '../lib/types';
 
-interface RevenuePanelProps {
-  opportunities: LeadOpportunity[];
-  onDecision: (opportunityId: string, decisionStatus: LeadDecisionStatus) => void;
-}
+const STORE_KEY = 'already_here_revenue_opportunities';
 
-export default function RevenuePanel({ opportunities, onDecision }: RevenuePanelProps) {
+export default function RevenuePanel() {
+  const [opportunities, setOpportunities] = useState<LeadOpportunity[]>(initialLeadOpportunities);
+
+  useEffect(() => {
+    const saved = window.localStorage.getItem(STORE_KEY);
+    if (!saved) return;
+    try {
+      const parsed = JSON.parse(saved) as LeadOpportunity[];
+      if (Array.isArray(parsed)) setOpportunities(parsed);
+    } catch {
+      setOpportunities(initialLeadOpportunities);
+    }
+  }, []);
+
+  useEffect(() => {
+    window.localStorage.setItem(STORE_KEY, JSON.stringify(opportunities));
+  }, [opportunities]);
+
   const ranked = rankLeadOpportunities(opportunities);
   const summary = summarizeLeadMesh(opportunities);
+
+  function decide(opportunityId: string, decisionStatus: LeadDecisionStatus) {
+    setOpportunities((current) => current.map((item) => item.id === opportunityId ? { ...item, decisionStatus } : item));
+  }
 
   return (
     <>
@@ -41,9 +61,9 @@ export default function RevenuePanel({ opportunities, onDecision }: RevenuePanel
               <small>${opportunity.expectedValue.toLocaleString()} value · ${opportunity.effectiveHourly}/hr effective · {opportunity.complianceMode}</small>
               {opportunity.riskFlags.length > 0 && <small>Risk: {opportunity.riskFlags.join(' · ')}</small>}
               <div className="leadActions">
-                <button onClick={() => onDecision(opportunity.id, 'proceed')}>Proceed</button>
-                <button onClick={() => onDecision(opportunity.id, 'counter')}>Counter</button>
-                <button onClick={() => onDecision(opportunity.id, 'discard')}>Discard</button>
+                <button onClick={() => decide(opportunity.id, 'proceed')}>Proceed</button>
+                <button onClick={() => decide(opportunity.id, 'counter')}>Counter</button>
+                <button onClick={() => decide(opportunity.id, 'discard')}>Discard</button>
               </div>
             </article>
           ))}
