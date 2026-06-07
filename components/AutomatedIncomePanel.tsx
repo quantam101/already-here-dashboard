@@ -3,30 +3,30 @@
 import {
   TARGET_OWNER_MONTHLY_INCOME,
   calculateMonthlyRevenue,
-  calculateTechnicianExpansion,
+  calculateTechnicianContribution,
   defaultRevenueModel,
   formatCurrency,
   getRevenueModeLabel,
-  getTechnicianBandLabel,
+  getTechnicianContributionLabel,
   monthlyRevenuePlan,
   passiveIncomeAssets,
-  technicianExpansionBands,
-  technicianExpansionScenarios
+  technicianContributionEstimates,
+  technicianContributionScenarios
 } from '../lib/revenue-model';
 
 export default function AutomatedIncomePanel() {
   const projection = calculateMonthlyRevenue(defaultRevenueModel);
   const gapLabel = projection.gapToTarget > 0
     ? `${formatCurrency(projection.gapToTarget)} owner-income gap remaining`
-    : `${formatCurrency(Math.abs(projection.gapToTarget))} owner-income surplus before technician expansion`;
-  const expansionResults = technicianExpansionScenarios.map((scenario) => calculateTechnicianExpansion(scenario, projection.ownerCompanyIncome));
+    : `${formatCurrency(Math.abs(projection.gapToTarget))} owner-income surplus before technician-network upside`;
+  const contributionResults = technicianContributionScenarios.map((scenario) => calculateTechnicianContribution(scenario, projection.ownerCompanyIncome));
 
   return (
     <section className="grid two incomeGrid">
       <div className="panel">
         <p className="eyebrow">Automated income engine</p>
         <h2>Owner / Company Monthly Income Floor</h2>
-        <p className="opsCopy">The {formatCurrency(TARGET_OWNER_MONTHLY_INCOME)} target is for Already Here LLC income before technician expansion upside. Morning active work stays protected while afternoons build retainers, dispatch margin, and automated assets.</p>
+        <p className="opsCopy">The {formatCurrency(TARGET_OWNER_MONTHLY_INCOME)} target is for Already Here LLC owner/company income before technician-network upside. Morning active work stays protected while afternoons build retainers, dispatch margin, and automated assets.</p>
 
         <div className="revenueTotal">
           <span>Owner/company target {formatCurrency(TARGET_OWNER_MONTHLY_INCOME)}</span>
@@ -49,30 +49,31 @@ export default function AutomatedIncomePanel() {
       </div>
 
       <div className="panel">
-        <p className="eyebrow">Technician capacity upside</p>
-        <h2>Per-Tech Monthly Lift</h2>
-        <p className="opsCopy">Each qualified technician should increase monthly upside by roughly {formatCurrency(1500)} to {formatCurrency(4000)}, depending on experience, reliability, skill level, and how much QA-controlled work can be routed through them.</p>
+        <p className="eyebrow">Technician network upside</p>
+        <h2>Company Net Contribution Estimates</h2>
+        <p className="opsCopy">These are not technician pay rates. Tech payout is negotiated per technician, job, skill, location, and volume. The estimate is the possible monthly Already Here LLC income lift after routing enough profitable work through that technician.</p>
 
         <div className="assetList">
-          {technicianExpansionBands.map((band) => (
-            <article className="asset" key={band.level}>
-              <strong>{band.label}</strong>
-              <span>{band.profile}</span>
-              <small>{band.operatingRule}</small>
-              <b>{formatCurrency(band.monthlyUpsidePerTech)} / tech / month</b>
+          {technicianContributionEstimates.map((estimate) => (
+            <article className="asset" key={estimate.profile}>
+              <strong>{estimate.label}</strong>
+              <span>{estimate.locationLogic}</span>
+              <small>{estimate.workVolumeLogic}</small>
+              <small>{estimate.marginLogic}</small>
+              <b>{formatCurrency(estimate.estimatedCompanyIncomeMin)}–{formatCurrency(estimate.estimatedCompanyIncomeMax)} company lift / tech / month</b>
             </article>
           ))}
         </div>
 
         <div className="planList expansionScenarios">
-          {expansionResults.map((result) => (
-            <article className="planItem" key={`${result.technicianCount}-${result.level}`}>
+          {contributionResults.map((result) => (
+            <article className="planItem" key={`${result.technicianCount}-${result.profile}`}>
               <div>
-                <strong>{result.technicianCount} {getTechnicianBandLabel(result.level)}</strong>
-                <span>{formatCurrency(result.monthlyUpsidePerTech)} each</span>
+                <strong>{result.technicianCount} techs · {getTechnicianContributionLabel(result.profile)}</strong>
+                <span>{formatCurrency(result.estimatedCompanyIncomeMin)}–{formatCurrency(result.estimatedCompanyIncomeMax)} estimated company lift each</span>
               </div>
-              <b>{formatCurrency(result.addedMonthlyUpside)}</b>
-              <p>Total with owner/company floor: {formatCurrency(result.totalWithOwnerCompanyIncome)}</p>
+              <b>{formatCurrency(result.addedMonthlyIncomeMin)}–{formatCurrency(result.addedMonthlyIncomeMax)}</b>
+              <p>Total with owner/company floor: {formatCurrency(result.totalWithOwnerCompanyIncomeMin)}–{formatCurrency(result.totalWithOwnerCompanyIncomeMax)}</p>
             </article>
           ))}
         </div>
