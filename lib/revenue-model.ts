@@ -1,5 +1,7 @@
 export const TARGET_OWNER_MONTHLY_INCOME = 25000;
 export const TARGET_MONTHLY_REVENUE = TARGET_OWNER_MONTHLY_INCOME;
+export const VERIFIED_SKILL_PREMIUM_MIN = 20;
+export const VERIFIED_SKILL_PREMIUM_MAX = 30;
 
 export type TechnicianContributionProfile = 'low_volume' | 'standard_market' | 'high_demand';
 
@@ -64,6 +66,30 @@ export interface TechnicianContributionResult {
   totalWithOwnerCompanyIncomeMax: number;
 }
 
+export interface DispatchMarginInput {
+  clientBillRateHourly: number;
+  technicianBasePayoutHourly: number;
+  verifiedSkillPremiumHourly: number;
+  hoursPerJob: number;
+  jobsPerMonth: number;
+  nonLaborCostPerJob: number;
+}
+
+export interface DispatchMarginResult {
+  effectiveTechPayoutHourly: number;
+  grossMarginHourly: number;
+  grossMarginPerJob: number;
+  monthlyCompanyIncomeLift: number;
+  marginIsViable: boolean;
+}
+
+export interface JobRatePolicy {
+  label: string;
+  pricingRule: string;
+  techPayoutRule: string;
+  locationRule: string;
+}
+
 export const defaultRevenueModel: RevenueModelInput = {
   dailyActiveIncome: 500,
   activeDaysPerMonth: 20,
@@ -97,13 +123,34 @@ export const monthlyRevenuePlan: RevenueLine[] = [
     label: 'Owner-controlled dispatch margin',
     monthlyTarget: 3000,
     mode: 'dispatch',
-    nextAction: 'Use the technician network to accept work outside Stephen’s route while keeping QA, pricing, margin, and client control under Already Here LLC.'
+    nextAction: 'Set the client/job rate first, then negotiate technician payout inside a safe margin band before dispatching work.'
   },
   {
     label: 'Automated asset income',
     monthlyTarget: 2000,
     mode: 'automated',
     nextAction: 'Sell templates, checklists, intake kits, and field-tech starter assets through automated funnels.'
+  }
+];
+
+export const jobRatePolicies: JobRatePolicy[] = [
+  {
+    label: 'Already Here client/job rate comes first',
+    pricingRule: 'Client pricing is set by job type, market, urgency, complexity, risk, travel, SLA, and whether the work is hourly, flat-rate, retainer, project, or dispatch coverage.',
+    techPayoutRule: 'Technician payout is negotiated per tech and per job after the client rate is known. It is not a fixed universal band.',
+    locationRule: 'Location changes the margin. Dense metros, urgent routes, and high-demand lanes can support higher payouts; thin or remote markets require tighter payout control.'
+  },
+  {
+    label: 'Verified credential premium',
+    pricingRule: 'Credentials, degrees, licenses, certifications, specialized tools, and additional verified skills can justify higher client pricing when the job requires them.',
+    techPayoutRule: `A verified higher-skill technician may justify roughly ${VERIFIED_SKILL_PREMIUM_MIN} to ${VERIFIED_SKILL_PREMIUM_MAX} dollars per hour above baseline payout when margin supports it.`,
+    locationRule: 'Premiums should be market-aware and tied to actual demand, not automatically paid on every ticket.'
+  },
+  {
+    label: 'Company-income formula',
+    pricingRule: 'Already Here LLC income lift equals client charge minus technician payout minus travel, admin, platform, QA, and non-labor costs, multiplied by profitable volume.',
+    techPayoutRule: 'The payout must preserve company margin, quality control, client ownership, and future repeat-work potential.',
+    locationRule: 'The same technician can produce different company lift in different cities because route density, demand, and client pricing change.'
   }
 ];
 
@@ -115,7 +162,7 @@ export const technicianContributionEstimates: TechnicianContributionEstimate[] =
     estimatedCompanyIncomeMax: 1500,
     locationLogic: 'Secondary markets, rural routes, thin demand, low repeat volume, or markets still being proven.',
     workVolumeLogic: 'A few dispatches per month, mostly simple work or overflow coverage.',
-    marginLogic: 'Negotiated per tech and per job; lower volume means lower predictable company lift.'
+    marginLogic: 'Company lift is lower when volume is low, even if the technician is good.'
   },
   {
     profile: 'standard_market',
@@ -124,7 +171,7 @@ export const technicianContributionEstimates: TechnicianContributionEstimate[] =
     estimatedCompanyIncomeMax: 4000,
     locationLogic: 'Usable planning range for normal metro coverage where there is enough recurring work to route consistently.',
     workVolumeLogic: 'Enough dispatches, retainers, and repeat-client work to create measurable monthly Already Here LLC net income.',
-    marginLogic: 'Depends on client bill rate, negotiated tech payout, closeout quality, travel friction, urgency premium, and volume.'
+    marginLogic: 'Depends on client bill rate, negotiated tech payout, credential premium, closeout quality, travel friction, urgency premium, and volume.'
   },
   {
     profile: 'high_demand',
@@ -133,7 +180,7 @@ export const technicianContributionEstimates: TechnicianContributionEstimate[] =
     estimatedCompanyIncomeMax: 8000,
     locationLogic: 'Dense metros, urgent coverage lanes, specialized skills, data center, healthcare, access control, low-voltage, or rollout work.',
     workVolumeLogic: 'Higher utilization, stronger repeat demand, and better client pricing can push upside above the normal planning range.',
-    marginLogic: 'Only valid when Already Here LLC controls client pricing, QA, scope, and dispatch reliability.'
+    marginLogic: 'Only valid when Already Here LLC controls client pricing, QA, scope, negotiated payout, and dispatch reliability.'
   }
 ];
 
@@ -143,6 +190,33 @@ export const technicianContributionScenarios: TechnicianContributionScenario[] =
   { technicianCount: 10, profile: 'standard_market' },
   { technicianCount: 5, profile: 'high_demand' },
   { technicianCount: 25, profile: 'standard_market' }
+];
+
+export const dispatchMarginExamples: DispatchMarginInput[] = [
+  {
+    clientBillRateHourly: 95,
+    technicianBasePayoutHourly: 55,
+    verifiedSkillPremiumHourly: 0,
+    hoursPerJob: 2,
+    jobsPerMonth: 20,
+    nonLaborCostPerJob: 5
+  },
+  {
+    clientBillRateHourly: 125,
+    technicianBasePayoutHourly: 65,
+    verifiedSkillPremiumHourly: 20,
+    hoursPerJob: 2,
+    jobsPerMonth: 20,
+    nonLaborCostPerJob: 5
+  },
+  {
+    clientBillRateHourly: 165,
+    technicianBasePayoutHourly: 75,
+    verifiedSkillPremiumHourly: 30,
+    hoursPerJob: 3,
+    jobsPerMonth: 16,
+    nonLaborCostPerJob: 10
+  }
 ];
 
 export const passiveIncomeAssets: PassiveIncomeAsset[] = [
@@ -200,6 +274,22 @@ export function calculateTechnicianContribution(
     addedMonthlyIncomeMax,
     totalWithOwnerCompanyIncomeMin: ownerCompanyIncome + addedMonthlyIncomeMin,
     totalWithOwnerCompanyIncomeMax: ownerCompanyIncome + addedMonthlyIncomeMax
+  };
+}
+
+export function calculateDispatchMargin(input: DispatchMarginInput): DispatchMarginResult {
+  const safePremium = Math.max(0, input.verifiedSkillPremiumHourly);
+  const effectiveTechPayoutHourly = input.technicianBasePayoutHourly + safePremium;
+  const grossMarginHourly = input.clientBillRateHourly - effectiveTechPayoutHourly;
+  const grossMarginPerJob = (grossMarginHourly * input.hoursPerJob) - input.nonLaborCostPerJob;
+  const monthlyCompanyIncomeLift = grossMarginPerJob * input.jobsPerMonth;
+
+  return {
+    effectiveTechPayoutHourly,
+    grossMarginHourly,
+    grossMarginPerJob,
+    monthlyCompanyIncomeLift,
+    marginIsViable: grossMarginHourly > 0 && grossMarginPerJob > 0
   };
 }
 
