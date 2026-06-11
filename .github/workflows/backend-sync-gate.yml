@@ -1,0 +1,26 @@
+name: Backend Sync Gate
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '27 * * * *'
+
+jobs:
+  verify-backend-sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Verify backend sync endpoint
+        run: npm run qa:backend-sync
+        env:
+          FIELD_NETWORK_BACKEND_SYNC_URL: ${{ secrets.FIELD_NETWORK_BACKEND_SYNC_URL }}
