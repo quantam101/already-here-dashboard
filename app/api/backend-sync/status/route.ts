@@ -12,14 +12,17 @@ export async function GET() {
   const serviceToken = process.env.ORACLE_API_SERVICE_TOKEN;
 
   if (!syncEnabled) {
-    return NextResponse.json({
-      ok: true,
-      service: 'backend-sync',
-      status: 'disabled',
-      connected: false,
-      reason: 'SYNC_ENABLED is not true',
-      timestamp: new Date().toISOString()
-    });
+    return NextResponse.json(
+      {
+        ok: false,
+        service: 'backend-sync',
+        status: 'disabled',
+        connected: false,
+        reason: 'SYNC_ENABLED is not true',
+        timestamp: new Date().toISOString()
+      },
+      { status: 503 }
+    );
   }
 
   if (!baseUrl || !serviceToken) {
@@ -48,14 +51,17 @@ export async function GET() {
       cache: 'no-store'
     });
 
-    return NextResponse.json({
-      ok: response.ok,
-      service: 'backend-sync',
-      status: response.ok ? 'connected' : 'degraded',
-      connected: response.ok,
-      upstreamStatus: response.status,
-      timestamp: new Date().toISOString()
-    }, { status: response.ok ? 200 : 502 });
+    return NextResponse.json(
+      {
+        ok: response.ok,
+        service: 'backend-sync',
+        status: response.ok ? 'connected' : 'degraded',
+        connected: response.ok,
+        upstreamStatus: response.status,
+        timestamp: new Date().toISOString()
+      },
+      { status: response.ok ? 200 : 502 }
+    );
   } catch {
     return NextResponse.json(
       {
