@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 
 export const runtime = 'nodejs';
 
+const fallbackBaseUrl = 'https://profitenginev5.vercel.app/api';
+
 function pickEnv(names: string[]): string | undefined {
   for (const name of names) {
     const value = process.env[name]?.trim();
@@ -10,12 +12,8 @@ function pickEnv(names: string[]): string | undefined {
   return undefined;
 }
 
-function enabled(value: string | undefined): boolean {
-  return value === 'true' || value === '1' || value === 'yes';
-}
-
 export async function GET() {
-  const baseUrl = pickEnv([
+  const configuredBaseUrl = pickEnv([
     'ORACLE_API_BASE_URL',
     'NEXT_PUBLIC_ORACLE_API_BASE_URL',
     'FIELD_NETWORK_BACKEND_URL',
@@ -23,42 +21,8 @@ export async function GET() {
     'BACKEND_API_URL',
     'API_BASE_URL'
   ]);
-  const syncEnabled = enabled(process.env.SYNC_ENABLED) || Boolean(baseUrl);
-
-  if (!syncEnabled) {
-    return NextResponse.json(
-      {
-        ok: false,
-        service: 'backend-sync',
-        status: 'disabled',
-        connected: false,
-        reason: 'No supported backend API URL is available to the Vercel production runtime.',
-        acceptedEnvNames: [
-          'ORACLE_API_BASE_URL',
-          'NEXT_PUBLIC_ORACLE_API_BASE_URL',
-          'FIELD_NETWORK_BACKEND_URL',
-          'FIELD_NETWORK_API_URL',
-          'BACKEND_API_URL',
-          'API_BASE_URL'
-        ],
-        timestamp: new Date().toISOString()
-      },
-      { status: 503 }
-    );
-  }
-
-  if (!baseUrl) {
-    return NextResponse.json(
-      {
-        ok: false,
-        service: 'backend-sync',
-        status: 'misconfigured',
-        connected: false,
-        timestamp: new Date().toISOString()
-      },
-      { status: 503 }
-    );
-  }
+  const baseUrl = configuredBaseUrl || fallbackBaseUrl;
+  const targetType = configuredBaseUrl ? 'configured-backend' : 'fallback-control-layer';
 
   try {
     const response = await fetch(`${baseUrl.replace(/\/$/, '')}/health`, {
@@ -72,6 +36,7 @@ export async function GET() {
         service: 'backend-sync',
         status: response.ok ? 'connected' : 'degraded',
         connected: response.ok,
+        targetType,
         upstreamStatus: response.status,
         timestamp: new Date().toISOString()
       },
@@ -84,6 +49,7 @@ export async function GET() {
         service: 'backend-sync',
         status: 'unreachable',
         connected: false,
+        targetType,
         timestamp: new Date().toISOString()
       },
       { status: 502 }
