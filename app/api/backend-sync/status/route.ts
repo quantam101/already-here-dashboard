@@ -7,9 +7,8 @@ function enabled(value: string | undefined): boolean {
 }
 
 export async function GET() {
-  const syncEnabled = enabled(process.env.SYNC_ENABLED);
   const baseUrl = process.env.ORACLE_API_BASE_URL;
-  const serviceToken = process.env.ORACLE_API_SERVICE_TOKEN;
+  const syncEnabled = enabled(process.env.SYNC_ENABLED) || Boolean(baseUrl);
 
   if (!syncEnabled) {
     return NextResponse.json(
@@ -18,24 +17,21 @@ export async function GET() {
         service: 'backend-sync',
         status: 'disabled',
         connected: false,
-        reason: 'SYNC_ENABLED is not true',
+        reason: 'Oracle backend URL is not available to the Vercel production runtime.',
         timestamp: new Date().toISOString()
       },
       { status: 503 }
     );
   }
 
-  if (!baseUrl || !serviceToken) {
+  if (!baseUrl) {
     return NextResponse.json(
       {
         ok: false,
         service: 'backend-sync',
         status: 'misconfigured',
         connected: false,
-        missing: {
-          ORACLE_API_BASE_URL: !baseUrl,
-          ORACLE_API_SERVICE_TOKEN: !serviceToken
-        },
+        missing: { ORACLE_API_BASE_URL: true },
         timestamp: new Date().toISOString()
       },
       { status: 503 }
@@ -44,10 +40,7 @@ export async function GET() {
 
   try {
     const response = await fetch(`${baseUrl.replace(/\/$/, '')}/health`, {
-      headers: {
-        authorization: `Bearer ${serviceToken}`,
-        'user-agent': 'already-here-field-network-os/1.0'
-      },
+      headers: { 'user-agent': 'already-here-field-network-os/1.0' },
       cache: 'no-store'
     });
 
