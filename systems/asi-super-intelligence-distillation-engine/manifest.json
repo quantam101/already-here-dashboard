@@ -1,0 +1,49 @@
+{
+  "system_identity": "AH-ASI-Distillation-Engine-v1",
+  "product_name": "ASI Super-Intelligence Distillation Engine",
+  "brand_note": "ASI is a branded orchestration and operational-intelligence engine, not a claim of AGI.",
+  "operational_modes": {
+    "allow_airgapped_execution": true,
+    "automatic_failover_trigger_ms": 150,
+    "max_concurrency_agent_limit": 32,
+    "minimum_daily_field_revenue": 500,
+    "preferred_completion_window": "by_noon"
+  },
+  "pricing_rules": {
+    "minimum_dispatch_value": 130,
+    "minimum_effective_hourly": 65,
+    "preferred_smart_hands_flat": 200,
+    "single_job_anchor_target": 500,
+    "retainer_floor_monthly": 1500
+  },
+  "storage_mesh": {
+    "local_wal_db_path": "./state_mesh_wal.db",
+    "task_lease_seconds": 300,
+    "max_attempts": 3
+  },
+  "service_categories": [
+    "server_smart_hands",
+    "data_center",
+    "network_support",
+    "ap_wireless",
+    "pos_support",
+    "printer_computer",
+    "access_control",
+    "low_voltage_cabling",
+    "healthcare_equipment",
+    "asset_inventory",
+    "decommissioning",
+    "hauling_delivery",
+    "project_management",
+    "field_project_lead",
+    "municipal_procurement",
+    "retainer_coverage",
+    "automation_software"
+  ],
+  "integrations": {
+    "mode": "standalone_core_with_api_and_repo_connectors",
+    "dashboard_target": "already-here-dashboard",
+    "revenue_repo_targets": ["already-here-llc", "profitenginev5", "ai-profit-suite", "tradegate2"],
+    "connector_policy": "permissioned_only"
+  }
+}
