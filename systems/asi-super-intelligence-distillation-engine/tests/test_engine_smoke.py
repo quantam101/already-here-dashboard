@@ -1,5 +1,6 @@
 from pathlib import Path
 import importlib.util
+import sys
 import tempfile
 
 module_path = Path(__file__).resolve().parents[1] / "asi_master_engine.py"
@@ -7,6 +8,7 @@ spec = importlib.util.spec_from_file_location("asi_master_engine", module_path)
 assert spec is not None
 assert spec.loader is not None
 engine = importlib.util.module_from_spec(spec)
+sys.modules[spec.name] = engine
 spec.loader.exec_module(engine)
 
 
