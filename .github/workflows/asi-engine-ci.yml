@@ -1,0 +1,35 @@
+name: ASI Engine CI
+
+on:
+  push:
+    paths:
+      - 'lib/asi-engine.ts'
+      - 'components/ASIDistillationPanel.tsx'
+      - 'app/api/asi/score/route.ts'
+      - 'systems/asi-super-intelligence-distillation-engine/**'
+      - 'tests/asi-engine.test.mjs'
+      - '.github/workflows/asi-engine-ci.yml'
+  pull_request:
+    paths:
+      - 'lib/asi-engine.ts'
+      - 'components/ASIDistillationPanel.tsx'
+      - 'app/api/asi/score/route.ts'
+      - 'systems/asi-super-intelligence-distillation-engine/**'
+      - 'tests/asi-engine.test.mjs'
+      - '.github/workflows/asi-engine-ci.yml'
+
+jobs:
+  asi-engine:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: npm ci
+      - run: node tests/asi-engine.test.mjs
+      - run: python -m pip install -r systems/asi-super-intelligence-distillation-engine/requirements.txt
+      - run: python -m pytest systems/asi-super-intelligence-distillation-engine/tests -q
