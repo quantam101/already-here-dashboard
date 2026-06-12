@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import ASIDistillationPanel from './ASIDistillationPanel';
 import AutomatedIncomePanel from './AutomatedIncomePanel';
 import PrimeNetworkPanel from './PrimeNetworkPanel';
 import RevenuePanel from './RevenuePanel';
@@ -11,6 +12,7 @@ import type { AuditEvent, FieldNetworkState, Skill, Technician, WorkOrder } from
 
 const skills: Skill[] = [
   'networking',
+  'project_management',
   'pos',
   'av',
   'access_control',
@@ -108,14 +110,14 @@ export default function FieldNetworkOS() {
     const workOrder: WorkOrder = {
       id: `wo-${crypto.randomUUID()}`,
       clientId: state.clients[0]?.id ?? 'client-direct-001',
-      title: 'New dispatch request',
+      title: selectedSkills.includes('project_management') ? 'New project/SOW field lead request' : 'New dispatch request',
       location: techMetro,
       metro: techMetro,
       requiredSkills: selectedSkills,
       status: 'new',
       scheduledFor: new Date().toISOString(),
-      budget: 250,
-      estimatedHours: 2,
+      budget: selectedSkills.includes('project_management') ? 500 : 250,
+      estimatedHours: selectedSkills.includes('project_management') ? 4 : 2,
       urgency: 'same_day'
     };
     const next = queueChange({
@@ -137,7 +139,7 @@ export default function FieldNetworkOS() {
         <div>
           <p className="eyebrow">Already Here LLC</p>
           <h1>Field Network OS</h1>
-          <p className="subhead">Technician network, dispatch matching, retainer tracking, opportunity ranking, prime-network readiness, automated income, offline queue, and audit control.</p>
+          <p className="subhead">Technician network, dispatch matching, retainer tracking, ASI revenue intelligence, project/SOW routing, opportunity ranking, prime-network readiness, automated income, offline queue, and audit control.</p>
         </div>
         <div className="statusCard">
           <span className={online ? 'pill good' : 'pill warn'}>{online ? 'Cloud reachable' : 'Offline failover active'}</span>
@@ -154,6 +156,7 @@ export default function FieldNetworkOS() {
         <Metric label="Retainer Targets" value={state.clients.filter((c) => c.retainerStatus !== 'active').length} />
       </section>
 
+      <ASIDistillationPanel state={state} />
       <RevenuePanel />
       <AutomatedIncomePanel />
       <PrimeNetworkPanel technicianCount={state.technicians.length} clientCount={state.clients.length} workOrderCount={state.workOrders.length} />
