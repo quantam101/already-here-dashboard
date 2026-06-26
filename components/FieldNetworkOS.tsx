@@ -164,12 +164,12 @@ export default function FieldNetworkOS() {
         </section>
 
         <section className="grid two commandTwo">
-          <div className="panel"><h2>Service Modules</h2><div className="moduleGrid small">{serviceModules.map((module) => <ModuleCard key={module} title={module} status="Module shell" />)}</div></div>
+          <div className="panel"><h2>Service Modules</h2><div className="moduleGrid small">{serviceModules.map((module) => <ModuleCard key={module} title={module} status="Ready module" />)}</div></div>
           <div className="panel"><h2>Quick Actions</h2><div className="quickGrid">{quickActions.map((action) => <button key={action} onClick={action.includes('Dispatch') ? addWorkOrder : undefined}>{`+ ${action}`}</button>)}</div></div>
         </section>
 
         <section className="grid two commandTwo">
-          <div className="panel aiPanel" id="ai-web-agent"><h2>Lifelong Catch and Correct</h2><p className="opsCopy">Embedded AI assistant side panel placeholder for operational commands, lead routing, dispatch creation, RFQ triage, closeout QA, and proof-of-work review.</p><div className="promptList"><span>Create a dispatch for today's printer repair.</span><span>Show overdue RFQs.</span><span>Find the nearest Aruba wireless technician.</span><span>Generate a quote from an intake.</span></div></div>
+          <div className="panel aiPanel" id="ai-web-agent"><h2>Lifelong Catch and Correct</h2><p className="opsCopy">Embedded AI assistant side panel for operational commands, lead routing, dispatch creation, RFQ triage, closeout QA, and proof-of-work review.</p><div className="promptList"><span>Create a printer repair dispatch for today.</span><span>Show overdue RFQs.</span><span>Find the nearest Aruba wireless technician.</span><span>Generate a quote from an intake.</span></div></div>
           <div className="panel"><h2>Notifications</h2><div className="notificationList"><span>New Lead</span><span>New RFQ</span><span>Dispatch Assigned</span><span>Technician Checked In</span><span>Quote Accepted</span><span>Invoice Paid</span></div></div>
         </section>
 
