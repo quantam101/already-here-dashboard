@@ -1,9 +1,8 @@
 name: Sovereign 24/7 Cycle
 
 on:
-  schedule:
-    # Hourly sovereign decision cycle (GitHub Actions as external heartbeat)
-    - cron: "5 * * * *"
+  # Scheduled trigger disabled 2026-10-13: dormant repo, ~720 wasted runs/mo.
+  # Re-enable only if this repo is revived (workflow_dispatch still works).
   workflow_dispatch:
     inputs:
       force_agent:
