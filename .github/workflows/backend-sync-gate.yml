@@ -2,8 +2,7 @@ name: Backend Sync Gate
 
 on:
   workflow_dispatch:
-  schedule:
-    - cron: '27 * * * *'
+  # Scheduled trigger disabled 2026-10-13: dormant repo, ~720 wasted runs/mo.
 
 jobs:
   verify-backend-sync:
